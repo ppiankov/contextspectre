@@ -29,6 +29,8 @@ type ContextStats struct {
 	FileSizeBytes        int64
 	ImageCount           int
 	ImageBytesTotal      int64
+	SnapshotCount        int
+	SnapshotBytesTotal   int64
 	ConversationalTurns  int
 	LastCompactionLine   int
 }
@@ -58,6 +60,12 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 		if e.IsConversational() {
 			stats.ConversationalTurns++
+		}
+
+		// Track snapshots
+		if e.Type == jsonl.TypeFileHistorySnapshot {
+			stats.SnapshotCount++
+			stats.SnapshotBytesTotal += int64(e.RawSize)
 		}
 
 		// Track images

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/ppiankov/contextspectre/internal/editor"
+	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/spf13/cobra"
 )
 
@@ -13,6 +14,7 @@ var (
 	cleanImages     bool
 	cleanProgress   bool
 	cleanSeparators bool
+	cleanSnapshots  bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -25,8 +27,8 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators {
-		return fmt.Errorf("specify --images, --progress, and/or --separators")
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots {
+		return fmt.Errorf("specify --images, --progress, --separators, and/or --snapshots")
 	}
 
 	path := resolveSessionPath(args[0])
@@ -76,6 +78,31 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanSnapshots {
+		entries, err := jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("parse for snapshots: %w", err)
+		}
+		toDelete := make(map[int]bool)
+		for i, e := range entries {
+			if e.Type == jsonl.TypeFileHistorySnapshot {
+				toDelete[i] = true
+			}
+		}
+		if len(toDelete) == 0 {
+			fmt.Println("No file-history-snapshot entries found.")
+		} else {
+			result, err := editor.Delete(path, toDelete)
+			if err != nil {
+				return fmt.Errorf("remove snapshots: %w", err)
+			}
+			fmt.Printf("Removed %d snapshot entries, saved %s\n",
+				result.EntriesRemoved,
+				formatBytes(result.BytesBefore-result.BytesAfter))
+			slog.Info("Snapshots removed", "count", result.EntriesRemoved)
+		}
+	}
+
 	return nil
 }
 
@@ -94,5 +121,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanImages, "images", false, "Replace base64 images with placeholders")
 	cleanCmd.Flags().BoolVar(&cleanProgress, "progress", false, "Remove all progress messages")
 	cleanCmd.Flags().BoolVar(&cleanSeparators, "separators", false, "Strip decorative separator lines")
+	cleanCmd.Flags().BoolVar(&cleanSnapshots, "snapshots", false, "Remove all file-history-snapshot entries")
 	rootCmd.AddCommand(cleanCmd)
 }

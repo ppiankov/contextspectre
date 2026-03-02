@@ -108,6 +108,11 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 		if !m.isActive {
 			return m.stripSeparators()
 		}
+	case key.Matches(msg, keys.SelectSnaps):
+		if !m.isActive {
+			m.selectAllSnapshots()
+			m.updateImpact()
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -225,7 +230,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space select  x progress  i images  s separators  d delete  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space select  x progress  h snapshots  i images  s separators  d delete  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -323,6 +328,11 @@ func (m messagesModel) renderContextMeter() string {
 		b.WriteString(styleMuted.Render(fmt.Sprintf(" (%.1f MB)", float64(m.stats.ImageBytesTotal)/1024/1024)))
 	}
 
+	if m.stats.SnapshotCount > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Snapshots: %d (%.1f MB)",
+			m.stats.SnapshotCount, float64(m.stats.SnapshotBytesTotal)/1024/1024)))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -369,6 +379,14 @@ func (m *messagesModel) updateImpact() {
 func (m *messagesModel) selectAllProgress() {
 	for i, e := range m.entries {
 		if e.Type == jsonl.TypeProgress {
+			m.selected[i] = true
+		}
+	}
+}
+
+func (m *messagesModel) selectAllSnapshots() {
+	for i, e := range m.entries {
+		if e.Type == jsonl.TypeFileHistorySnapshot {
 			m.selected[i] = true
 		}
 	}
