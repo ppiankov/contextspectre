@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -24,6 +25,8 @@ var (
 	cleanSidechains    bool
 	cleanTangents      bool
 	cleanAll           bool
+	cleanLive          bool
+	cleanAggressive    bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -36,13 +39,25 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive {
 		return fmt.Errorf("specify at least one clean operation flag")
+	}
+
+	if cleanAggressive && !cleanLive {
+		return fmt.Errorf("--aggressive can only be used with --live")
 	}
 
 	path := resolveSessionPath(args[0])
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("session not found: %s", path)
+	}
+
+	if cleanLive {
+		if cleanAll || cleanImages || cleanProgress || cleanSeparators || cleanSnapshots ||
+			cleanDedupReads || cleanTruncate || cleanFailedRetries || cleanSidechains || cleanTangents {
+			return fmt.Errorf("--live cannot be combined with --all or individual operation flags")
+		}
+		return runCleanLive(path)
 	}
 
 	if cleanAll {
@@ -233,6 +248,38 @@ func runClean(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runCleanLive(path string) error {
+	opts := editor.CleanLiveOpts{
+		Aggressive: cleanAggressive,
+	}
+	result, err := editor.CleanLive(path, opts)
+	if err != nil {
+		if errors.Is(err, editor.ErrRaceDetected) {
+			return fmt.Errorf("aborted: Claude Code wrote to session during cleanup (file restored from backup)")
+		}
+		if errors.Is(err, editor.ErrSessionNotIdle) {
+			return fmt.Errorf("session is actively being written to — wait a few seconds and retry")
+		}
+		return fmt.Errorf("clean live: %w", err)
+	}
+
+	if isJSON() {
+		return printJSON(cleanLiveToJSON(path, result))
+	}
+
+	fmt.Printf("Live cleaned: %d prog, %d snap",
+		result.ProgressRemoved, result.SnapshotsRemoved)
+	if cleanAggressive {
+		fmt.Printf(", %d img, %d sep, %d trunc",
+			result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
+	}
+	fmt.Println()
+	fmt.Printf("Total saved: ~%d tokens, %s\n",
+		result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+	slog.Info("Clean live complete", "tokens", result.TotalTokensSaved, "aggressive", opts.Aggressive)
+	return nil
+}
+
 func formatBytes(b int64) string {
 	switch {
 	case b >= 1024*1024:
@@ -257,5 +304,7 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanSidechains, "sidechains", false, "Remove all sidechain entries")
 	cleanCmd.Flags().BoolVar(&cleanTangents, "tangents", false, "Remove cross-repo tangent sequences")
 	cleanCmd.Flags().BoolVar(&cleanAll, "all", false, "Run all cleanup operations")
+	cleanCmd.Flags().BoolVar(&cleanLive, "live", false, "Safe cleanup for active sessions (Tier 1-3)")
+	cleanCmd.Flags().BoolVar(&cleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
 	rootCmd.AddCommand(cleanCmd)
 }
