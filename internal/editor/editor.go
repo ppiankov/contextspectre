@@ -138,29 +138,7 @@ func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 		}
 
 		if lineModified {
-			// Re-serialize the content blocks into the raw line
-			newContent, err := json.Marshal(blocks)
-			if err != nil {
-				continue
-			}
-
-			var raw map[string]json.RawMessage
-			if err := json.Unmarshal(rawLines[i], &raw); err != nil {
-				continue
-			}
-
-			// Update message.content
-			var msg map[string]json.RawMessage
-			if err := json.Unmarshal(raw["message"], &msg); err != nil {
-				continue
-			}
-			msg["content"] = newContent
-			newMsg, err := json.Marshal(msg)
-			if err != nil {
-				continue
-			}
-			raw["message"] = newMsg
-			updated, err := json.Marshal(raw)
+			updated, err := reserializeContent(rawLines[i], blocks)
 			if err != nil {
 				continue
 			}
@@ -206,6 +184,31 @@ func RemoveProgress(path string) (*DeleteResult, error) {
 	}
 
 	return Delete(path, toDelete)
+}
+
+// reserializeContent updates the content blocks in a raw JSONL line.
+func reserializeContent(rawLine []byte, blocks []jsonl.ContentBlock) ([]byte, error) {
+	newContent, err := json.Marshal(blocks)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(rawLine, &raw); err != nil {
+		return nil, err
+	}
+
+	var msg map[string]json.RawMessage
+	if err := json.Unmarshal(raw["message"], &msg); err != nil {
+		return nil, err
+	}
+	msg["content"] = newContent
+	newMsg, err := json.Marshal(msg)
+	if err != nil {
+		return nil, err
+	}
+	raw["message"] = newMsg
+	return json.Marshal(raw)
 }
 
 // resolveParent walks up the deletion chain to find the nearest surviving ancestor.
