@@ -39,13 +39,27 @@ func TestProjectNameFromDir(t *testing.T) {
 	}
 }
 
+func mustMkdirAll(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func mustWriteFile(t *testing.T, path string, data []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestDiscoverer_ListProjects(t *testing.T) {
 	dir := t.TempDir()
 	projectsDir := filepath.Join(dir, "projects")
-	os.MkdirAll(filepath.Join(projectsDir, "project-a"), 0755)
-	os.MkdirAll(filepath.Join(projectsDir, "project-b"), 0755)
+	mustMkdirAll(t, filepath.Join(projectsDir, "project-a"))
+	mustMkdirAll(t, filepath.Join(projectsDir, "project-b"))
 	// Create a file (should be ignored)
-	os.WriteFile(filepath.Join(projectsDir, "not-a-dir.txt"), []byte("x"), 0644)
+	mustWriteFile(t, filepath.Join(projectsDir, "not-a-dir.txt"), []byte("x"))
 
 	d := &Discoverer{ClaudeDir: dir}
 	projects, err := d.ListProjects()
@@ -60,13 +74,13 @@ func TestDiscoverer_ListProjects(t *testing.T) {
 func TestDiscoverer_ListSessions_FromGlob(t *testing.T) {
 	dir := t.TempDir()
 	projectDir := filepath.Join(dir, "projects", "test-project")
-	os.MkdirAll(projectDir, 0755)
+	mustMkdirAll(t, projectDir)
 
 	// Create a minimal JSONL file
 	sessionData := `{"type":"user","uuid":"u1","timestamp":"2026-03-01T10:00:00Z","sessionId":"s1","message":{"role":"user","content":"hello"}}
 {"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-01T10:00:01Z","sessionId":"s1","message":{"role":"assistant","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":50,"output_tokens":5,"cache_creation_input_tokens":1000,"cache_read_input_tokens":0}}}
 `
-	os.WriteFile(filepath.Join(projectDir, "test-session.jsonl"), []byte(sessionData), 0644)
+	mustWriteFile(t, filepath.Join(projectDir, "test-session.jsonl"), []byte(sessionData))
 
 	d := &Discoverer{ClaudeDir: dir}
 	sessions, err := d.ListSessions(projectDir)
@@ -90,14 +104,14 @@ func TestDiscoverer_ListSessions_FromGlob(t *testing.T) {
 func TestDiscoverer_ListSessions_FromIndex(t *testing.T) {
 	dir := t.TempDir()
 	projectDir := filepath.Join(dir, "projects", "test-project")
-	os.MkdirAll(projectDir, 0755)
+	mustMkdirAll(t, projectDir)
 
 	// Create session file
 	sessionPath := filepath.Join(projectDir, "abc-123.jsonl")
 	sessionData := `{"type":"user","uuid":"u1","timestamp":"2026-03-01T10:00:00Z","message":{"role":"user","content":"hello"}}
 {"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-01T10:00:01Z","message":{"role":"assistant","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":50,"output_tokens":5,"cache_creation_input_tokens":2000,"cache_read_input_tokens":0}}}
 `
-	os.WriteFile(sessionPath, []byte(sessionData), 0644)
+	mustWriteFile(t, sessionPath, []byte(sessionData))
 
 	// Create sessions-index.json
 	idx := sessionsIndex{
@@ -113,8 +127,11 @@ func TestDiscoverer_ListSessions_FromIndex(t *testing.T) {
 			ProjectPath:  "/dev/test",
 		}},
 	}
-	idxData, _ := json.Marshal(idx)
-	os.WriteFile(filepath.Join(projectDir, "sessions-index.json"), idxData, 0644)
+	idxData, err := json.Marshal(idx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWriteFile(t, filepath.Join(projectDir, "sessions-index.json"), idxData)
 
 	d := &Discoverer{ClaudeDir: dir}
 	sessions, err := d.ListSessions(projectDir)
@@ -139,10 +156,10 @@ func TestDiscoverer_ListAllSessions(t *testing.T) {
 	// Two projects with one session each
 	for _, name := range []string{"proj-a", "proj-b"} {
 		pdir := filepath.Join(projectsDir, name)
-		os.MkdirAll(pdir, 0755)
+		mustMkdirAll(t, pdir)
 		data := `{"type":"user","uuid":"u1","timestamp":"2026-03-01T10:00:00Z","message":{"role":"user","content":"hello"}}
 `
-		os.WriteFile(filepath.Join(pdir, "sess.jsonl"), []byte(data), 0644)
+		mustWriteFile(t, filepath.Join(pdir, "sess.jsonl"), []byte(data))
 	}
 
 	d := &Discoverer{ClaudeDir: dir}

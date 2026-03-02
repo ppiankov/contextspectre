@@ -61,12 +61,12 @@ func (m confirmModel) View() string {
 	b.WriteString(styleHeader.Render(fmt.Sprintf("Delete %d messages?", m.impact.SelectedCount)))
 	b.WriteString("\n\n")
 
-	b.WriteString(fmt.Sprintf("Estimated token savings: ~%s (%.1f%%)\n",
+	fmt.Fprintf(&b, "Estimated token savings: ~%s (%.1f%%)\n",
 		formatTokensShort(m.impact.EstimatedTokenSaved),
-		float64(m.impact.EstimatedTokenSaved)/float64(analyzer.ContextWindowSize)*100))
+		float64(m.impact.EstimatedTokenSaved)/float64(analyzer.ContextWindowSize)*100)
 
-	b.WriteString(fmt.Sprintf("New context usage: %.1f%%\n", m.impact.NewContextPercent))
-	b.WriteString(fmt.Sprintf("ParentUuid repairs: %d chains\n", m.impact.ChainRepairs))
+	fmt.Fprintf(&b, "New context usage: %.1f%%\n", m.impact.NewContextPercent)
+	fmt.Fprintf(&b, "ParentUuid repairs: %d chains\n", m.impact.ChainRepairs)
 
 	if m.impact.ProgressAutoRemoved > 0 {
 		b.WriteString(fmt.Sprintf("Progress auto-removed: %d\n", m.impact.ProgressAutoRemoved))

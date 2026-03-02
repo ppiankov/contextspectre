@@ -9,7 +9,7 @@ var (
 	colorMuted  = lipgloss.Color("#888888")
 	colorAccent = lipgloss.Color("#7B68EE")
 	colorWhite  = lipgloss.Color("#FFFFFF")
-	colorDim    = lipgloss.Color("#555555")
+	_           = lipgloss.Color("#555555") // reserved dim color
 )
 
 var (
@@ -39,7 +39,7 @@ var (
 	styleFooter = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
-	styleBar = lipgloss.NewStyle()
+	_ = lipgloss.NewStyle() // reserved bar style
 )
 
 func contextColor(pct float64) lipgloss.Color {

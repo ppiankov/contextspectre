@@ -13,12 +13,16 @@ func setupTestDir(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
 	projectsDir := filepath.Join(dir, "projects", "test-project")
-	os.MkdirAll(projectsDir, 0755)
+	if err := os.MkdirAll(projectsDir, 0755); err != nil {
+		t.Fatal(err)
+	}
 
 	sessionData := `{"type":"user","uuid":"u1","parentUuid":"","timestamp":"2026-03-01T10:00:00Z","sessionId":"s1","message":{"role":"user","content":"hello"}}
 {"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-01T10:00:01Z","sessionId":"s1","message":{"role":"assistant","content":[{"type":"text","text":"hi"}],"usage":{"input_tokens":50,"output_tokens":5,"cache_creation_input_tokens":1000,"cache_read_input_tokens":0}}}
 `
-	os.WriteFile(filepath.Join(projectsDir, "test-session.jsonl"), []byte(sessionData), 0644)
+	if err := os.WriteFile(filepath.Join(projectsDir, "test-session.jsonl"), []byte(sessionData), 0644); err != nil {
+		t.Fatal(err)
+	}
 	return dir
 }
 
@@ -39,7 +43,11 @@ func TestApp_WindowResize(t *testing.T) {
 	app := NewApp(dir, "test")
 
 	model, _ := app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	m := model.(AppModel)
+	m, ok := model.(AppModel)
+	if !ok {
+		t.Fatal("expected AppModel")
+	}
+	_ = ok
 
 	if m.width != 120 || m.height != 40 {
 		t.Errorf("expected 120x40, got %dx%d", m.width, m.height)
@@ -57,7 +65,11 @@ func TestApp_OpenSession(t *testing.T) {
 
 	info := app.sessions.sessions[0]
 	model, _ := app.Update(openSessionMsg{info: info})
-	m := model.(AppModel)
+	m, ok := model.(AppModel)
+	if !ok {
+		t.Fatal("expected AppModel")
+	}
+	_ = ok
 
 	if m.currentView != viewMessages {
 		t.Errorf("expected messages view, got %d", m.currentView)
@@ -73,7 +85,11 @@ func TestApp_BackToSessions(t *testing.T) {
 	app.currentView = viewMessages
 
 	model, _ := app.Update(backToSessionsMsg{})
-	m := model.(AppModel)
+	m, ok := model.(AppModel)
+	if !ok {
+		t.Fatal("expected AppModel")
+	}
+	_ = ok
 
 	if m.currentView != viewSessions {
 		t.Errorf("expected sessions view, got %d", m.currentView)
@@ -86,7 +102,11 @@ func TestApp_CancelDelete(t *testing.T) {
 	app.currentView = viewConfirm
 
 	model, _ := app.Update(cancelDeleteMsg{})
-	m := model.(AppModel)
+	m, ok := model.(AppModel)
+	if !ok {
+		t.Fatal("expected AppModel")
+	}
+	_ = ok
 
 	if m.currentView != viewMessages {
 		t.Errorf("expected messages view after cancel, got %d", m.currentView)

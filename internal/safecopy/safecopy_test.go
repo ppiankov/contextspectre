@@ -6,10 +6,17 @@ import (
 	"testing"
 )
 
+func mustWrite(t *testing.T, path string, data []byte, perm os.FileMode) {
+	t.Helper()
+	if err := os.WriteFile(path, data, perm); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestCreate(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
-	os.WriteFile(path, []byte("original content"), 0644)
+	mustWrite(t, path, []byte("original content"), 0644)
 
 	if err := Create(path); err != nil {
 		t.Fatalf("create backup: %v", err)
@@ -28,8 +35,8 @@ func TestCreate(t *testing.T) {
 func TestCreate_AlreadyExists(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
-	os.WriteFile(path, []byte("content"), 0644)
-	os.WriteFile(path+".bak", []byte("old backup"), 0644)
+	mustWrite(t, path, []byte("content"), 0644)
+	mustWrite(t, path+".bak", []byte("old backup"), 0644)
 
 	err := Create(path)
 	if err == nil {
@@ -47,8 +54,8 @@ func TestCreate_SourceNotFound(t *testing.T) {
 func TestRestore(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
-	os.WriteFile(path, []byte("modified content"), 0644)
-	os.WriteFile(path+".bak", []byte("original content"), 0644)
+	mustWrite(t, path, []byte("modified content"), 0644)
+	mustWrite(t, path+".bak", []byte("original content"), 0644)
 
 	if err := Restore(path); err != nil {
 		t.Fatalf("restore: %v", err)
@@ -78,7 +85,7 @@ func TestRestore_NoBackup(t *testing.T) {
 func TestClean(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
-	os.WriteFile(path+".bak", []byte("backup"), 0644)
+	mustWrite(t, path+".bak", []byte("backup"), 0644)
 
 	if err := Clean(path); err != nil {
 		t.Fatalf("clean: %v", err)
@@ -103,7 +110,7 @@ func TestExists(t *testing.T) {
 		t.Error("expected no backup to exist")
 	}
 
-	os.WriteFile(path+".bak", []byte("x"), 0644)
+	mustWrite(t, path+".bak", []byte("x"), 0644)
 	if !Exists(path) {
 		t.Error("expected backup to exist")
 	}
@@ -112,7 +119,7 @@ func TestExists(t *testing.T) {
 func TestCreate_PreservesPermissions(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
-	os.WriteFile(path, []byte("content"), 0600)
+	mustWrite(t, path, []byte("content"), 0600)
 
 	if err := Create(path); err != nil {
 		t.Fatal(err)

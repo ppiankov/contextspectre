@@ -26,7 +26,7 @@ type AppModel struct {
 	claudeDir     string
 	version       string
 	width, height int
-	err           error
+	_             error // reserved for future error display
 }
 
 // NewApp creates a new app model with session discovery.
