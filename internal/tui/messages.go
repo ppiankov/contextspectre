@@ -172,6 +172,10 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 }
 
 func (m messagesModel) View() string {
+	if m.width == 0 {
+		return ""
+	}
+
 	var b strings.Builder
 
 	// Context meter

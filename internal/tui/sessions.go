@@ -67,6 +67,9 @@ func (m sessionsModel) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
 	}
+	if m.width == 0 {
+		return ""
+	}
 	if len(m.sessions) == 0 {
 		return "No sessions found.\n"
 	}

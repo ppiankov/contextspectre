@@ -176,6 +176,19 @@ func TestSessionsModel_EmptyView(t *testing.T) {
 	}
 }
 
+func TestSessionsModel_ZeroWidth_NoPanic(t *testing.T) {
+	sessions := []session.Info{
+		{SessionID: "s1", ProjectName: "proj1", MessageCount: 10, FileSizeMB: 1.5},
+	}
+	m := newSessionsModel(sessions)
+	// width and height are zero (no WindowSizeMsg received yet)
+
+	view := m.View()
+	if view != "" {
+		t.Errorf("expected empty string for zero-width view, got %q", view)
+	}
+}
+
 func containsStr(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || len(s) > 0 && findStr(s, substr))
 }
