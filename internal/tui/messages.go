@@ -15,21 +15,23 @@ import (
 )
 
 type messagesModel struct {
-	session       session.Info
-	entries       []jsonl.Entry
-	stats         *analyzer.ContextStats
-	issues        map[int][]analyzer.Issue
-	dupResult     *analyzer.DuplicateReadResult
-	staleIndices  map[int]bool
-	retryResult   *analyzer.RetryResult
-	failedIndices map[int]bool
-	cursor        int
-	scrollOffset  int
-	selected      map[int]bool
-	impact        *analyzer.DeletionImpact
-	isActive      bool
-	statusMsg     string
-	width, height int
+	session        session.Info
+	entries        []jsonl.Entry
+	stats          *analyzer.ContextStats
+	issues         map[int][]analyzer.Issue
+	dupResult      *analyzer.DuplicateReadResult
+	staleIndices   map[int]bool
+	retryResult    *analyzer.RetryResult
+	failedIndices  map[int]bool
+	tangentResult  *analyzer.TangentResult
+	tangentIndices map[int]bool
+	cursor         int
+	scrollOffset   int
+	selected       map[int]bool
+	impact         *analyzer.DeletionImpact
+	isActive       bool
+	statusMsg      string
+	width, height  int
 }
 
 type backToSessionsMsg struct{}
@@ -52,18 +54,21 @@ func newMessagesModel(info session.Info) messagesModel {
 	diagnosis := analyzer.Diagnose(entries)
 	dupResult := analyzer.FindDuplicateReads(entries)
 	retryResult := analyzer.FindFailedRetries(entries)
+	tangentResult := analyzer.FindTangents(entries)
 
 	return messagesModel{
-		session:       info,
-		entries:       entries,
-		stats:         stats,
-		issues:        diagnosis.IssuesByIndex(),
-		dupResult:     dupResult,
-		staleIndices:  dupResult.AllStaleIndices(),
-		retryResult:   retryResult,
-		failedIndices: retryResult.AllFailedIndices(),
-		selected:      make(map[int]bool),
-		isActive:      info.IsActive(),
+		session:        info,
+		entries:        entries,
+		stats:          stats,
+		issues:         diagnosis.IssuesByIndex(),
+		dupResult:      dupResult,
+		staleIndices:   dupResult.AllStaleIndices(),
+		retryResult:    retryResult,
+		failedIndices:  retryResult.AllFailedIndices(),
+		tangentResult:  tangentResult,
+		tangentIndices: tangentResult.AllTangentIndices(),
+		selected:       make(map[int]bool),
+		isActive:       info.IsActive(),
 	}
 }
 
@@ -135,6 +140,11 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 	case key.Matches(msg, keys.SelectChains):
 		if !m.isActive {
 			m.selectAllSidechains()
+			m.updateImpact()
+		}
+	case key.Matches(msg, keys.SelectTangents):
+		if !m.isActive {
+			m.selectAllTangents()
 			m.updateImpact()
 		}
 	case key.Matches(msg, keys.CleanAll):
@@ -217,9 +227,11 @@ func (m messagesModel) View() string {
 			}
 		}
 
-		// Stale/failed indicators
+		// Stale/failed/tangent indicators
 		staleLabel := ""
-		if m.staleIndices[i] {
+		if m.tangentIndices[i] {
+			staleLabel = styleMuted.Render(" tangent")
+		} else if m.staleIndices[i] {
 			staleLabel = styleMuted.Render(" stale")
 		} else if m.failedIndices[i] {
 			staleLabel = styleMuted.Render(" failed")
@@ -249,7 +261,7 @@ func (m messagesModel) View() string {
 			b.WriteString(styleSelected.Render(line))
 		} else if isMarked {
 			b.WriteString(styleMarked.Render(line))
-		} else if e.Type == jsonl.TypeProgress || e.IsSidechain {
+		} else if e.Type == jsonl.TypeProgress || e.IsSidechain || m.tangentIndices[i] {
 			b.WriteString(styleMuted.Render(line))
 		} else {
 			b.WriteString(line)
@@ -266,7 +278,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  a all  i img  s sep  t trunc  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -389,6 +401,11 @@ func (m messagesModel) renderContextMeter() string {
 			m.stats.SidechainCount, m.stats.SidechainGroups, formatTokensShort(m.stats.SidechainTokens))))
 	}
 
+	if m.tangentResult != nil && m.tangentResult.TotalEntries > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Tangents: %d entries, %d groups (~%s tok)",
+			m.tangentResult.TotalEntries, len(m.tangentResult.Groups), formatTokensShort(m.tangentResult.TotalTokens))))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -462,6 +479,12 @@ func (m *messagesModel) selectAllSidechains() {
 	}
 }
 
+func (m *messagesModel) selectAllTangents() {
+	for idx := range m.tangentIndices {
+		m.selected[idx] = true
+	}
+}
+
 func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 	// Preview savings before executing
 	imgTokens := m.estimateTotalImageTokens()
@@ -494,10 +517,11 @@ func (m messagesModel) cleanAll() (messagesModel, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Error: %v", err)
 		return m, nil
 	}
-	m.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d chain, %d retry, %d stale, %d img, %d sep, %d trunc — saved ~%d tokens",
+	m.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d chain, %d tang, %d retry, %d stale, %d img, %d sep, %d trunc — saved ~%d tokens",
 		result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
-		result.FailedRetries, result.StaleReadsRemoved, result.ImagesReplaced,
-		result.SeparatorsStripped, result.OutputsTruncated, result.TotalTokensSaved)
+		result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,
+		result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated,
+		result.TotalTokensSaved)
 	return m.reload(), nil
 }
 
@@ -565,6 +589,8 @@ func (m messagesModel) reload() messagesModel {
 	m.staleIndices = m.dupResult.AllStaleIndices()
 	m.retryResult = analyzer.FindFailedRetries(entries)
 	m.failedIndices = m.retryResult.AllFailedIndices()
+	m.tangentResult = analyzer.FindTangents(entries)
+	m.tangentIndices = m.tangentResult.AllTangentIndices()
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {

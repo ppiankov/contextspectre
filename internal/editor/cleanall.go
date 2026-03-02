@@ -14,6 +14,7 @@ type CleanAllResult struct {
 	ProgressRemoved    int
 	SnapshotsRemoved   int
 	SidechainsRemoved  int
+	TangentsRemoved    int
 	FailedRetries      int
 	StaleReadsRemoved  int
 	ImagesReplaced     int
@@ -109,7 +110,21 @@ func CleanAll(path string) (*CleanAllResult, error) {
 		cleanIntermediate()
 	}
 
-	// 1d. Remove failed retries
+	// 1d. Remove cross-repo tangents
+	entries, _ = jsonl.Parse(path)
+	tangentResult := analyzer.FindTangents(entries)
+	if len(tangentResult.Groups) > 0 {
+		toDelete = tangentResult.AllTangentIndices()
+		dr, err := Delete(path, toDelete)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("tangents: %w", err)
+		}
+		result.TangentsRemoved = dr.EntriesRemoved
+		cleanIntermediate()
+	}
+
+	// 1e. Remove failed retries
 	entries, _ = jsonl.Parse(path)
 	retryResult := analyzer.FindFailedRetries(entries)
 	if len(retryResult.Sequences) > 0 {
@@ -122,7 +137,7 @@ func CleanAll(path string) (*CleanAllResult, error) {
 		cleanIntermediate()
 	}
 
-	// 1e. Remove stale reads
+	// 1f. Remove stale reads
 	entries, _ = jsonl.Parse(path)
 	dupResult := analyzer.FindDuplicateReads(entries)
 	if len(dupResult.Groups) > 0 {
