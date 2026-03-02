@@ -153,6 +153,30 @@ Key design decisions:
 - **Bubbletea TUI.** Keyboard-driven, no mouse required. Lipgloss for styling.
 - **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.
 
+## See also: CLI status line
+
+Claude Code CLI supports a custom status line hook that shows context usage in real time:
+
+```
+Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
+```
+
+This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it* and lets you trim.
+
+To set up the status line, create `~/.claude/statusline.sh` that reads JSON from stdin and outputs a formatted line. Claude Code passes `context_window.used_percentage`, `model.display_name`, `cost.total_cost_usd`, and line change stats. Configure it in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "statusLine": {
+      "type": "command",
+      "command": "~/.claude/statusline.sh",
+      "padding": 2
+    }
+  }
+}
+```
+
 ## Known limitations
 
 - **Token estimates are approximate.** The 4 chars/token heuristic is close but not exact. Actual BPE tokenization varies by content.
