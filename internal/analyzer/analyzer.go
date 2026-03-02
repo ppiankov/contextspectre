@@ -38,6 +38,9 @@ type ContextStats struct {
 	SnapshotBytesTotal   int64
 	LargeOutputCount     int
 	LargeOutputTokens    int
+	SidechainCount       int
+	SidechainGroups      int
+	SidechainTokens      int
 	ConversationalTurns  int
 	LastCompactionLine   int
 }
@@ -73,6 +76,16 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 		if e.Type == jsonl.TypeFileHistorySnapshot {
 			stats.SnapshotCount++
 			stats.SnapshotBytesTotal += int64(e.RawSize)
+		}
+
+		// Track sidechains
+		if e.IsSidechain {
+			stats.SidechainCount++
+			stats.SidechainTokens += e.RawSize / 4
+			// Count group boundaries: new group when previous was not sidechain
+			if i == 0 || !entries[i-1].IsSidechain {
+				stats.SidechainGroups++
+			}
 		}
 
 		// Track images

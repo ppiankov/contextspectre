@@ -21,6 +21,7 @@ var (
 	cleanOutThreshold  int
 	cleanOutKeepLines  int
 	cleanFailedRetries bool
+	cleanSidechains    bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -33,7 +34,7 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
@@ -163,6 +164,31 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanSidechains {
+		entries, err := jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("parse for sidechains: %w", err)
+		}
+		toDelete := make(map[int]bool)
+		for i, e := range entries {
+			if e.IsSidechain {
+				toDelete[i] = true
+			}
+		}
+		if len(toDelete) == 0 {
+			fmt.Println("No sidechain entries found.")
+		} else {
+			result, err := editor.Delete(path, toDelete)
+			if err != nil {
+				return fmt.Errorf("remove sidechains: %w", err)
+			}
+			fmt.Printf("Removed %d sidechain entries, saved %s\n",
+				result.EntriesRemoved,
+				formatBytes(result.BytesBefore-result.BytesAfter))
+			slog.Info("Sidechains removed", "count", result.EntriesRemoved)
+		}
+	}
+
 	return nil
 }
 
@@ -187,5 +213,6 @@ func init() {
 	cleanCmd.Flags().IntVar(&cleanOutThreshold, "output-threshold", 4096, "Byte threshold for output truncation")
 	cleanCmd.Flags().IntVar(&cleanOutKeepLines, "keep-lines", 10, "Lines to keep at start and end")
 	cleanCmd.Flags().BoolVar(&cleanFailedRetries, "failed-retries", false, "Remove failed tool attempts that were retried")
+	cleanCmd.Flags().BoolVar(&cleanSidechains, "sidechains", false, "Remove all sidechain entries")
 	rootCmd.AddCommand(cleanCmd)
 }
