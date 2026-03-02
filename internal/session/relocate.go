@@ -183,7 +183,7 @@ func rewriteCWD(path, fromPath, toPath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20)
@@ -246,20 +246,20 @@ func rewriteCWD(path, fromPath, toPath string) (int, error) {
 	w := bufio.NewWriter(tmpF)
 	for i, line := range newLines {
 		if _, err := w.Write(line); err != nil {
-			tmpF.Close()
-			os.Remove(tmpPath)
+			_ = tmpF.Close()
+			_ = os.Remove(tmpPath)
 			return 0, err
 		}
 		if i < len(newLines)-1 {
-			w.WriteByte('\n')
+			_ = w.WriteByte('\n')
 		}
 	}
 	if err := w.Flush(); err != nil {
-		tmpF.Close()
-		os.Remove(tmpPath)
+		_ = tmpF.Close()
+		_ = os.Remove(tmpPath)
 		return 0, err
 	}
-	tmpF.Close()
+	_ = tmpF.Close()
 
 	return modified, os.Rename(tmpPath, path)
 }

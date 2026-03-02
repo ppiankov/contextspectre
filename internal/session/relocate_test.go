@@ -170,7 +170,7 @@ func TestRelocate_ConflictErrors(t *testing.T) {
 func TestRelocate_MissingSource(t *testing.T) {
 	claudeDir := t.TempDir()
 	projectsDir := filepath.Join(claudeDir, "projects")
-	os.MkdirAll(projectsDir, 0755)
+	_ = os.MkdirAll(projectsDir, 0755)
 
 	_, err := Relocate(claudeDir, "/nonexistent/path", "/new/path", false)
 	if err == nil {

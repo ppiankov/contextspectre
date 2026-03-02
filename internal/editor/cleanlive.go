@@ -125,11 +125,11 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 	}
 
 	cleanIntermediate := func() {
-		safecopy.Clean(path)
+		_ = safecopy.Clean(path)
 	}
 
 	abortAndRestore := func() {
-		safecopy.Clean(path)
+		_ = safecopy.Clean(path)
 		_ = os.Rename(origBak, path)
 	}
 
@@ -266,7 +266,7 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 	result.TotalTokensSaved = int(result.BytesBefore-result.BytesAfter) / 4
 
 	// Finalize: move .bak.orig to .bak (same pattern as CleanAll)
-	safecopy.Clean(path) // remove any remaining intermediate
+	_ = safecopy.Clean(path) // remove any remaining intermediate
 	if err := os.Rename(origBak, path+".bak"); err != nil {
 		return nil, fmt.Errorf("finalize backup: %w", err)
 	}

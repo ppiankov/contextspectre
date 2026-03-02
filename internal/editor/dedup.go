@@ -38,9 +38,6 @@ func DeduplicateReads(path string, dupResult *analyzer.DuplicateReadResult) (*De
 	}
 
 	// Build sets of stale tool_use IDs per assistant entry, and per user entry
-	type blockRemoval struct {
-		toolUseID string
-	}
 	// assistantRemovals[entryIdx] = list of tool_use IDs to remove
 	assistantRemovals := make(map[int][]string)
 	// userRemovals[entryIdx] = list of tool_use_ids whose tool_results should be removed

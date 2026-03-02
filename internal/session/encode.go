@@ -21,10 +21,7 @@ func EncodePath(fsPath string) string {
 // Use ValidateDecodedPath to check if the result exists on disk.
 func DecodePath(dirName string) string {
 	// Remove leading "-" and replace remaining "-" with "/"
-	decoded := dirName
-	if strings.HasPrefix(decoded, "-") {
-		decoded = decoded[1:]
-	}
+	decoded := strings.TrimPrefix(dirName, "-")
 	decoded = strings.ReplaceAll(decoded, "-", "/")
 	if !strings.HasPrefix(decoded, "/") {
 		decoded = "/" + decoded
