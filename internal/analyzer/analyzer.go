@@ -1,6 +1,8 @@
 package analyzer
 
 import (
+	"encoding/json"
+
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 )
 
@@ -14,6 +16,9 @@ const CompactionThreshold = 165000
 // CompactionDropThreshold is the minimum token decrease between consecutive
 // assistant messages that indicates a compaction event occurred.
 const CompactionDropThreshold = 50000
+
+// LargeOutputThreshold is the default byte threshold for flagging large Bash outputs.
+const LargeOutputThreshold = 4096
 
 // ContextStats holds comprehensive analysis results for a session.
 type ContextStats struct {
@@ -31,6 +36,8 @@ type ContextStats struct {
 	ImageBytesTotal      int64
 	SnapshotCount        int
 	SnapshotBytesTotal   int64
+	LargeOutputCount     int
+	LargeOutputTokens    int
 	ConversationalTurns  int
 	LastCompactionLine   int
 }
@@ -111,6 +118,28 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 		}
 	}
 
+	// Detect large Bash outputs
+	bashToolIDs := collectBashToolIDs(entries)
+	for _, e := range entries {
+		if e.Type != jsonl.TypeUser || e.Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type != "tool_result" || !bashToolIDs[b.ToolUseID] {
+				continue
+			}
+			size := toolResultContentSize(b)
+			if size >= LargeOutputThreshold {
+				stats.LargeOutputCount++
+				stats.LargeOutputTokens += size / 4
+			}
+		}
+	}
+
 	// Calculate usage percentage
 	if ContextWindowSize > 0 {
 		stats.UsagePercent = float64(stats.CurrentContextTokens) / float64(ContextWindowSize) * 100
@@ -142,4 +171,47 @@ func CompactionDistance(stats *ContextStats) int {
 		return 0
 	}
 	return int(float64(tokensRemaining) / stats.TokenGrowthRate)
+}
+
+// collectBashToolIDs returns a set of tool_use IDs for Bash/shell tools.
+func collectBashToolIDs(entries []jsonl.Entry) map[string]bool {
+	ids := make(map[string]bool)
+	for _, e := range entries {
+		if e.Type != jsonl.TypeAssistant || e.Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "tool_use" && isBashTool(b.Name) {
+				ids[b.ID] = true
+			}
+		}
+	}
+	return ids
+}
+
+// isBashTool returns true for tool names that execute shell commands.
+func isBashTool(name string) bool {
+	switch name {
+	case "Bash", "bash", "execute_command", "run_command":
+		return true
+	}
+	return false
+}
+
+// toolResultContentSize returns the approximate byte size of tool_result content.
+func toolResultContentSize(b jsonl.ContentBlock) int {
+	if b.Content == nil {
+		return 0
+	}
+	// Try string first
+	var s string
+	if json.Unmarshal(b.Content, &s) == nil {
+		return len(s)
+	}
+	// Array of content blocks
+	return len(b.Content)
 }

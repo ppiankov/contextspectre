@@ -3,24 +3,25 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
-	Up            key.Binding
-	Down          key.Binding
-	Enter         key.Binding
-	Back          key.Binding
-	Quit          key.Binding
-	Space         key.Binding
-	SelectAllProg key.Binding
-	ReplaceImages key.Binding
-	StripSeps     key.Binding
-	SelectSnaps   key.Binding
-	SelectStale   key.Binding
-	Delete        key.Binding
-	Undo          key.Binding
-	Search        key.Binding
-	Escape        key.Binding
-	Confirm       key.Binding
-	DryRun        key.Binding
-	Cancel        key.Binding
+	Up             key.Binding
+	Down           key.Binding
+	Enter          key.Binding
+	Back           key.Binding
+	Quit           key.Binding
+	Space          key.Binding
+	SelectAllProg  key.Binding
+	ReplaceImages  key.Binding
+	StripSeps      key.Binding
+	SelectSnaps    key.Binding
+	SelectStale    key.Binding
+	TruncateOutput key.Binding
+	Delete         key.Binding
+	Undo           key.Binding
+	Search         key.Binding
+	Escape         key.Binding
+	Confirm        key.Binding
+	DryRun         key.Binding
+	Cancel         key.Binding
 }
 
 var keys = keyMap{
@@ -67,6 +68,10 @@ var keys = keyMap{
 	SelectStale: key.NewBinding(
 		key.WithKeys("r"),
 		key.WithHelp("r", "select stale reads"),
+	),
+	TruncateOutput: key.NewBinding(
+		key.WithKeys("t"),
+		key.WithHelp("t", "truncate outputs"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
