@@ -123,6 +123,10 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 			m.selectAllStaleReads()
 			m.updateImpact()
 		}
+	case key.Matches(msg, keys.TruncateOutput):
+		if !m.isActive {
+			return m.truncateOutputs()
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -246,7 +250,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space select  x progress  h snapshots  r stale  i images  s separators  d delete  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space select  x progress  h snaps  r stale  i imgs  s seps  t truncate  d delete  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -354,6 +358,11 @@ func (m messagesModel) renderContextMeter() string {
 			m.dupResult.TotalStale, m.dupResult.UniqueFiles, formatTokensShort(m.dupResult.TotalTokens))))
 	}
 
+	if m.stats.LargeOutputCount > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Large outputs: %d (~%s tok)",
+			m.stats.LargeOutputCount, formatTokensShort(m.stats.LargeOutputTokens))))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -442,6 +451,21 @@ func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 		result.ImagesReplaced, formatTokensShort(imgTokens), savedPct, float64(result.BytesSaved)/1024)
 
 	// Reload session data
+	return m.reload(), nil
+}
+
+func (m messagesModel) truncateOutputs() (messagesModel, tea.Cmd) {
+	result, err := editor.TruncateOutputs(m.session.FullPath, analyzer.LargeOutputThreshold, 10)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("Error: %v", err)
+		return m, nil
+	}
+	if result.OutputsTruncated == 0 {
+		m.statusMsg = "No large outputs to truncate."
+		return m, nil
+	}
+	m.statusMsg = fmt.Sprintf("Truncated %d outputs, saved ~%d tokens",
+		result.OutputsTruncated, result.TokensSaved)
 	return m.reload(), nil
 }
 

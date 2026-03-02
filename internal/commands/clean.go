@@ -12,11 +12,14 @@ import (
 )
 
 var (
-	cleanImages     bool
-	cleanProgress   bool
-	cleanSeparators bool
-	cleanSnapshots  bool
-	cleanDedupReads bool
+	cleanImages       bool
+	cleanProgress     bool
+	cleanSeparators   bool
+	cleanSnapshots    bool
+	cleanDedupReads   bool
+	cleanTruncate     bool
+	cleanOutThreshold int
+	cleanOutKeepLines int
 )
 
 var cleanCmd = &cobra.Command{
@@ -29,8 +32,8 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads {
-		return fmt.Errorf("specify --images, --progress, --separators, --snapshots, and/or --dedup-reads")
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate {
+		return fmt.Errorf("specify --images, --progress, --separators, --snapshots, --dedup-reads, and/or --truncate-output")
 	}
 
 	path := resolveSessionPath(args[0])
@@ -125,6 +128,20 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanTruncate {
+		result, err := editor.TruncateOutputs(path, cleanOutThreshold, cleanOutKeepLines)
+		if err != nil {
+			return fmt.Errorf("truncate outputs: %w", err)
+		}
+		if result.OutputsTruncated > 0 {
+			fmt.Printf("Truncated %d outputs, saved ~%d tokens (kept first/last %d lines)\n",
+				result.OutputsTruncated, result.TokensSaved, cleanOutKeepLines)
+			slog.Info("Outputs truncated", "count", result.OutputsTruncated, "tokens", result.TokensSaved)
+		} else {
+			fmt.Println("No large outputs to truncate.")
+		}
+	}
+
 	return nil
 }
 
@@ -145,5 +162,8 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanSeparators, "separators", false, "Strip decorative separator lines")
 	cleanCmd.Flags().BoolVar(&cleanSnapshots, "snapshots", false, "Remove all file-history-snapshot entries")
 	cleanCmd.Flags().BoolVar(&cleanDedupReads, "dedup-reads", false, "Remove stale duplicate file reads")
+	cleanCmd.Flags().BoolVar(&cleanTruncate, "truncate-output", false, "Truncate large Bash outputs")
+	cleanCmd.Flags().IntVar(&cleanOutThreshold, "output-threshold", 4096, "Byte threshold for output truncation")
+	cleanCmd.Flags().IntVar(&cleanOutKeepLines, "keep-lines", 10, "Lines to keep at start and end")
 	rootCmd.AddCommand(cleanCmd)
 }
