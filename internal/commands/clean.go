@@ -9,6 +9,7 @@ import (
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
+	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
 
@@ -27,24 +28,40 @@ var (
 	cleanAll           bool
 	cleanLive          bool
 	cleanAggressive    bool
+	cleanAuto          bool
 )
 
 var cleanCmd = &cobra.Command{
-	Use:   "clean <session-id-or-path>",
+	Use:   "clean [session-id-or-path]",
 	Short: "Clean a session (replace images, remove progress)",
 	Long: `Clean a conversation session by replacing base64 images with tiny
-placeholders or removing progress messages. Always creates a backup first.`,
-	Args: cobra.ExactArgs(1),
+placeholders or removing progress messages. Always creates a backup first.
+
+Use --auto to automatically find and clean the most recent session:
+  contextspectre clean --auto`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runClean,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive && !cleanAuto {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
 	if cleanAggressive && !cleanLive {
 		return fmt.Errorf("--aggressive can only be used with --live")
+	}
+
+	if cleanAuto && len(args) > 0 {
+		return fmt.Errorf("--auto does not accept a session argument (it finds the most recent session)")
+	}
+	if !cleanAuto && len(args) == 0 {
+		return fmt.Errorf("session argument required (or use --auto to find the most recent session)")
+	}
+
+	// --auto: find the most recent session and run --all
+	if cleanAuto {
+		return runCleanAuto()
 	}
 
 	path := resolveSessionPath(args[0])
@@ -248,6 +265,57 @@ func runClean(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func runCleanAuto() error {
+	dir := resolveClaudeDir()
+	d := &session.Discoverer{ClaudeDir: dir}
+	sessions, err := d.ListAllSessions()
+	if err != nil {
+		return fmt.Errorf("discover sessions: %w", err)
+	}
+	if len(sessions) == 0 {
+		if isJSON() {
+			return printJSON(map[string]string{"status": "no_sessions"})
+		}
+		fmt.Println("No sessions found.")
+		return nil
+	}
+
+	// Most recent session (already sorted by mtime desc)
+	target := sessions[0]
+	path := target.FullPath
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return fmt.Errorf("session file not found: %s", path)
+	}
+
+	result, err := editor.CleanAll(path)
+	if err != nil {
+		return fmt.Errorf("clean auto: %w", err)
+	}
+
+	if isJSON() {
+		out := cleanAllToJSON(path, result)
+		out.Mode = "auto"
+		return printJSON(out)
+	}
+
+	totalOps := result.ProgressRemoved + result.SnapshotsRemoved + result.SidechainsRemoved +
+		result.TangentsRemoved + result.FailedRetries + result.StaleReadsRemoved +
+		result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+	if totalOps == 0 {
+		fmt.Printf("Session %s (%s): nothing to clean\n", target.SessionID, target.ProjectName)
+		return nil
+	}
+
+	fmt.Printf("Auto-cleaned session %s (%s): %d entries removed, ~%d tokens saved, %s\n",
+		target.SessionID, target.ProjectName,
+		result.ProgressRemoved+result.SnapshotsRemoved+result.SidechainsRemoved+
+			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved,
+		result.TotalTokensSaved,
+		formatBytes(result.BytesBefore-result.BytesAfter))
+	slog.Info("Clean auto complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
+	return nil
+}
+
 func runCleanLive(path string) error {
 	opts := editor.CleanLiveOpts{
 		Aggressive: cleanAggressive,
@@ -306,5 +374,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanAll, "all", false, "Run all cleanup operations")
 	cleanCmd.Flags().BoolVar(&cleanLive, "live", false, "Safe cleanup for active sessions (Tier 1-3)")
 	cleanCmd.Flags().BoolVar(&cleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
+	cleanCmd.Flags().BoolVar(&cleanAuto, "auto", false, "Find and clean the most recent session (no session arg needed)")
 	rootCmd.AddCommand(cleanCmd)
 }
