@@ -12,14 +12,15 @@ import (
 )
 
 var (
-	cleanImages       bool
-	cleanProgress     bool
-	cleanSeparators   bool
-	cleanSnapshots    bool
-	cleanDedupReads   bool
-	cleanTruncate     bool
-	cleanOutThreshold int
-	cleanOutKeepLines int
+	cleanImages        bool
+	cleanProgress      bool
+	cleanSeparators    bool
+	cleanSnapshots     bool
+	cleanDedupReads    bool
+	cleanTruncate      bool
+	cleanOutThreshold  int
+	cleanOutKeepLines  int
+	cleanFailedRetries bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -32,8 +33,8 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate {
-		return fmt.Errorf("specify --images, --progress, --separators, --snapshots, --dedup-reads, and/or --truncate-output")
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries {
+		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
 	path := resolveSessionPath(args[0])
@@ -142,6 +143,26 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanFailedRetries {
+		entries, err := jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("parse for retries: %w", err)
+		}
+		retryResult := analyzer.FindFailedRetries(entries)
+		if len(retryResult.Sequences) == 0 {
+			fmt.Println("No failed retries found.")
+		} else {
+			result, err := editor.RemoveFailedRetries(path, retryResult)
+			if err != nil {
+				return fmt.Errorf("remove retries: %w", err)
+			}
+			fmt.Printf("Removed %d failed attempts, saved %s\n",
+				result.FailedRemoved,
+				formatBytes(result.BytesBefore-result.BytesAfter))
+			slog.Info("Failed retries removed", "count", result.FailedRemoved)
+		}
+	}
+
 	return nil
 }
 
@@ -165,5 +186,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanTruncate, "truncate-output", false, "Truncate large Bash outputs")
 	cleanCmd.Flags().IntVar(&cleanOutThreshold, "output-threshold", 4096, "Byte threshold for output truncation")
 	cleanCmd.Flags().IntVar(&cleanOutKeepLines, "keep-lines", 10, "Lines to keep at start and end")
+	cleanCmd.Flags().BoolVar(&cleanFailedRetries, "failed-retries", false, "Remove failed tool attempts that were retried")
 	rootCmd.AddCommand(cleanCmd)
 }
