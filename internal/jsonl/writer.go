@@ -20,8 +20,8 @@ func WriteLines(path string, lines [][]byte) error {
 	success := false
 	defer func() {
 		if !success {
-			tmp.Close()
-			os.Remove(tmpPath)
+			_ = tmp.Close()
+			_ = os.Remove(tmpPath)
 		}
 	}()
 
@@ -44,7 +44,7 @@ func WriteLines(path string, lines [][]byte) error {
 	// Preserve original file permissions
 	info, err := os.Stat(path)
 	if err == nil {
-		os.Chmod(tmpPath, info.Mode())
+		_ = os.Chmod(tmpPath, info.Mode())
 	}
 
 	if err := os.Rename(tmpPath, path); err != nil {

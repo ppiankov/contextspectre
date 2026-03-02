@@ -92,7 +92,7 @@ func Delete(path string, toDelete map[int]bool) (*DeleteResult, error) {
 
 	if err := jsonl.WriteLines(path, newLines); err != nil {
 		// Try to restore from backup on failure
-		safecopy.Restore(path)
+		_ = safecopy.Restore(path) // best-effort restore
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
@@ -179,7 +179,7 @@ func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 	}
 
 	if err := jsonl.WriteLines(path, rawLines); err != nil {
-		safecopy.Restore(path)
+		_ = safecopy.Restore(path) // best-effort restore
 		return nil, fmt.Errorf("write: %w", err)
 	}
 

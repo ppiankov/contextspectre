@@ -15,7 +15,7 @@ func Parse(path string) ([]Entry, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
@@ -51,7 +51,7 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
@@ -110,7 +110,7 @@ func ScanLight(path string) (*LightStats, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	stats := &LightStats{
 		FileSizeBytes: info.Size(),
