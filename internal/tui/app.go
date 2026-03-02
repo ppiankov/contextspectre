@@ -106,7 +106,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch m.currentView {
 	case viewSessions:
-		if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "q" {
+		if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "q" && !m.sessions.searching {
 			return m, tea.Quit
 		}
 		m.sessions, cmd = m.sessions.Update(msg)
