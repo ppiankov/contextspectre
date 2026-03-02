@@ -90,12 +90,15 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 
 // LightStats holds minimal stats extracted without full parsing.
 type LightStats struct {
-	LineCount     int
-	FileSizeBytes int64
-	TypeCounts    map[MessageType]int
-	LastUsage     *Usage
-	MaxContext    int
-	ImageCount    int
+	LineCount            int
+	FileSizeBytes        int64
+	TypeCounts           map[MessageType]int
+	LastUsage            *Usage
+	MaxContext           int
+	ImageCount           int
+	CompactionCount      int
+	LastCompactionBefore int
+	LastCompactionAfter  int
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -120,6 +123,8 @@ func ScanLight(path string) (*LightStats, error) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
 
+	var prevContextTokens int
+
 	for scanner.Scan() {
 		stats.LineCount++
 		raw := scanner.Bytes()
@@ -139,6 +144,14 @@ func ScanLight(path string) (*LightStats, error) {
 			if ctx > stats.MaxContext {
 				stats.MaxContext = ctx
 			}
+
+			// Detect compaction: large drop in context tokens
+			if prevContextTokens > 0 && prevContextTokens-ctx > 50000 {
+				stats.CompactionCount++
+				stats.LastCompactionBefore = prevContextTokens
+				stats.LastCompactionAfter = ctx
+			}
+			prevContextTokens = ctx
 		}
 
 		// Quick image detection via string search (faster than full content parse)

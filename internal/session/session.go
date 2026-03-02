@@ -30,9 +30,12 @@ type Info struct {
 
 // QuickStats holds lightweight context stats for the session browser.
 type QuickStats struct {
-	ContextTokens int
-	ContextPct    float64
-	ImageCount    int
+	ContextTokens        int
+	ContextPct           float64
+	ImageCount           int
+	CompactionCount      int
+	LastCompactionBefore int
+	LastCompactionAfter  int
 }
 
 // IsActive returns true if the session was modified within the last 60 seconds.
@@ -164,7 +167,10 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 		// Quick context stats
 		if stats, err := jsonl.ScanLight(e.FullPath); err == nil {
 			info.ContextStats = &QuickStats{
-				ImageCount: stats.ImageCount,
+				ImageCount:           stats.ImageCount,
+				CompactionCount:      stats.CompactionCount,
+				LastCompactionBefore: stats.LastCompactionBefore,
+				LastCompactionAfter:  stats.LastCompactionAfter,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
@@ -207,7 +213,10 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 		if stats, err := jsonl.ScanLight(path); err == nil {
 			info.MessageCount = stats.LineCount
 			info.ContextStats = &QuickStats{
-				ImageCount: stats.ImageCount,
+				ImageCount:           stats.ImageCount,
+				CompactionCount:      stats.CompactionCount,
+				LastCompactionBefore: stats.LastCompactionBefore,
+				LastCompactionAfter:  stats.LastCompactionAfter,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()

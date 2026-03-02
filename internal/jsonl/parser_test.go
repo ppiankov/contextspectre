@@ -186,6 +186,33 @@ func TestScanLight_SmallSession(t *testing.T) {
 	}
 }
 
+func TestScanLight_CompactionDetection(t *testing.T) {
+	stats, err := ScanLight(testdataPath("compaction.jsonl"))
+	if err != nil {
+		t.Fatalf("scanLight: %v", err)
+	}
+	// compaction.jsonl has a drop from 165300 to 35100 (130200 drop)
+	if stats.CompactionCount != 1 {
+		t.Errorf("expected 1 compaction, got %d", stats.CompactionCount)
+	}
+	if stats.LastCompactionBefore != 165300 {
+		t.Errorf("expected LastCompactionBefore=165300, got %d", stats.LastCompactionBefore)
+	}
+	if stats.LastCompactionAfter != 35100 {
+		t.Errorf("expected LastCompactionAfter=35100, got %d", stats.LastCompactionAfter)
+	}
+}
+
+func TestScanLight_NoCompaction(t *testing.T) {
+	stats, err := ScanLight(testdataPath("small_session.jsonl"))
+	if err != nil {
+		t.Fatalf("scanLight: %v", err)
+	}
+	if stats.CompactionCount != 0 {
+		t.Errorf("expected 0 compactions, got %d", stats.CompactionCount)
+	}
+}
+
 func TestScanLight_NonexistentFile(t *testing.T) {
 	_, err := ScanLight("/nonexistent/file.jsonl")
 	if err == nil {
