@@ -56,5 +56,7 @@ func ClaudeDir() string {
 func init() {
 	rootCmd.PersistentFlags().BoolVar(&verbose, "verbose", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVar(&claudeDir, "claude-dir", "", "Override ~/.claude directory path")
+	rootCmd.PersistentFlags().StringVar(&outputFormat, "format", "", "Output format (json for machine-readable)")
+
 	rootCmd.AddCommand(versionCmd)
 }
