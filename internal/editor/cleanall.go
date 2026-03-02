@@ -45,7 +45,7 @@ func CleanAll(path string) (*CleanAllResult, error) {
 
 	// Helper: clean intermediate .bak files between operations
 	cleanIntermediate := func() {
-		safecopy.Clean(path)
+		_ = safecopy.Clean(path)
 	}
 
 	// Phase 1: Entry-level deletions

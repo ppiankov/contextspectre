@@ -13,7 +13,9 @@ func TestIsIdle_OldFile(t *testing.T) {
 	path := copyFixture(t, "small_session.jsonl")
 	// Set mtime to 10 seconds ago
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	idle, mtime, err := IsIdle(path, DefaultIdleThreshold)
 	if err != nil {
@@ -30,7 +32,9 @@ func TestIsIdle_OldFile(t *testing.T) {
 func TestIsIdle_RecentFile(t *testing.T) {
 	path := copyFixture(t, "small_session.jsonl")
 	// Touch the file to make it very recent
-	os.Chtimes(path, time.Now(), time.Now())
+	if err := os.Chtimes(path, time.Now(), time.Now()); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	idle, _, err := IsIdle(path, 5*time.Second)
 	if err != nil {
@@ -59,8 +63,12 @@ func TestCheckRace_Detected(t *testing.T) {
 
 	// Modify the file to change mtime
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.Write([]byte("\n"))
-	f.Close()
+	if _, err := f.Write([]byte("\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
 
 	err := checkRace(path, expected)
 	if !errors.Is(err, ErrRaceDetected) {
@@ -73,7 +81,9 @@ func TestCleanLive_Basic(t *testing.T) {
 
 	// Set mtime to the past so IsIdle passes
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	result, err := CleanLive(path, CleanLiveOpts{Threshold: 1 * time.Second})
 	if err != nil {
@@ -127,7 +137,9 @@ func TestCleanLive_Aggressive(t *testing.T) {
 	path := copyFixture(t, "with_images.jsonl")
 
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	result, err := CleanLive(path, CleanLiveOpts{
 		Aggressive: true,
@@ -145,7 +157,9 @@ func TestCleanLive_Aggressive(t *testing.T) {
 func TestCleanLive_NotIdle(t *testing.T) {
 	path := copyFixture(t, "small_session.jsonl")
 	// Touch the file to make mtime = now
-	os.Chtimes(path, time.Now(), time.Now())
+	if err := os.Chtimes(path, time.Now(), time.Now()); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	_, err := CleanLive(path, CleanLiveOpts{Threshold: 5 * time.Second})
 	if !errors.Is(err, ErrSessionNotIdle) {
@@ -166,7 +180,9 @@ func TestCleanLive_RaceDetected(t *testing.T) {
 	origData, _ := os.ReadFile(path)
 
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	// Run first: verify basic CleanLive works (establishes baseline)
 	result, err := CleanLive(path, CleanLiveOpts{Threshold: 1 * time.Second})
@@ -178,16 +194,22 @@ func TestCleanLive_RaceDetected(t *testing.T) {
 	}
 
 	// Restore original and test race detection via checkRace directly
-	os.WriteFile(path, origData, 0644)
-	os.Remove(path + ".bak")
+	if err := os.WriteFile(path, origData, 0644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	_ = os.Remove(path + ".bak")
 
 	fi, _ := os.Stat(path)
 	origMtime := fi.ModTime()
 
 	// Simulate Claude writing by appending
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
-	f.Write([]byte("\n"))
-	f.Close()
+	if _, err := f.Write([]byte("\n")); err != nil {
+		t.Fatalf("Write: %v", err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
 
 	err = checkRace(path, origMtime)
 	if !errors.Is(err, ErrRaceDetected) {
@@ -200,7 +222,9 @@ func TestCleanLive_NoChanges(t *testing.T) {
 	path := copyFixture(t, "tangent_session.jsonl")
 
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	result, err := CleanLive(path, CleanLiveOpts{Threshold: 1 * time.Second})
 	if err != nil {
@@ -220,7 +244,9 @@ func TestCleanLive_Tier6NeverRuns(t *testing.T) {
 	path := copyFixture(t, "tangent_session.jsonl")
 
 	past := time.Now().Add(-10 * time.Second)
-	os.Chtimes(path, past, past)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
 
 	entriesBefore, _ := jsonl.Parse(path)
 	countBefore := len(entriesBefore)
