@@ -26,8 +26,37 @@ func runSessions(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(sessions) == 0 {
+		if isJSON() {
+			return printJSON(SessionsOutput{Sessions: []SessionJSON{}, Total: 0})
+		}
 		fmt.Println("No sessions found.")
 		return nil
+	}
+
+	if isJSON() {
+		out := SessionsOutput{Total: len(sessions)}
+		for _, s := range sessions {
+			sj := SessionJSON{
+				ID:            s.SessionID,
+				Project:       s.ProjectPath,
+				Branch:        s.GitBranch,
+				Messages:      s.MessageCount,
+				FileSizeBytes: int64(s.FileSizeMB * 1024 * 1024),
+				LastModified:  s.Modified,
+				Active:        s.IsActive(),
+			}
+			if sj.Project == "" {
+				sj.Project = s.ProjectName
+			}
+			if s.ContextStats != nil {
+				sj.Tokens = s.ContextStats.ContextTokens
+				sj.ContextPercent = s.ContextStats.ContextPct
+				sj.Compactions = s.ContextStats.CompactionCount
+				sj.Images = s.ContextStats.ImageCount
+			}
+			out.Sessions = append(out.Sessions, sj)
+		}
+		return printJSON(out)
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)

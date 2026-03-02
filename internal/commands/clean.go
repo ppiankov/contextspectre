@@ -50,6 +50,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("clean all: %w", err)
 		}
+		if isJSON() {
+			return printJSON(cleanAllToJSON(path, result))
+		}
 		fmt.Printf("Cleaned: %d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d img, %d sep, %d trunc\n",
 			result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
 			result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,

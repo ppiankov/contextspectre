@@ -30,6 +30,12 @@ func runStats(cmd *cobra.Command, args []string) error {
 	}
 
 	stats := analyzer.Analyze(entries)
+	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+
+	if isJSON() {
+		out := buildStatsOutput(sessionID, stats)
+		return printJSON(out)
+	}
 
 	fi, _ := os.Stat(path)
 
