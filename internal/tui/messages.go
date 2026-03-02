@@ -132,6 +132,11 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 		if !m.isActive {
 			return m.truncateOutputs()
 		}
+	case key.Matches(msg, keys.SelectChains):
+		if !m.isActive {
+			m.selectAllSidechains()
+			m.updateImpact()
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -240,7 +245,7 @@ func (m messagesModel) View() string {
 			b.WriteString(styleSelected.Render(line))
 		} else if isMarked {
 			b.WriteString(styleMarked.Render(line))
-		} else if e.Type == jsonl.TypeProgress {
+		} else if e.Type == jsonl.TypeProgress || e.IsSidechain {
 			b.WriteString(styleMuted.Render(line))
 		} else {
 			b.WriteString(line)
@@ -257,7 +262,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space select  x progress  h snaps  r stale  i imgs  s seps  t truncate  d delete  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  i img  s sep  t trunc  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -375,6 +380,11 @@ func (m messagesModel) renderContextMeter() string {
 			m.retryResult.TotalFailed, formatTokensShort(m.retryResult.TotalTokens))))
 	}
 
+	if m.stats.SidechainCount > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Sidechains: %d entries, %d groups (~%s tok)",
+			m.stats.SidechainCount, m.stats.SidechainGroups, formatTokensShort(m.stats.SidechainTokens))))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -437,6 +447,14 @@ func (m *messagesModel) selectAllSnapshots() {
 func (m *messagesModel) selectAllStaleReads() {
 	for idx := range m.staleIndices {
 		m.selected[idx] = true
+	}
+}
+
+func (m *messagesModel) selectAllSidechains() {
+	for i, e := range m.entries {
+		if e.IsSidechain {
+			m.selected[i] = true
+		}
 	}
 }
 
