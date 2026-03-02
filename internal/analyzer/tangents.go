@@ -1,0 +1,361 @@
+package analyzer
+
+import (
+	"encoding/json"
+	"path/filepath"
+	"strings"
+
+	"github.com/ppiankov/contextspectre/internal/jsonl"
+)
+
+// TangentGroup represents a contiguous block of entries referencing external repos.
+type TangentGroup struct {
+	StartIndex      int      // first entry in the tangent
+	EndIndex        int      // last entry in the tangent (inclusive)
+	EntryIndices    []int    // all entry indices in this tangent
+	ExternalPaths   []string // unique external paths referenced
+	EstimatedTokens int      // total tokens across tangent entries
+}
+
+// TangentResult summarizes all detected cross-repo tangents in a session.
+type TangentResult struct {
+	Groups       []TangentGroup
+	TotalEntries int
+	TotalTokens  int
+	ExternalDirs int // unique external root directories
+	SessionCWD   string
+}
+
+// AllTangentIndices returns every entry index across all tangent groups.
+func (r *TangentResult) AllTangentIndices() map[int]bool {
+	m := make(map[int]bool)
+	for _, g := range r.Groups {
+		for _, idx := range g.EntryIndices {
+			m[idx] = true
+		}
+	}
+	return m
+}
+
+// entryInfo holds path-analysis metadata for a single entry.
+type entryInfo struct {
+	externalPaths []string // paths outside CWD
+	modifiesCWD   bool     // writes/edits files inside CWD
+	refsExternal  bool     // references any external path
+	refsCWD       bool     // references any CWD path
+}
+
+// FindTangents detects cross-repo tangent sequences in a session.
+// A tangent is a contiguous block of entries where tool_use inputs reference
+// paths outside the session's CWD AND no file modifications occur in the CWD.
+// Only flags tangents where external paths are explicitly present — no semantic analysis.
+func FindTangents(entries []jsonl.Entry) *TangentResult {
+	result := &TangentResult{}
+
+	cwd := detectSessionCWD(entries)
+	if cwd == "" {
+		return result
+	}
+	result.SessionCWD = cwd
+
+	infos := make([]entryInfo, len(entries))
+	for i, e := range entries {
+		paths, tools := extractAllPaths(e)
+		for j, p := range paths {
+			if isOutsideCWD(p, cwd) {
+				infos[i].externalPaths = append(infos[i].externalPaths, p)
+				infos[i].refsExternal = true
+			} else {
+				infos[i].refsCWD = true
+			}
+			// Check if this is a file-modifying tool
+			if j < len(tools) && isModifyingTool(tools[j]) && !isOutsideCWD(p, cwd) {
+				infos[i].modifiesCWD = true
+			}
+		}
+	}
+
+	// Find contiguous blocks where entries reference external paths
+	// and do NOT modify CWD files
+	i := 0
+	for i < len(entries) {
+		// Skip entries that reference CWD or are non-conversational
+		if !infos[i].refsExternal || infos[i].refsCWD || infos[i].modifiesCWD {
+			i++
+			continue
+		}
+
+		// Found start of potential tangent
+		start := i
+		externalPathSet := make(map[string]bool)
+		totalTokens := 0
+
+		// Expand forward: include entries that are part of this tangent block
+		for i < len(entries) {
+			e := entries[i]
+			info := infos[i]
+
+			// Stop if entry references CWD or modifies CWD
+			if info.refsCWD || info.modifiesCWD {
+				break
+			}
+
+			// Include if entry references external paths
+			if info.refsExternal {
+				for _, p := range info.externalPaths {
+					externalPathSet[p] = true
+				}
+				totalTokens += e.RawSize / 4
+				i++
+				continue
+			}
+
+			// Include non-conversational entries (progress, snapshots) between tangent entries
+			if !e.IsConversational() {
+				totalTokens += e.RawSize / 4
+				i++
+				continue
+			}
+
+			// Conversational entry with no path refs: could be part of the tangent
+			// (e.g., assistant text response to external question)
+			// Include if it's between two external-referencing entries
+			if isResponseToTangent(entries, infos, i, start) {
+				totalTokens += e.RawSize / 4
+				i++
+				continue
+			}
+
+			break
+		}
+
+		end := i - 1
+		if end < start {
+			continue
+		}
+
+		// Build the group
+		var indices []int
+		for j := start; j <= end; j++ {
+			indices = append(indices, j)
+		}
+
+		// Only flag if there are at least 2 entries (a question and response)
+		if len(indices) >= 2 {
+			var uniquePaths []string
+			for p := range externalPathSet {
+				uniquePaths = append(uniquePaths, p)
+			}
+
+			group := TangentGroup{
+				StartIndex:      start,
+				EndIndex:        end,
+				EntryIndices:    indices,
+				ExternalPaths:   uniquePaths,
+				EstimatedTokens: totalTokens,
+			}
+
+			result.Groups = append(result.Groups, group)
+			result.TotalEntries += len(indices)
+			result.TotalTokens += totalTokens
+		}
+	}
+
+	// Count unique external root directories
+	extDirs := make(map[string]bool)
+	for _, g := range result.Groups {
+		for _, p := range g.ExternalPaths {
+			extDirs[externalRootDir(p, cwd)] = true
+		}
+	}
+	result.ExternalDirs = len(extDirs)
+
+	return result
+}
+
+// detectSessionCWD extracts the CWD from the first entry that has one set.
+func detectSessionCWD(entries []jsonl.Entry) string {
+	for _, e := range entries {
+		if e.CWD != "" {
+			return e.CWD
+		}
+	}
+	return ""
+}
+
+// extractAllPaths extracts file paths and corresponding tool names from an entry's tool_use/tool_result blocks.
+func extractAllPaths(e jsonl.Entry) (paths []string, toolNames []string) {
+	if e.Message == nil {
+		return nil, nil
+	}
+	blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+	if err != nil {
+		return nil, nil
+	}
+
+	for _, b := range blocks {
+		switch b.Type {
+		case "tool_use":
+			p := extractToolPath(b.Input)
+			if p != "" {
+				paths = append(paths, p)
+				toolNames = append(toolNames, b.Name)
+			}
+		case "tool_result":
+			// Tool results can contain path references in their content
+			// but we primarily care about tool_use inputs for path detection
+		}
+	}
+
+	// Also check for Bash commands referencing paths
+	for _, b := range blocks {
+		if b.Type == "tool_use" && isBashLikeTool(b.Name) {
+			cmdPaths := extractBashCommandPaths(b.Input)
+			for _, p := range cmdPaths {
+				paths = append(paths, p)
+				toolNames = append(toolNames, b.Name)
+			}
+		}
+	}
+
+	return paths, toolNames
+}
+
+// extractToolPath extracts a file path from a tool_use input.
+func extractToolPath(input json.RawMessage) string {
+	var fields struct {
+		FilePath string `json:"file_path"`
+		Path     string `json:"path"`
+	}
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return ""
+	}
+	if fields.FilePath != "" {
+		return fields.FilePath
+	}
+	return fields.Path
+}
+
+// extractBashCommandPaths extracts absolute paths from Bash command inputs.
+func extractBashCommandPaths(input json.RawMessage) []string {
+	var fields struct {
+		Command string `json:"command"`
+	}
+	if err := json.Unmarshal(input, &fields); err != nil {
+		return nil
+	}
+
+	var paths []string
+	// Split on whitespace and look for absolute paths
+	for _, word := range strings.Fields(fields.Command) {
+		// Clean quotes
+		word = strings.Trim(word, `"'`)
+		if strings.HasPrefix(word, "/") && !isSystemPath(word) {
+			paths = append(paths, word)
+		}
+	}
+	return paths
+}
+
+// isOutsideCWD checks if a path is outside the session's CWD.
+func isOutsideCWD(path, cwd string) bool {
+	if path == "" || cwd == "" {
+		return false
+	}
+	// Normalize paths
+	absPath := filepath.Clean(path)
+	absCWD := filepath.Clean(cwd)
+
+	// Check if path is under CWD
+	rel, err := filepath.Rel(absCWD, absPath)
+	if err != nil {
+		return true // can't determine relationship — treat as external
+	}
+	// If the relative path starts with "..", it's outside CWD
+	return strings.HasPrefix(rel, "..")
+}
+
+// isModifyingTool returns true for tool names that modify files.
+func isModifyingTool(name string) bool {
+	switch name {
+	case "Write", "Edit", "write_file", "edit_file", "WriteFile",
+		"Bash", "bash", "execute_command", "run_command",
+		"NotebookEdit":
+		return true
+	}
+	return false
+}
+
+// isBashLikeTool returns true for Bash/shell tool names.
+func isBashLikeTool(name string) bool {
+	switch name {
+	case "Bash", "bash", "execute_command", "run_command":
+		return true
+	}
+	return false
+}
+
+// isSystemPath returns true for common system paths that shouldn't be treated as project paths.
+func isSystemPath(path string) bool {
+	prefixes := []string{"/usr/", "/bin/", "/sbin/", "/etc/", "/tmp/", "/var/", "/dev/", "/proc/", "/sys/"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isResponseToTangent checks if a conversational entry with no path refs
+// is likely a response within a tangent (e.g., assistant answering about external repo).
+func isResponseToTangent(entries []jsonl.Entry, infos []entryInfo, idx, tangentStart int) bool {
+	if idx <= tangentStart {
+		return false
+	}
+
+	e := entries[idx]
+
+	// Assistant responses following external-referencing user messages are part of the tangent
+	if e.Type == jsonl.TypeAssistant {
+		// Check if the preceding entry (or recent entries) are in the tangent
+		for j := idx - 1; j >= tangentStart; j-- {
+			if entries[j].IsConversational() {
+				return infos[j].refsExternal || !infos[j].refsCWD
+			}
+		}
+	}
+
+	// User messages with tool_results following tangent assistant messages
+	if e.Type == jsonl.TypeUser {
+		for j := idx - 1; j >= tangentStart; j-- {
+			if entries[j].IsConversational() {
+				return infos[j].refsExternal || !infos[j].refsCWD
+			}
+		}
+	}
+
+	return false
+}
+
+// externalRootDir extracts the project root directory from an external path.
+// E.g., "/home/user/dev/other-repo/src/main.go" → "/home/user/dev/other-repo"
+func externalRootDir(path, cwd string) string {
+	// Find the common parent between cwd and path, then take the next component
+	cwdParts := strings.Split(filepath.Clean(cwd), string(filepath.Separator))
+	pathParts := strings.Split(filepath.Clean(path), string(filepath.Separator))
+
+	// Find where they diverge
+	common := 0
+	for i := 0; i < len(cwdParts) && i < len(pathParts); i++ {
+		if cwdParts[i] != pathParts[i] {
+			break
+		}
+		common = i + 1
+	}
+
+	// Take one more component from the path after divergence
+	if common < len(pathParts) {
+		return strings.Join(pathParts[:common+1], string(filepath.Separator))
+	}
+	return path
+}

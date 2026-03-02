@@ -41,6 +41,9 @@ type ContextStats struct {
 	SidechainCount       int
 	SidechainGroups      int
 	SidechainTokens      int
+	TangentCount         int
+	TangentEntries       int
+	TangentTokens        int
 	ConversationalTurns  int
 	LastCompactionLine   int
 }

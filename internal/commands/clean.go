@@ -22,6 +22,7 @@ var (
 	cleanOutKeepLines  int
 	cleanFailedRetries bool
 	cleanSidechains    bool
+	cleanTangents      bool
 	cleanAll           bool
 )
 
@@ -35,7 +36,7 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanAll {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
@@ -49,10 +50,10 @@ func runClean(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("clean all: %w", err)
 		}
-		fmt.Printf("Cleaned: %d progress, %d snapshots, %d sidechains, %d retries, %d stale reads, %d images, %d separators, %d truncated\n",
+		fmt.Printf("Cleaned: %d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d img, %d sep, %d trunc\n",
 			result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
-			result.FailedRetries, result.StaleReadsRemoved, result.ImagesReplaced,
-			result.SeparatorsStripped, result.OutputsTruncated)
+			result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,
+			result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
 		slog.Info("Clean all complete", "tokens", result.TotalTokensSaved)
@@ -205,6 +206,27 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanTangents {
+		entries, err := jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("parse for tangents: %w", err)
+		}
+		tangentResult := analyzer.FindTangents(entries)
+		if len(tangentResult.Groups) == 0 {
+			fmt.Println("No cross-repo tangents found.")
+		} else {
+			toDelete := tangentResult.AllTangentIndices()
+			result, err := editor.Delete(path, toDelete)
+			if err != nil {
+				return fmt.Errorf("remove tangents: %w", err)
+			}
+			fmt.Printf("Removed %d tangent entries across %d groups referencing %d external repos, saved %s\n",
+				result.EntriesRemoved, len(tangentResult.Groups), tangentResult.ExternalDirs,
+				formatBytes(result.BytesBefore-result.BytesAfter))
+			slog.Info("Tangents removed", "entries", result.EntriesRemoved, "groups", len(tangentResult.Groups))
+		}
+	}
+
 	return nil
 }
 
@@ -230,6 +252,7 @@ func init() {
 	cleanCmd.Flags().IntVar(&cleanOutKeepLines, "keep-lines", 10, "Lines to keep at start and end")
 	cleanCmd.Flags().BoolVar(&cleanFailedRetries, "failed-retries", false, "Remove failed tool attempts that were retried")
 	cleanCmd.Flags().BoolVar(&cleanSidechains, "sidechains", false, "Remove all sidechain entries")
+	cleanCmd.Flags().BoolVar(&cleanTangents, "tangents", false, "Remove cross-repo tangent sequences")
 	cleanCmd.Flags().BoolVar(&cleanAll, "all", false, "Run all cleanup operations")
 	rootCmd.AddCommand(cleanCmd)
 }
