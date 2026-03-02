@@ -93,6 +93,7 @@ type GrowthRateJSON struct {
 // CleanOutput is the JSON output for the clean command.
 type CleanOutput struct {
 	SessionID  string           `json:"session_id"`
+	Mode       string           `json:"mode,omitempty"`
 	Operations []CleanOpJSON    `json:"operations"`
 	Summary    CleanSummaryJSON `json:"summary"`
 }
@@ -212,6 +213,46 @@ func cleanAllToJSON(path string, r *editor.CleanAllResult) *CleanOutput {
 
 	totalEntries := r.ProgressRemoved + r.SnapshotsRemoved + r.SidechainsRemoved +
 		r.TangentsRemoved + r.FailedRetries + r.StaleReadsRemoved
+	totalModified := r.ImagesReplaced + r.SeparatorsStripped + r.OutputsTruncated
+
+	out.Summary = CleanSummaryJSON{
+		EntriesRemoved:  totalEntries,
+		EntriesModified: totalModified,
+		TokensSaved:     r.TotalTokensSaved,
+		BytesSaved:      r.BytesBefore - r.BytesAfter,
+	}
+
+	return out
+}
+
+// cleanLiveToJSON converts a CleanLiveResult to JSON output.
+func cleanLiveToJSON(path string, r *editor.CleanLiveResult) *CleanOutput {
+	mode := "live"
+	if r.ImagesReplaced > 0 || r.SeparatorsStripped > 0 || r.OutputsTruncated > 0 {
+		mode = "live-aggressive"
+	}
+
+	out := &CleanOutput{
+		SessionID: filepath.Base(path),
+		Mode:      mode,
+	}
+
+	addOp := func(typ string, count int) {
+		if count > 0 {
+			out.Operations = append(out.Operations, CleanOpJSON{
+				Type:            typ,
+				EntriesAffected: count,
+			})
+		}
+	}
+
+	addOp("progress_removal", r.ProgressRemoved)
+	addOp("snapshot_removal", r.SnapshotsRemoved)
+	addOp("image_replacement", r.ImagesReplaced)
+	addOp("separator_stripping", r.SeparatorsStripped)
+	addOp("output_truncation", r.OutputsTruncated)
+
+	totalEntries := r.ProgressRemoved + r.SnapshotsRemoved
 	totalModified := r.ImagesReplaced + r.SeparatorsStripped + r.OutputsTruncated
 
 	out.Summary = CleanSummaryJSON{
