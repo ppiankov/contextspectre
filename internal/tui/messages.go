@@ -19,6 +19,8 @@ type messagesModel struct {
 	entries       []jsonl.Entry
 	stats         *analyzer.ContextStats
 	issues        map[int][]analyzer.Issue
+	dupResult     *analyzer.DuplicateReadResult
+	staleIndices  map[int]bool
 	cursor        int
 	scrollOffset  int
 	selected      map[int]bool
@@ -46,14 +48,17 @@ func newMessagesModel(info session.Info) messagesModel {
 
 	stats := analyzer.Analyze(entries)
 	diagnosis := analyzer.Diagnose(entries)
+	dupResult := analyzer.FindDuplicateReads(entries)
 
 	return messagesModel{
-		session:  info,
-		entries:  entries,
-		stats:    stats,
-		issues:   diagnosis.IssuesByIndex(),
-		selected: make(map[int]bool),
-		isActive: info.IsActive(),
+		session:      info,
+		entries:      entries,
+		stats:        stats,
+		issues:       diagnosis.IssuesByIndex(),
+		dupResult:    dupResult,
+		staleIndices: dupResult.AllStaleIndices(),
+		selected:     make(map[int]bool),
+		isActive:     info.IsActive(),
 	}
 }
 
@@ -111,6 +116,11 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 	case key.Matches(msg, keys.SelectSnaps):
 		if !m.isActive {
 			m.selectAllSnapshots()
+			m.updateImpact()
+		}
+	case key.Matches(msg, keys.SelectStale):
+		if !m.isActive {
+			m.selectAllStaleReads()
 			m.updateImpact()
 		}
 	case key.Matches(msg, keys.Delete):
@@ -189,6 +199,12 @@ func (m messagesModel) View() string {
 			}
 		}
 
+		// Stale read indicator
+		staleLabel := ""
+		if m.staleIndices[i] {
+			staleLabel = styleMuted.Render(" stale")
+		}
+
 		// Image cost indicator
 		imgLabel := ""
 		if e.HasImages() {
@@ -204,8 +220,8 @@ func (m messagesModel) View() string {
 		// Preview
 		preview := e.ContentPreview(previewWidth)
 
-		line := fmt.Sprintf("%s%-12s %8s  %-8s  %s%s",
-			marker, typeStr, tokenStr, timeStr, truncateStr(preview, previewWidth), imgLabel)
+		line := fmt.Sprintf("%s%-12s %8s  %-8s  %s%s%s",
+			marker, typeStr, tokenStr, timeStr, truncateStr(preview, previewWidth), staleLabel, imgLabel)
 
 		if isSelected && isMarked {
 			b.WriteString(lipgloss.NewStyle().Background(colorRed).Foreground(colorWhite).Render(line))
@@ -230,7 +246,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space select  x progress  h snapshots  i images  s separators  d delete  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space select  x progress  h snapshots  r stale  i images  s separators  d delete  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -333,6 +349,11 @@ func (m messagesModel) renderContextMeter() string {
 			m.stats.SnapshotCount, float64(m.stats.SnapshotBytesTotal)/1024/1024)))
 	}
 
+	if m.dupResult != nil && m.dupResult.TotalStale > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Stale reads: %d across %d files (~%s tok)",
+			m.dupResult.TotalStale, m.dupResult.UniqueFiles, formatTokensShort(m.dupResult.TotalTokens))))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -389,6 +410,12 @@ func (m *messagesModel) selectAllSnapshots() {
 		if e.Type == jsonl.TypeFileHistorySnapshot {
 			m.selected[i] = true
 		}
+	}
+}
+
+func (m *messagesModel) selectAllStaleReads() {
+	for idx := range m.staleIndices {
+		m.selected[idx] = true
 	}
 }
 
@@ -463,6 +490,8 @@ func (m messagesModel) reload() messagesModel {
 	m.entries = entries
 	m.stats = analyzer.Analyze(entries)
 	m.issues = analyzer.Diagnose(entries).IssuesByIndex()
+	m.dupResult = analyzer.FindDuplicateReads(entries)
+	m.staleIndices = m.dupResult.AllStaleIndices()
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {

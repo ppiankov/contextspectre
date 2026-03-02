@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/spf13/cobra"
@@ -15,6 +16,7 @@ var (
 	cleanProgress   bool
 	cleanSeparators bool
 	cleanSnapshots  bool
+	cleanDedupReads bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -27,8 +29,8 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots {
-		return fmt.Errorf("specify --images, --progress, --separators, and/or --snapshots")
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads {
+		return fmt.Errorf("specify --images, --progress, --separators, --snapshots, and/or --dedup-reads")
 	}
 
 	path := resolveSessionPath(args[0])
@@ -103,6 +105,26 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanDedupReads {
+		entries, err := jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("parse for dedup: %w", err)
+		}
+		dupResult := analyzer.FindDuplicateReads(entries)
+		if len(dupResult.Groups) == 0 {
+			fmt.Println("No duplicate file reads found.")
+		} else {
+			result, err := editor.DeduplicateReads(path, dupResult)
+			if err != nil {
+				return fmt.Errorf("dedup reads: %w", err)
+			}
+			fmt.Printf("Removed %d stale file reads across %d files, saved %s\n",
+				result.StaleReadsRemoved, dupResult.UniqueFiles,
+				formatBytes(result.BytesBefore-result.BytesAfter))
+			slog.Info("Dedup reads", "stale", result.StaleReadsRemoved, "files", dupResult.UniqueFiles)
+		}
+	}
+
 	return nil
 }
 
@@ -122,5 +144,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanProgress, "progress", false, "Remove all progress messages")
 	cleanCmd.Flags().BoolVar(&cleanSeparators, "separators", false, "Strip decorative separator lines")
 	cleanCmd.Flags().BoolVar(&cleanSnapshots, "snapshots", false, "Remove all file-history-snapshot entries")
+	cleanCmd.Flags().BoolVar(&cleanDedupReads, "dedup-reads", false, "Remove stale duplicate file reads")
 	rootCmd.AddCommand(cleanCmd)
 }

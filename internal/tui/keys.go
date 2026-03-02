@@ -13,6 +13,7 @@ type keyMap struct {
 	ReplaceImages key.Binding
 	StripSeps     key.Binding
 	SelectSnaps   key.Binding
+	SelectStale   key.Binding
 	Delete        key.Binding
 	Undo          key.Binding
 	Search        key.Binding
@@ -62,6 +63,10 @@ var keys = keyMap{
 	SelectSnaps: key.NewBinding(
 		key.WithKeys("h"),
 		key.WithHelp("h", "select snapshots"),
+	),
+	SelectStale: key.NewBinding(
+		key.WithKeys("r"),
+		key.WithHelp("r", "select stale reads"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
