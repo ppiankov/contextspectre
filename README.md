@@ -189,7 +189,9 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 - **Large Bash output truncation** — truncate test runs, build logs, and git diffs to first/last N lines while preserving structure.
 - **Failed tool retry cleanup** — remove failed tool attempts that were immediately retried and superseded.
 - **Sidechain cleanup** — remove completed subagent sidechain entries whose results have been folded into the main chain.
+- **Cross-repo tangent cleanup** — detect and remove off-topic Q&A exchanges about other repos that were asked in the wrong session.
 - **Unified cleanup** (`contextspectre clean --all`) — run all safe cleanups in one pass with a single backup and combined report.
+- **Live session cleanup** (research) — investigate whether the JSONL can be safely modified between turns during an active session. If proven safe, enable real-time noise removal to delay compaction.
 
 ## Known limitations
 
