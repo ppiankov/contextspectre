@@ -14,8 +14,15 @@ linters:
         - (strings.Builder).WriteString
         - (strings.Builder).WriteRune
         - (strings.Builder).WriteByte
+        - (strings.Builder).Write
         - (*strings.Builder).WriteString
         - (*strings.Builder).WriteRune
         - (*strings.Builder).WriteByte
+        - (*strings.Builder).Write
         - fmt.Fprintf
         - fmt.Fprintln
+issues:
+  exclude-rules:
+    - linters:
+        - errcheck
+      source: "WriteString\\("

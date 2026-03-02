@@ -69,11 +69,11 @@ func (m confirmModel) View() string {
 	fmt.Fprintf(&b, "ParentUuid repairs: %d chains\n", m.impact.ChainRepairs)
 
 	if m.impact.ProgressAutoRemoved > 0 {
-		b.WriteString(fmt.Sprintf("Progress auto-removed: %d\n", m.impact.ProgressAutoRemoved))
+		fmt.Fprintf(&b, "Progress auto-removed: %d\n", m.impact.ProgressAutoRemoved)
 	}
 
 	if m.impact.PredictedTurnsGained > 0 {
-		b.WriteString(fmt.Sprintf("Predicted turns gained: +%d\n", m.impact.PredictedTurnsGained))
+		fmt.Fprintf(&b, "Predicted turns gained: +%d\n", m.impact.PredictedTurnsGained)
 	}
 
 	for _, w := range m.impact.Warnings {

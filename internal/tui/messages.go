@@ -240,11 +240,11 @@ func (m messagesModel) renderContextMeter() string {
 	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("█", filled))
 	emptyStr := styleMuted.Render(strings.Repeat("░", barWidth-filled))
 
-	b.WriteString(fmt.Sprintf(" Context: %s%s  %.1f%% (%s / %s)",
+	fmt.Fprintf(&b, " Context: %s%s  %.1f%% (%s / %s)",
 		filledStr, emptyStr,
 		pct,
 		formatTokensFull(m.stats.CurrentContextTokens),
-		formatTokensFull(analyzer.ContextWindowSize)))
+		formatTokensFull(analyzer.ContextWindowSize))
 	b.WriteString("\n")
 
 	// Stats line

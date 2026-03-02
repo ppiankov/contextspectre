@@ -59,7 +59,7 @@ func copyFile(src, dst string) error {
 	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		os.Remove(dst)
+		_ = os.Remove(dst) // best-effort cleanup on copy failure
 		return fmt.Errorf("copy data: %w", err)
 	}
 
