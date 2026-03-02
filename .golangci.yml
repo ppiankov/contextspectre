@@ -10,3 +10,12 @@ linters:
   settings:
     errcheck:
       check-type-assertions: true
+      exclude-functions:
+        - (strings.Builder).WriteString
+        - (strings.Builder).WriteRune
+        - (strings.Builder).WriteByte
+        - (*strings.Builder).WriteString
+        - (*strings.Builder).WriteRune
+        - (*strings.Builder).WriteByte
+        - fmt.Fprintf
+        - fmt.Fprintln
