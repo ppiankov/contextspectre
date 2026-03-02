@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2026-03-02
+
+### Added
+
+- Post-compaction visual distinction: amber context bar for compacted sessions
+- Ghost bar showing pre-compaction context level
+- Compaction count indicator in session list (e.g., "3x")
+- "Compacted from X%" label on context meter
+- Turns estimate labeled "since last compaction" after compaction events
+- Compaction detection in lightweight scanner (ScanLight)
+
 ## [0.1.0] - 2026-03-02
 
 ### Added
