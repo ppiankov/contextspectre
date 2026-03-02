@@ -16,6 +16,7 @@ type keyMap struct {
 	SelectStale    key.Binding
 	TruncateOutput key.Binding
 	SelectChains   key.Binding
+	CleanAll       key.Binding
 	Delete         key.Binding
 	Undo           key.Binding
 	Search         key.Binding
@@ -77,6 +78,10 @@ var keys = keyMap{
 	SelectChains: key.NewBinding(
 		key.WithKeys("c"),
 		key.WithHelp("c", "select sidechains"),
+	),
+	CleanAll: key.NewBinding(
+		key.WithKeys("a"),
+		key.WithHelp("a", "clean all"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),

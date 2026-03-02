@@ -22,6 +22,7 @@ var (
 	cleanOutKeepLines  int
 	cleanFailedRetries bool
 	cleanSidechains    bool
+	cleanAll           bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -34,13 +35,28 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanAll {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
 	path := resolveSessionPath(args[0])
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("session not found: %s", path)
+	}
+
+	if cleanAll {
+		result, err := editor.CleanAll(path)
+		if err != nil {
+			return fmt.Errorf("clean all: %w", err)
+		}
+		fmt.Printf("Cleaned: %d progress, %d snapshots, %d sidechains, %d retries, %d stale reads, %d images, %d separators, %d truncated\n",
+			result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
+			result.FailedRetries, result.StaleReadsRemoved, result.ImagesReplaced,
+			result.SeparatorsStripped, result.OutputsTruncated)
+		fmt.Printf("Total saved: ~%d tokens, %s\n",
+			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+		slog.Info("Clean all complete", "tokens", result.TotalTokensSaved)
+		return nil
 	}
 
 	if cleanImages {
@@ -214,5 +230,6 @@ func init() {
 	cleanCmd.Flags().IntVar(&cleanOutKeepLines, "keep-lines", 10, "Lines to keep at start and end")
 	cleanCmd.Flags().BoolVar(&cleanFailedRetries, "failed-retries", false, "Remove failed tool attempts that were retried")
 	cleanCmd.Flags().BoolVar(&cleanSidechains, "sidechains", false, "Remove all sidechain entries")
+	cleanCmd.Flags().BoolVar(&cleanAll, "all", false, "Run all cleanup operations")
 	rootCmd.AddCommand(cleanCmd)
 }
