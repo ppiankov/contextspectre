@@ -134,6 +134,17 @@ func TestMessagesModel_ImpactEmpty(t *testing.T) {
 	}
 }
 
+func TestMessagesModel_ZeroWidth_NoPanic(t *testing.T) {
+	m := testMessagesModel()
+	m.width = 0
+	m.height = 0
+
+	view := m.View()
+	if view != "" {
+		t.Errorf("expected empty string for zero-width view, got %q", view)
+	}
+}
+
 func TestMessagesModel_View(t *testing.T) {
 	m := testMessagesModel()
 	view := m.View()
