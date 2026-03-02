@@ -128,15 +128,21 @@ func (m sessionsModel) View() string {
 
 		bar := "░░░░░░░░░░"
 		pct := "—"
+		compactLabel := ""
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			pctVal := s.ContextStats.ContextPct
-			bar = contextBarStr(pctVal, barW)
+			if s.ContextStats.CompactionCount > 0 {
+				bar = contextBarStrCompacted(pctVal, barW)
+				compactLabel = styleCompacted.Render(fmt.Sprintf(" %dx", s.ContextStats.CompactionCount))
+			} else {
+				bar = contextBarStr(pctVal, barW)
+			}
 			pct = fmt.Sprintf("%.1f%%", pctVal)
 		}
 
 		mod := timeAgoStr(s.Modified)
 
-		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s %*s",
+		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s",
 			prefix,
 			projW, project,
 			branchW, branch,
@@ -144,6 +150,7 @@ func (m sessionsModel) View() string {
 			sizeW, size,
 			bar,
 			pctW, pct,
+			compactLabel,
 			modW, mod,
 		)
 
@@ -182,6 +189,20 @@ func contextBarStr(pct float64, width int) string {
 		filled = 0
 	}
 	color := contextColor(pct)
+	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("█", filled))
+	emptyStr := styleMuted.Render(strings.Repeat("░", width-filled))
+	return filledStr + emptyStr
+}
+
+func contextBarStrCompacted(pct float64, width int) string {
+	filled := int(pct / 100 * float64(width))
+	if filled > width {
+		filled = width
+	}
+	if filled < 0 {
+		filled = 0
+	}
+	color := contextColorCompacted(pct)
 	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("█", filled))
 	emptyStr := styleMuted.Render(strings.Repeat("░", width-filled))
 	return filledStr + emptyStr

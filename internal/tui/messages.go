@@ -231,12 +231,20 @@ func (m messagesModel) renderContextMeter() string {
 
 	// Context bar
 	pct := m.stats.UsagePercent
-	color := contextColor(pct)
+	isCompacted := m.stats.CompactionCount > 0
 	barWidth := 20
 	filled := int(pct / 100 * float64(barWidth))
 	if filled > barWidth {
 		filled = barWidth
 	}
+
+	var color lipgloss.Color
+	if isCompacted {
+		color = contextColorCompacted(pct)
+	} else {
+		color = contextColor(pct)
+	}
+
 	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("█", filled))
 	emptyStr := styleMuted.Render(strings.Repeat("░", barWidth-filled))
 
@@ -245,16 +253,44 @@ func (m messagesModel) renderContextMeter() string {
 		pct,
 		formatTokensFull(m.stats.CurrentContextTokens),
 		formatTokensFull(analyzer.ContextWindowSize))
+
+	// Post-compaction label
+	if isCompacted {
+		last := m.stats.Compactions[len(m.stats.Compactions)-1]
+		b.WriteString(styleCompacted.Render(fmt.Sprintf("  compacted from %.0f%%",
+			float64(last.BeforeTokens)/float64(analyzer.ContextWindowSize)*100)))
+	}
 	b.WriteString("\n")
+
+	// Ghost bar showing pre-compaction level
+	if isCompacted {
+		last := m.stats.Compactions[len(m.stats.Compactions)-1]
+		ghostPct := float64(last.BeforeTokens) / float64(analyzer.ContextWindowSize) * 100
+		ghostFilled := int(ghostPct / 100 * float64(barWidth))
+		if ghostFilled > barWidth {
+			ghostFilled = barWidth
+		}
+		ghostBar := styleGhost.Render(strings.Repeat("▓", ghostFilled) + strings.Repeat("░", barWidth-ghostFilled))
+		b.WriteString(styleMuted.Render(fmt.Sprintf(" Before:  %s  %.0f%% (%s)",
+			ghostBar,
+			ghostPct,
+			formatTokensFull(last.BeforeTokens))))
+		b.WriteString("\n")
+	}
 
 	// Stats line
 	turnsStr := "unknown"
+	turnsLabel := "turns until next"
 	if m.stats.EstimatedTurnsLeft >= 0 {
 		turnsStr = fmt.Sprintf("~%d", m.stats.EstimatedTurnsLeft)
 	}
-	b.WriteString(styleMuted.Render(fmt.Sprintf(" Compactions: %d  |  %s turns until next  |  Images: %d",
+	if isCompacted {
+		turnsLabel = "turns until next (since last compaction)"
+	}
+	b.WriteString(styleMuted.Render(fmt.Sprintf(" Compactions: %d  |  %s %s  |  Images: %d",
 		m.stats.CompactionCount,
 		turnsStr,
+		turnsLabel,
 		m.stats.ImageCount)))
 
 	if m.stats.ImageBytesTotal > 0 {
@@ -349,7 +385,12 @@ func (m messagesModel) reload() messagesModel {
 
 func (m messagesModel) visibleRows() int {
 	// Reserve: title(3) + context meter(4) + separator(1) + header(1) + impact(2) + footer(2) = 13
-	avail := m.height - 13
+	reserved := 13
+	// Extra line for ghost bar when session has compacted
+	if m.stats != nil && m.stats.CompactionCount > 0 {
+		reserved++
+	}
+	avail := m.height - reserved
 	if avail < 3 {
 		return 3
 	}

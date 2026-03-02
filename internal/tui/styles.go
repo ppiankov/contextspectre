@@ -6,10 +6,11 @@ var (
 	colorGreen  = lipgloss.Color("#00CC66")
 	colorYellow = lipgloss.Color("#FFCC00")
 	colorRed    = lipgloss.Color("#FF4444")
+	colorAmber  = lipgloss.Color("#FF8C00")
 	colorMuted  = lipgloss.Color("#888888")
 	colorAccent = lipgloss.Color("#7B68EE")
 	colorWhite  = lipgloss.Color("#FFFFFF")
-	_           = lipgloss.Color("#555555") // reserved dim color
+	colorDim    = lipgloss.Color("#555555")
 )
 
 var (
@@ -39,7 +40,11 @@ var (
 	styleFooter = lipgloss.NewStyle().
 			Foreground(colorMuted)
 
-	_ = lipgloss.NewStyle() // reserved bar style
+	styleCompacted = lipgloss.NewStyle().
+			Foreground(colorAmber)
+
+	styleGhost = lipgloss.NewStyle().
+			Foreground(colorDim)
 )
 
 func contextColor(pct float64) lipgloss.Color {
@@ -51,4 +56,13 @@ func contextColor(pct float64) lipgloss.Color {
 	default:
 		return colorGreen
 	}
+}
+
+// contextColorCompacted returns amber for post-compaction sessions at low usage,
+// falling back to normal color coding at higher usage levels.
+func contextColorCompacted(pct float64) lipgloss.Color {
+	if pct < 60 {
+		return colorAmber
+	}
+	return contextColor(pct)
 }

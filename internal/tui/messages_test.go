@@ -159,6 +159,71 @@ func TestMessagesModel_ContextMeter(t *testing.T) {
 	if !containsStr(meter, "Compactions:") {
 		t.Error("expected 'Compactions:' in meter")
 	}
+	if !containsStr(meter, "turns until next") {
+		t.Error("expected 'turns until next' label for fresh session")
+	}
+}
+
+func testMessagesModelCompacted() messagesModel {
+	entries := []jsonl.Entry{
+		{
+			Type: jsonl.TypeUser, UUID: "u1",
+			Timestamp: time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC),
+			Message:   &jsonl.Message{Content: json.RawMessage(`"hello"`)},
+		},
+		{
+			Type: jsonl.TypeAssistant, UUID: "a1", ParentUUID: "u1",
+			Timestamp: time.Date(2026, 3, 1, 10, 0, 1, 0, time.UTC),
+			Message: &jsonl.Message{
+				Content: json.RawMessage(`"response"`),
+				Usage:   &jsonl.Usage{InputTokens: 100, CacheCreationInputTokens: 165000, OutputTokens: 50},
+			},
+		},
+		{
+			Type: jsonl.TypeUser, UUID: "u2", ParentUUID: "a1",
+			Timestamp: time.Date(2026, 3, 1, 10, 1, 0, 0, time.UTC),
+			Message:   &jsonl.Message{Content: json.RawMessage(`"after compaction"`)},
+		},
+		{
+			Type: jsonl.TypeAssistant, UUID: "a2", ParentUUID: "u2",
+			Timestamp: time.Date(2026, 3, 1, 10, 1, 1, 0, time.UTC),
+			Message: &jsonl.Message{
+				Content: json.RawMessage(`"compacted response"`),
+				Usage:   &jsonl.Usage{InputTokens: 100, CacheCreationInputTokens: 30000, OutputTokens: 50},
+			},
+		},
+	}
+
+	stats := analyzer.Analyze(entries)
+
+	return messagesModel{
+		session:  session.Info{SessionID: "test-compact", ProjectName: "testproj"},
+		entries:  entries,
+		stats:    stats,
+		selected: make(map[int]bool),
+		width:    120,
+		height:   40,
+	}
+}
+
+func TestMessagesModel_ContextMeter_PostCompaction(t *testing.T) {
+	m := testMessagesModelCompacted()
+
+	if m.stats.CompactionCount != 1 {
+		t.Fatalf("expected 1 compaction, got %d", m.stats.CompactionCount)
+	}
+
+	meter := m.renderContextMeter()
+
+	if !containsStr(meter, "compacted from") {
+		t.Error("expected 'compacted from' label in post-compaction meter")
+	}
+	if !containsStr(meter, "Before:") {
+		t.Error("expected ghost bar 'Before:' line in post-compaction meter")
+	}
+	if !containsStr(meter, "since last compaction") {
+		t.Error("expected 'since last compaction' label for turns estimate")
+	}
 }
 
 func TestMessagesModel_ImpactBar(t *testing.T) {
