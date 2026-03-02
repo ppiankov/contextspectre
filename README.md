@@ -192,6 +192,7 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 - **Cross-repo tangent cleanup** — detect and remove off-topic Q&A exchanges about other repos that were asked in the wrong session.
 - **Unified cleanup** (`contextspectre clean --all`) — run all safe cleanups in one pass with a single backup and combined report.
 - **Live session cleanup** (research) — investigate whether the JSONL can be safely modified between turns during an active session. If proven safe, enable real-time noise removal to delay compaction.
+- **ANCC adoption** — add `--format json` to CLI commands, write SKILL.md, add `doctor` command. Makes contextspectre discoverable and composable by orchestration agents via the [Agent-Native CLI Convention](https://ancc.dev).
 
 ## Known limitations
 
