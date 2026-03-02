@@ -137,6 +137,10 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 			m.selectAllSidechains()
 			m.updateImpact()
 		}
+	case key.Matches(msg, keys.CleanAll):
+		if !m.isActive {
+			return m.cleanAll()
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -262,7 +266,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  i img  s sep  t trunc  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  a all  i img  s sep  t trunc  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -481,6 +485,19 @@ func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 		result.ImagesReplaced, formatTokensShort(imgTokens), savedPct, float64(result.BytesSaved)/1024)
 
 	// Reload session data
+	return m.reload(), nil
+}
+
+func (m messagesModel) cleanAll() (messagesModel, tea.Cmd) {
+	result, err := editor.CleanAll(m.session.FullPath)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("Error: %v", err)
+		return m, nil
+	}
+	m.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d chain, %d retry, %d stale, %d img, %d sep, %d trunc — saved ~%d tokens",
+		result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
+		result.FailedRetries, result.StaleReadsRemoved, result.ImagesReplaced,
+		result.SeparatorsStripped, result.OutputsTruncated, result.TotalTokensSaved)
 	return m.reload(), nil
 }
 
