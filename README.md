@@ -177,6 +177,13 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 }
 ```
 
+## Roadmap
+
+- **Session repair** (`contextspectre fix`) — detect and remove content filter blocks, oversized images, orphaned tool results, and malformed entries. Diagnose first (`--dry-run`), fix on demand (`--apply`).
+- **Post-compaction distinction** — visually differentiate "fresh session at 5%" from "just compacted from 82% to 5%."
+- **Compaction imminent warning** — `⚠ COMPACTION IMMINENT` label at >85% context usage.
+- **Image weight tracking** — per-message image cost display, warning when images dominate context budget.
+
 ## Known limitations
 
 - **Token estimates are approximate.** The 4 chars/token heuristic is close but not exact. Actual BPE tokenization varies by content.
