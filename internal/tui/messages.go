@@ -104,6 +104,10 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 		if !m.isActive {
 			return m.replaceImages()
 		}
+	case key.Matches(msg, keys.StripSeps):
+		if !m.isActive {
+			return m.stripSeparators()
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -221,7 +225,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space select  x select progress  i replace images  d delete  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space select  x progress  i images  s separators  d delete  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -393,6 +397,21 @@ func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 		result.ImagesReplaced, formatTokensShort(imgTokens), savedPct, float64(result.BytesSaved)/1024)
 
 	// Reload session data
+	return m.reload(), nil
+}
+
+func (m messagesModel) stripSeparators() (messagesModel, tea.Cmd) {
+	result, err := editor.StripSeparators(m.session.FullPath)
+	if err != nil {
+		m.statusMsg = fmt.Sprintf("Error: %v", err)
+		return m, nil
+	}
+	if result.LinesStripped == 0 {
+		m.statusMsg = "No decorative separators found."
+		return m, nil
+	}
+	m.statusMsg = fmt.Sprintf("Stripped %d separator lines from %d messages, saved ~%d tokens",
+		result.LinesStripped, result.MessagesModified, result.CharsSaved/4)
 	return m.reload(), nil
 }
 

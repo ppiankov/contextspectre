@@ -11,6 +11,7 @@ type keyMap struct {
 	Space         key.Binding
 	SelectAllProg key.Binding
 	ReplaceImages key.Binding
+	StripSeps     key.Binding
 	Delete        key.Binding
 	Undo          key.Binding
 	Search        key.Binding
@@ -52,6 +53,10 @@ var keys = keyMap{
 	ReplaceImages: key.NewBinding(
 		key.WithKeys("i"),
 		key.WithHelp("i", "replace images"),
+	),
+	StripSeps: key.NewBinding(
+		key.WithKeys("s"),
+		key.WithHelp("s", "strip separators"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
