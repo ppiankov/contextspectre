@@ -183,6 +183,7 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 - **Post-compaction distinction** — visually differentiate "fresh session at 5%" from "just compacted from 82% to 5%."
 - **Compaction imminent warning** — `⚠ COMPACTION IMMINENT` label at >85% context usage.
 - **Image weight tracking** — per-message image cost display, warning when images dominate context budget.
+- **Decorative noise stripping** — detect and remove long separator lines (`────...`) that consume tokens with zero semantic value.
 
 ## Known limitations
 
