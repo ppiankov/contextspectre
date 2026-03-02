@@ -10,8 +10,9 @@ import (
 )
 
 var (
-	cleanImages   bool
-	cleanProgress bool
+	cleanImages     bool
+	cleanProgress   bool
+	cleanSeparators bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -24,8 +25,8 @@ placeholders or removing progress messages. Always creates a backup first.`,
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress {
-		return fmt.Errorf("specify --images and/or --progress")
+	if !cleanImages && !cleanProgress && !cleanSeparators {
+		return fmt.Errorf("specify --images, --progress, and/or --separators")
 	}
 
 	path := resolveSessionPath(args[0])
@@ -61,6 +62,20 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	if cleanSeparators {
+		result, err := editor.StripSeparators(path)
+		if err != nil {
+			return fmt.Errorf("strip separators: %w", err)
+		}
+		if result.LinesStripped > 0 {
+			fmt.Printf("Stripped %d separator lines from %d messages, saved ~%d tokens\n",
+				result.LinesStripped, result.MessagesModified, result.CharsSaved/4)
+			slog.Info("Separators stripped", "lines", result.LinesStripped, "messages", result.MessagesModified)
+		} else {
+			fmt.Println("No decorative separators found.")
+		}
+	}
+
 	return nil
 }
 
@@ -78,5 +93,6 @@ func formatBytes(b int64) string {
 func init() {
 	cleanCmd.Flags().BoolVar(&cleanImages, "images", false, "Replace base64 images with placeholders")
 	cleanCmd.Flags().BoolVar(&cleanProgress, "progress", false, "Remove all progress messages")
+	cleanCmd.Flags().BoolVar(&cleanSeparators, "separators", false, "Strip decorative separator lines")
 	rootCmd.AddCommand(cleanCmd)
 }
