@@ -1,0 +1,6 @@
+{"type":"user","uuid":"u1","parentUuid":"","timestamp":"2026-03-01T10:00:00Z","sessionId":"sess1","message":{"role":"user","content":"run the tests"}}
+{"type":"assistant","uuid":"a1","parentUuid":"u1","timestamp":"2026-03-01T10:00:01Z","sessionId":"sess1","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_f1","name":"Bash","input":{"command":"go test ./..."}}]}}
+{"type":"user","uuid":"u2","parentUuid":"a1","timestamp":"2026-03-01T10:00:02Z","sessionId":"sess1","message":{"role":"user","content":[{"tool_use_id":"toolu_f1","type":"tool_result","is_error":true,"content":"Error: compilation failed\nexit status 1"}]}}
+{"type":"assistant","uuid":"a2","parentUuid":"u2","timestamp":"2026-03-01T10:01:00Z","sessionId":"sess1","message":{"role":"assistant","content":[{"type":"text","text":"Let me fix the import."},{"type":"tool_use","id":"toolu_f2","name":"Bash","input":{"command":"go test ./..."}}]}}
+{"type":"user","uuid":"u3","parentUuid":"a2","timestamp":"2026-03-01T10:01:02Z","sessionId":"sess1","message":{"role":"user","content":[{"tool_use_id":"toolu_f2","type":"tool_result","content":"ok  github.com/test/pkg  0.5s"}]}}
+{"type":"assistant","uuid":"a3","parentUuid":"u3","timestamp":"2026-03-01T10:02:00Z","sessionId":"sess1","message":{"role":"assistant","content":[{"type":"text","text":"Tests pass now."}]}}

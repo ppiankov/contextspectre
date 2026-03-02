@@ -21,6 +21,8 @@ type messagesModel struct {
 	issues        map[int][]analyzer.Issue
 	dupResult     *analyzer.DuplicateReadResult
 	staleIndices  map[int]bool
+	retryResult   *analyzer.RetryResult
+	failedIndices map[int]bool
 	cursor        int
 	scrollOffset  int
 	selected      map[int]bool
@@ -49,16 +51,19 @@ func newMessagesModel(info session.Info) messagesModel {
 	stats := analyzer.Analyze(entries)
 	diagnosis := analyzer.Diagnose(entries)
 	dupResult := analyzer.FindDuplicateReads(entries)
+	retryResult := analyzer.FindFailedRetries(entries)
 
 	return messagesModel{
-		session:      info,
-		entries:      entries,
-		stats:        stats,
-		issues:       diagnosis.IssuesByIndex(),
-		dupResult:    dupResult,
-		staleIndices: dupResult.AllStaleIndices(),
-		selected:     make(map[int]bool),
-		isActive:     info.IsActive(),
+		session:       info,
+		entries:       entries,
+		stats:         stats,
+		issues:        diagnosis.IssuesByIndex(),
+		dupResult:     dupResult,
+		staleIndices:  dupResult.AllStaleIndices(),
+		retryResult:   retryResult,
+		failedIndices: retryResult.AllFailedIndices(),
+		selected:      make(map[int]bool),
+		isActive:      info.IsActive(),
 	}
 }
 
@@ -203,10 +208,12 @@ func (m messagesModel) View() string {
 			}
 		}
 
-		// Stale read indicator
+		// Stale/failed indicators
 		staleLabel := ""
 		if m.staleIndices[i] {
 			staleLabel = styleMuted.Render(" stale")
+		} else if m.failedIndices[i] {
+			staleLabel = styleMuted.Render(" failed")
 		}
 
 		// Image cost indicator
@@ -363,6 +370,11 @@ func (m messagesModel) renderContextMeter() string {
 			m.stats.LargeOutputCount, formatTokensShort(m.stats.LargeOutputTokens))))
 	}
 
+	if m.retryResult != nil && m.retryResult.TotalFailed > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Failed retries: %d (~%s tok)",
+			m.retryResult.TotalFailed, formatTokensShort(m.retryResult.TotalTokens))))
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -516,6 +528,8 @@ func (m messagesModel) reload() messagesModel {
 	m.issues = analyzer.Diagnose(entries).IssuesByIndex()
 	m.dupResult = analyzer.FindDuplicateReads(entries)
 	m.staleIndices = m.dupResult.AllStaleIndices()
+	m.retryResult = analyzer.FindFailedRetries(entries)
+	m.failedIndices = m.retryResult.AllFailedIndices()
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {
