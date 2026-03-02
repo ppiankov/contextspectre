@@ -18,6 +18,7 @@ type messagesModel struct {
 	session       session.Info
 	entries       []jsonl.Entry
 	stats         *analyzer.ContextStats
+	issues        map[int][]analyzer.Issue
 	cursor        int
 	scrollOffset  int
 	selected      map[int]bool
@@ -44,11 +45,13 @@ func newMessagesModel(info session.Info) messagesModel {
 	}
 
 	stats := analyzer.Analyze(entries)
+	diagnosis := analyzer.Diagnose(entries)
 
 	return messagesModel{
 		session:  info,
 		entries:  entries,
 		stats:    stats,
+		issues:   diagnosis.IssuesByIndex(),
 		selected: make(map[int]bool),
 		isActive: info.IsActive(),
 	}
@@ -162,8 +165,11 @@ func (m messagesModel) View() string {
 			marker = "▸ "
 		}
 
-		// Type
+		// Type with issue marker
 		typeStr := typeIcon(e.Type)
+		if _, hasIssue := m.issues[i]; hasIssue {
+			typeStr = styleWarning.Render("!") + typeStr
+		}
 
 		// Tokens
 		tokenStr := "—"
@@ -419,6 +425,7 @@ func (m messagesModel) reload() messagesModel {
 	}
 	m.entries = entries
 	m.stats = analyzer.Analyze(entries)
+	m.issues = analyzer.Diagnose(entries).IssuesByIndex()
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {
