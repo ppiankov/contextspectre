@@ -123,3 +123,27 @@ func TestEstimateImageBytes_NoImage(t *testing.T) {
 		t.Error("expected 0 image bytes for text message")
 	}
 }
+
+func TestEstimateImageTokens(t *testing.T) {
+	imgData := strings.Repeat("A", 7500) // 7500 / 750 = 10 tokens
+	e := &jsonl.Entry{
+		Type: jsonl.TypeUser,
+		Message: &jsonl.Message{
+			Content: json.RawMessage(`[{"type":"image","source":{"type":"base64","media_type":"image/png","data":"` + imgData + `"}}]`),
+		},
+	}
+	tokens := EstimateImageTokens(e)
+	if tokens != 10 {
+		t.Errorf("expected 10 image tokens, got %d", tokens)
+	}
+}
+
+func TestEstimateImageTokens_NoImage(t *testing.T) {
+	e := &jsonl.Entry{
+		Type:    jsonl.TypeUser,
+		Message: &jsonl.Message{Content: json.RawMessage(`"just text"`)},
+	}
+	if EstimateImageTokens(e) != 0 {
+		t.Error("expected 0 image tokens for text message")
+	}
+}

@@ -76,6 +76,25 @@ func estimateToolResultTokens(b jsonl.ContentBlock) int {
 	return len(b.Content) / CharsPerToken
 }
 
+// EstimateImageTokens returns the estimated token cost of images in an entry.
+func EstimateImageTokens(e *jsonl.Entry) int {
+	if e.Message == nil {
+		return 0
+	}
+	blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+	if err != nil {
+		return 0
+	}
+
+	total := 0
+	for _, b := range blocks {
+		if b.Type == "image" && b.Source != nil {
+			total += len(b.Source.Data) / Base64BytesPerToken
+		}
+	}
+	return total
+}
+
 // EstimateImageBytes returns the approximate decoded size of all images in an entry.
 func EstimateImageBytes(e *jsonl.Entry) int64 {
 	if e.Message == nil {

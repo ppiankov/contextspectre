@@ -174,14 +174,23 @@ func (m messagesModel) View() string {
 			}
 		}
 
+		// Image cost indicator
+		imgLabel := ""
+		if e.HasImages() {
+			imgTok := analyzer.EstimateImageTokens(&e)
+			if imgTok > 0 {
+				imgLabel = styleWarning.Render(fmt.Sprintf(" img:%s", formatTokensShort(imgTok)))
+			}
+		}
+
 		// Time
 		timeStr := e.Timestamp.Format("15:04")
 
 		// Preview
 		preview := e.ContentPreview(previewWidth)
 
-		line := fmt.Sprintf("%s%-12s %8s  %-8s  %s",
-			marker, typeStr, tokenStr, timeStr, truncateStr(preview, previewWidth))
+		line := fmt.Sprintf("%s%-12s %8s  %-8s  %s%s",
+			marker, typeStr, tokenStr, timeStr, truncateStr(preview, previewWidth), imgLabel)
 
 		if isSelected && isMarked {
 			b.WriteString(lipgloss.NewStyle().Background(colorRed).Foreground(colorWhite).Render(line))
@@ -304,6 +313,17 @@ func (m messagesModel) renderContextMeter() string {
 		b.WriteString(styleMuted.Render(fmt.Sprintf(" (%.1f MB)", float64(m.stats.ImageBytesTotal)/1024/1024)))
 	}
 
+	// Image weight warning when images are >10% of context
+	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
+		imgTokens := m.estimateTotalImageTokens()
+		imgPct := float64(imgTokens) / float64(m.stats.CurrentContextTokens) * 100
+		if imgPct > 10 {
+			b.WriteString("\n")
+			b.WriteString(styleWarning.Render(fmt.Sprintf(" !! Images: %.1f%% of context (%d images, %.1f MB) — press i to replace",
+				imgPct, m.stats.ImageCount, float64(m.stats.ImageBytesTotal)/1024/1024)))
+		}
+	}
+
 	return b.String()
 }
 
@@ -345,6 +365,13 @@ func (m *messagesModel) selectAllProgress() {
 }
 
 func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
+	// Preview savings before executing
+	imgTokens := m.estimateTotalImageTokens()
+	if imgTokens == 0 {
+		m.statusMsg = "No images to replace."
+		return m, nil
+	}
+
 	result, err := editor.ReplaceImages(m.session.FullPath)
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("Error: %v", err)
@@ -354,11 +381,21 @@ func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 		m.statusMsg = "No images to replace."
 		return m, nil
 	}
-	m.statusMsg = fmt.Sprintf("Replaced %d images, saved %.1f KB",
-		result.ImagesReplaced, float64(result.BytesSaved)/1024)
+
+	savedPct := float64(imgTokens) / float64(analyzer.ContextWindowSize) * 100
+	m.statusMsg = fmt.Sprintf("Replaced %d images, saved ~%s tokens (%.1f%%), %.1f KB on disk",
+		result.ImagesReplaced, formatTokensShort(imgTokens), savedPct, float64(result.BytesSaved)/1024)
 
 	// Reload session data
 	return m.reload(), nil
+}
+
+func (m messagesModel) estimateTotalImageTokens() int {
+	total := 0
+	for i := range m.entries {
+		total += analyzer.EstimateImageTokens(&m.entries[i])
+	}
+	return total
 }
 
 func (m messagesModel) undoLastChange() (messagesModel, tea.Cmd) {
@@ -396,6 +433,14 @@ func (m messagesModel) visibleRows() int {
 	// Extra line for ghost bar when session has compacted
 	if m.stats != nil && m.stats.CompactionCount > 0 {
 		reserved++
+	}
+	// Extra line for image weight warning
+	if m.stats != nil && m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
+		imgTokens := m.estimateTotalImageTokens()
+		imgPct := float64(imgTokens) / float64(m.stats.CurrentContextTokens) * 100
+		if imgPct > 10 {
+			reserved++
+		}
 	}
 	avail := m.height - reserved
 	if avail < 3 {
