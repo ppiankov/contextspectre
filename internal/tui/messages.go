@@ -260,6 +260,13 @@ func (m messagesModel) renderContextMeter() string {
 		b.WriteString(styleCompacted.Render(fmt.Sprintf("  compacted from %.0f%%",
 			float64(last.BeforeTokens)/float64(analyzer.ContextWindowSize)*100)))
 	}
+
+	// Compaction imminent warning
+	if pct >= 90 && m.stats.EstimatedTurnsLeft >= 0 {
+		b.WriteString(styleWarning.Render(fmt.Sprintf("  !! ~%d turns left", m.stats.EstimatedTurnsLeft)))
+	} else if pct >= 85 {
+		b.WriteString(styleWarning.Render("  !! COMPACTION IMMINENT"))
+	}
 	b.WriteString("\n")
 
 	// Ghost bar showing pre-compaction level

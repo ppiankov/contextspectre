@@ -226,6 +226,46 @@ func TestMessagesModel_ContextMeter_PostCompaction(t *testing.T) {
 	}
 }
 
+func TestMessagesModel_ContextMeter_ImminentWarning(t *testing.T) {
+	m := testMessagesModel()
+
+	// Set stats to 87% — should show COMPACTION IMMINENT
+	m.stats.UsagePercent = 87.0
+	m.stats.CurrentContextTokens = 174000
+	m.stats.EstimatedTurnsLeft = 5
+
+	meter := m.renderContextMeter()
+	if !containsStr(meter, "COMPACTION IMMINENT") {
+		t.Error("expected 'COMPACTION IMMINENT' warning at 87%")
+	}
+}
+
+func TestMessagesModel_ContextMeter_TurnsWarning(t *testing.T) {
+	m := testMessagesModel()
+
+	// Set stats to 92% — should show turns remaining
+	m.stats.UsagePercent = 92.0
+	m.stats.CurrentContextTokens = 184000
+	m.stats.EstimatedTurnsLeft = 2
+
+	meter := m.renderContextMeter()
+	if !containsStr(meter, "~2 turns left") {
+		t.Error("expected '~2 turns left' warning at 92%")
+	}
+}
+
+func TestMessagesModel_ContextMeter_NoWarningAtLowUsage(t *testing.T) {
+	m := testMessagesModel()
+	meter := m.renderContextMeter()
+
+	if containsStr(meter, "COMPACTION IMMINENT") {
+		t.Error("should not show warning at low usage")
+	}
+	if containsStr(meter, "turns left") {
+		t.Error("should not show turns warning at low usage")
+	}
+}
+
 func TestMessagesModel_ImpactBar(t *testing.T) {
 	m := testMessagesModel()
 

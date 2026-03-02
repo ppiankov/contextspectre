@@ -45,6 +45,10 @@ var (
 
 	styleGhost = lipgloss.NewStyle().
 			Foreground(colorDim)
+
+	styleWarning = lipgloss.NewStyle().
+			Foreground(colorRed).
+			Bold(true)
 )
 
 func contextColor(pct float64) lipgloss.Color {
