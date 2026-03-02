@@ -8,7 +8,7 @@ Claude Code conversation context manager. Shows how close you are to compaction 
 
 ## The problem
 
-Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. There is no way to see it coming and no way to control what stays.
+Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays. The Mac app shows nothing at all.
 
 The deeper problem: not all context ages equally. You ask a sharp question to correct trajectory. You get alignment. You decide. Now that exploratory branch is complete — but it stays in context forever, subtly biasing future responses. That's not token waste. That's reasoning contamination.
 
