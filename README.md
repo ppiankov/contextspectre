@@ -184,6 +184,12 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 - **Compaction imminent warning** — `⚠ COMPACTION IMMINENT` label at >85% context usage.
 - **Image weight tracking** — per-message image cost display, warning when images dominate context budget.
 - **Decorative noise stripping** — detect and remove long separator lines (`────...`) that consume tokens with zero semantic value.
+- **File-history-snapshot cleanup** — remove bulk snapshot entries that capture full file states (often megabytes per session).
+- **Duplicate file read deduplication** — detect same file read N times, flag the first N-1 as stale, offer removal.
+- **Large Bash output truncation** — truncate test runs, build logs, and git diffs to first/last N lines while preserving structure.
+- **Failed tool retry cleanup** — remove failed tool attempts that were immediately retried and superseded.
+- **Sidechain cleanup** — remove completed subagent sidechain entries whose results have been folded into the main chain.
+- **Unified cleanup** (`contextspectre clean --all`) — run all safe cleanups in one pass with a single backup and combined report.
 
 ## Known limitations
 
