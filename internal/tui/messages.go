@@ -29,6 +29,7 @@ type messagesModel struct {
 	driftResult    *analyzer.ScopeDrift
 	driftIndices   map[int]bool
 	recommendation *analyzer.CleanupRecommendation
+	health         *analyzer.HealthScore
 	cursor         int
 	scrollOffset   int
 	selected       map[int]bool
@@ -63,6 +64,7 @@ func newMessagesModel(info session.Info) messagesModel {
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 
 	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+	health := analyzer.ComputeHealth(stats, rec)
 
 	return messagesModel{
 		session:        info,
@@ -78,6 +80,7 @@ func newMessagesModel(info session.Info) messagesModel {
 		driftResult:    driftResult,
 		driftIndices:   driftResult.DriftIndices(),
 		recommendation: rec,
+		health:         health,
 		selected:       make(map[int]bool),
 		isActive:       info.IsActive(),
 	}
@@ -372,6 +375,20 @@ func (m messagesModel) renderContextMeter() string {
 		b.WriteString(styleWarning.Render("  !! COMPACTION IMMINENT"))
 	}
 	b.WriteString("\n")
+
+	// Health line
+	if m.health != nil && m.health.TotalTokens > 0 {
+		healthLine := fmt.Sprintf(" Health:  %.0f%% signal (%s)", m.health.SignalPercent, m.health.Grade)
+		if m.health.NoiseTokens > 0 {
+			healthLine += fmt.Sprintf(" — %.0f%% noise (~%s tokens", m.health.NoisePercent, formatTokensShort(m.health.NoiseTokens))
+			if m.health.BiggestOffender != "" {
+				healthLine += fmt.Sprintf(", biggest: %s", m.health.BiggestOffender)
+			}
+			healthLine += ")"
+		}
+		b.WriteString(gradeStyle(m.health.Grade).Render(healthLine))
+		b.WriteString("\n")
+	}
 
 	// Ghost bar showing pre-compaction level
 	if isCompacted {
@@ -696,6 +713,7 @@ func (m messagesModel) reload() messagesModel {
 	m.driftResult = analyzer.AnalyzeScopeDrift(entries, m.stats.Compactions, "")
 	m.driftIndices = m.driftResult.DriftIndices()
 	m.recommendation = analyzer.Recommend(m.stats, m.dupResult, m.retryResult, m.tangentResult)
+	m.health = analyzer.ComputeHealth(m.stats, m.recommendation)
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {
@@ -705,8 +723,8 @@ func (m messagesModel) reload() messagesModel {
 }
 
 func (m messagesModel) visibleRows() int {
-	// Reserve: title(3) + context meter(4) + separator(1) + header(1) + impact(2) + footer(2) = 13
-	reserved := 13
+	// Reserve: title(3) + context meter(4) + health(1) + separator(1) + header(1) + impact(2) + footer(2) = 14
+	reserved := 14
 	// Extra line for ghost bar when session has compacted
 	if m.stats != nil && m.stats.CompactionCount > 0 {
 		reserved++

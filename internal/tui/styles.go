@@ -70,3 +70,15 @@ func contextColorCompacted(pct float64) lipgloss.Color {
 	}
 	return contextColor(pct)
 }
+
+// gradeStyle returns a lipgloss style colored by health grade.
+func gradeStyle(grade string) lipgloss.Style {
+	switch grade {
+	case "A", "B":
+		return lipgloss.NewStyle().Foreground(colorGreen)
+	case "C":
+		return lipgloss.NewStyle().Foreground(colorYellow)
+	default: // D, F
+		return lipgloss.NewStyle().Foreground(colorRed)
+	}
+}

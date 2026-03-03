@@ -302,17 +302,19 @@ func (m sessionsModel) View() string {
 	sizeW := 8
 	barW := 10
 	pctW := 7
+	sigW := 4
 	costW := 9
 	modW := 10
 
 	// Column header
-	header := fmt.Sprintf("   %-*s %-*s %*s %*s %-*s %*s %*s %*s",
+	header := fmt.Sprintf("   %-*s %-*s %*s %*s %-*s %*s %*s %*s %*s",
 		projW, "Project",
 		branchW, "Branch",
 		msgsW, "Msgs",
 		sizeW, "Size",
 		barW, "Context",
 		pctW, "",
+		sigW, "Sig",
 		costW, "Cost",
 		modW, "Modified",
 	)
@@ -379,7 +381,14 @@ func (m sessionsModel) View() string {
 			costStr = analyzer.FormatCost(s.ContextStats.EstimatedCost)
 		}
 
-		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s %*s",
+		// Signal health grade
+		sigStr := "—"
+		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
+			grade := analyzer.GradeFromSignalPercent(s.ContextStats.SignalPercent)
+			sigStr = gradeStyle(grade).Render(grade)
+		}
+
+		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s %*s %*s",
 			prefix,
 			projW, project,
 			branchW, branch,
@@ -388,6 +397,7 @@ func (m sessionsModel) View() string {
 			bar,
 			pctW, pct,
 			compactLabel,
+			sigW, sigStr,
 			costW, costStr,
 			modW, mod,
 		)

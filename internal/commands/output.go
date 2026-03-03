@@ -28,6 +28,7 @@ type SessionJSON struct {
 	Images         int       `json:"images"`
 	EstimatedCost  float64   `json:"estimated_cost,omitempty"`
 	Model          string    `json:"model,omitempty"`
+	SignalPercent  *int      `json:"signal_percent,omitempty"`
 }
 
 // SessionsOutput is the JSON output for the sessions command.
@@ -41,6 +42,7 @@ type StatsOutput struct {
 	SessionID      string              `json:"session_id"`
 	Project        string              `json:"project,omitempty"`
 	Context        ContextJSON         `json:"context"`
+	Health         *HealthScoreJSON    `json:"health,omitempty"`
 	Cost           *CostJSON           `json:"cost,omitempty"`
 	EpochCosts     []EpochCostJSON     `json:"epoch_costs,omitempty"`
 	Archaeology    *ArchaeologyJSON    `json:"archaeology,omitempty"`
@@ -163,6 +165,18 @@ type GrowthRateJSON struct {
 	SinceLastCompaction bool    `json:"since_last_compaction"`
 }
 
+// HealthScoreJSON holds signal/noise health metrics for JSON output.
+type HealthScoreJSON struct {
+	SignalTokens    int     `json:"signal_tokens"`
+	NoiseTokens     int     `json:"noise_tokens"`
+	TotalTokens     int     `json:"total_tokens"`
+	SignalPercent   float64 `json:"signal_percent"`
+	NoisePercent    float64 `json:"noise_percent"`
+	Grade           string  `json:"grade"`
+	BiggestOffender string  `json:"biggest_offender,omitempty"`
+	OffenderTokens  int     `json:"offender_tokens,omitempty"`
+}
+
 // RecommendationJSON holds cleanup recommendations for JSON output.
 type RecommendationJSON struct {
 	Items            []CleanupItemJSON `json:"items"`
@@ -271,6 +285,21 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			TokensPerTurn:       stats.TokenGrowthRate,
 			SinceLastCompaction: stats.CompactionCount > 0,
 		},
+	}
+
+	// Health score
+	health := analyzer.ComputeHealth(stats, rec)
+	if health != nil && health.TotalTokens > 0 {
+		out.Health = &HealthScoreJSON{
+			SignalTokens:    health.SignalTokens,
+			NoiseTokens:     health.NoiseTokens,
+			TotalTokens:     health.TotalTokens,
+			SignalPercent:   health.SignalPercent,
+			NoisePercent:    health.NoisePercent,
+			Grade:           health.Grade,
+			BiggestOffender: health.BiggestOffender,
+			OffenderTokens:  health.OffenderTokens,
+		}
 	}
 
 	// Fill message counts

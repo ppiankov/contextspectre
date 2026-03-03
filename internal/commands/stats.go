@@ -76,6 +76,19 @@ func runStats(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Context bar:     %s\n", contextBar(stats.UsagePercent, 30))
 	fmt.Println()
 
+	// Context health
+	health := analyzer.ComputeHealth(stats, rec)
+	if health != nil && health.TotalTokens > 0 {
+		fmt.Println("Context health:")
+		fmt.Printf("  Signal:           %.1f%% (%s)\n", health.SignalPercent, health.Grade)
+		fmt.Printf("  Signal tokens:    %s\n", formatTokens(health.SignalTokens))
+		fmt.Printf("  Noise tokens:     %s\n", formatTokens(health.NoiseTokens))
+		if health.BiggestOffender != "" {
+			fmt.Printf("  Biggest offender: %s (%s tokens)\n", health.BiggestOffender, formatTokens(health.OffenderTokens))
+		}
+		fmt.Println()
+	}
+
 	// Compaction info
 	fmt.Printf("Compactions: %d\n", stats.CompactionCount)
 	if stats.CompactionCount > 0 {
