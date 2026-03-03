@@ -672,6 +672,25 @@ type UniteOutputJSON struct {
 	Sections         []UniteSectionJSON `json:"sections"`
 }
 
+// VectorItemJSON is a single vector item for JSON output.
+type VectorItemJSON struct {
+	Text       string `json:"text"`
+	Source     string `json:"source"`
+	SourceType string `json:"source_type"`
+	Epoch      int    `json:"epoch"`
+}
+
+// VectorOutputJSON is the JSON output for the vector command.
+type VectorOutputJSON struct {
+	ProjectName     string           `json:"project_name"`
+	SnapshotDate    string           `json:"snapshot_date"`
+	SessionsScanned int              `json:"sessions_scanned"`
+	Decisions       []VectorItemJSON `json:"decisions"`
+	Constraints     []VectorItemJSON `json:"constraints"`
+	Questions       []VectorItemJSON `json:"questions"`
+	Files           []string         `json:"files"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
