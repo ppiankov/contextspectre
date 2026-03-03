@@ -6,6 +6,14 @@
 
 Reasoning hygiene layer for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
+## Before and after
+
+A real session: 625 lines, 2.0MB, Signal F (255K noise tokens, $19.80). After cleanup: 232 lines, 1.1MB, Signal A (0 noise, $6.12).
+
+| Before | After |
+|--------|-------|
+| ![Before cleanup](assets/stats-before.png) | ![After cleanup](assets/stats-after.png) |
+
 ## The problem
 
 Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays.
