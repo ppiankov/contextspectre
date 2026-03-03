@@ -269,7 +269,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 // ProjectNameFromDir extracts a human-readable project name from a Claude project directory path.
 func ProjectNameFromDir(dir string) string {
 	name := filepath.Base(dir)
-	// Project dirs are URL-encoded paths like "-Users-user-dev-ppiankov-github"
+	// Project dirs are URL-encoded paths like "-Users-user-dev-myproject"
 	// Extract the last meaningful segment
 	parts := strings.Split(name, "-")
 	if len(parts) > 1 {
