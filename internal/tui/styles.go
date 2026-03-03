@@ -64,6 +64,10 @@ var (
 
 	stylePhaseOperational = lipgloss.NewStyle().
 				Foreground(colorGreen)
+
+	styleAmputate = lipgloss.NewStyle().
+			Background(lipgloss.Color("#3B0000")).
+			Foreground(colorRed)
 )
 
 func contextColor(pct float64) lipgloss.Color {
