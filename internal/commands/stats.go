@@ -6,26 +6,30 @@ import (
 	"path/filepath"
 	"strings"
 
+	"sort"
+
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
+	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
 
 var (
 	statsCmd = &cobra.Command{
-		Use:   "stats <session-id-or-path>",
+		Use:   "stats [session-id-or-path]",
 		Short: "Show context statistics for a session",
-		Args:  cobra.ExactArgs(1),
+		Args:  cobra.MaximumNArgs(1),
 		RunE:  runStats,
 	}
 	showEpochs bool
 	showScope  bool
+	statsCWD   bool
 )
 
 func runStats(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("session not found: %s", path)
+	path, err := resolveSessionArg(args, statsCWD)
+	if err != nil {
+		return err
 	}
 
 	entries, err := jsonl.Parse(path)
@@ -398,6 +402,66 @@ func resolveSessionPath(arg string) string {
 	return arg + ".jsonl"
 }
 
+// resolveCWDSession finds the most recent session for the current working directory.
+// Returns the full path to the session JSONL file.
+func resolveCWDSession() (string, error) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return "", fmt.Errorf("cannot determine working directory: %w", err)
+	}
+	dir := resolveClaudeDir()
+	encodedDir := session.EncodePath(cwd)
+	projectDir := filepath.Join(dir, "projects", encodedDir)
+
+	files, err := os.ReadDir(projectDir)
+	if err != nil {
+		return "", fmt.Errorf("no sessions found for %s", cwd)
+	}
+
+	type candidate struct {
+		path    string
+		modTime int64
+	}
+	var candidates []candidate
+	for _, f := range files {
+		name := f.Name()
+		if strings.HasSuffix(name, ".jsonl") && !strings.Contains(name, ".bak") {
+			info, err := f.Info()
+			if err != nil {
+				continue
+			}
+			candidates = append(candidates, candidate{
+				path:    filepath.Join(projectDir, name),
+				modTime: info.ModTime().UnixNano(),
+			})
+		}
+	}
+	if len(candidates) == 0 {
+		return "", fmt.Errorf("no sessions found for %s", cwd)
+	}
+
+	sort.Slice(candidates, func(i, j int) bool {
+		return candidates[i].modTime > candidates[j].modTime
+	})
+	return candidates[0].path, nil
+}
+
+// resolveSessionArg resolves the session path from args or --cwd flag.
+// If useCWD is true and no args provided, auto-discovers the most recent session for CWD.
+func resolveSessionArg(args []string, useCWD bool) (string, error) {
+	if len(args) > 0 {
+		path := resolveSessionPath(args[0])
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return "", fmt.Errorf("session not found: %s", path)
+		}
+		return path, nil
+	}
+	if useCWD || os.Getenv("CLAUDECODE") == "1" {
+		return resolveCWDSession()
+	}
+	return "", fmt.Errorf("provide a session ID or use --cwd")
+}
+
 func formatTokens(n int) string {
 	if n >= 1000000 {
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)
@@ -445,4 +509,5 @@ func init() {
 	rootCmd.AddCommand(statsCmd)
 	statsCmd.Flags().BoolVar(&showEpochs, "epochs", false, "Show epoch timeline")
 	statsCmd.Flags().BoolVar(&showScope, "scope", false, "Show scope drift analysis")
+	statsCmd.Flags().BoolVar(&statsCWD, "cwd", false, "Use most recent session for current directory")
 }

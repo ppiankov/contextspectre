@@ -20,8 +20,12 @@ var (
 	amputateApply bool
 )
 
+var (
+	amputateCWD bool
+)
+
 var amputateCmd = &cobra.Command{
-	Use:   "amputate <session-id-or-path>",
+	Use:   "amputate [session-id-or-path]",
 	Short: "Surgically remove entries to unblock stuck sessions",
 	Long: `Remove a range of entries from a session to unblock content filter blocks
 or other corruption. Always creates a backup before any modification.
@@ -32,15 +36,15 @@ Examples:
   contextspectre amputate <id> --from 45 --to 50           # preview removal
   contextspectre amputate <id> --from 45 --to 50 --apply   # execute
   contextspectre amputate <id> --last 3 --apply            # remove last 3 entries
-  contextspectre amputate <id> --after 120 --apply         # remove from 120 to end`,
-	Args: cobra.ExactArgs(1),
+  contextspectre amputate --cwd --last 3 --apply           # use current directory's session`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runAmputate,
 }
 
 func runAmputate(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("session not found: %s", path)
+	path, err := resolveSessionArg(args, amputateCWD)
+	if err != nil {
+		return err
 	}
 
 	entries, err := jsonl.Parse(path)
@@ -204,5 +208,6 @@ func init() {
 	amputateCmd.Flags().IntVar(&amputateLast, "last", 0, "Remove the last N entries")
 	amputateCmd.Flags().IntVar(&amputateAfter, "after", -1, "Remove all entries from this index onward")
 	amputateCmd.Flags().BoolVar(&amputateApply, "apply", false, "Execute the amputation (default: dry-run)")
+	amputateCmd.Flags().BoolVar(&amputateCWD, "cwd", false, "Use most recent session for current directory")
 	rootCmd.AddCommand(amputateCmd)
 }

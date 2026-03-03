@@ -3,7 +3,6 @@ package commands
 import (
 	"fmt"
 	"log/slog"
-	"os"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
@@ -11,24 +10,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var fixApply bool
+var (
+	fixApply bool
+	fixCWD   bool
+)
 
 var fixCmd = &cobra.Command{
-	Use:   "fix <session-id-or-path>",
+	Use:   "fix [session-id-or-path]",
 	Short: "Diagnose and repair session problems",
 	Long: `Scan a session for common problems (content filter blocks, oversized images,
 orphaned tool results) and optionally repair them.
 
 By default runs in dry-run mode (report only). Use --apply to fix detected issues.
 Always creates a backup before any modification.`,
-	Args: cobra.ExactArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	RunE: runFix,
 }
 
 func runFix(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("session not found: %s", path)
+	path, err := resolveSessionArg(args, fixCWD)
+	if err != nil {
+		return err
 	}
 
 	entries, err := jsonl.Parse(path)
@@ -86,5 +88,6 @@ func runFix(cmd *cobra.Command, args []string) error {
 
 func init() {
 	fixCmd.Flags().BoolVar(&fixApply, "apply", false, "Apply repairs (default: dry-run)")
+	fixCmd.Flags().BoolVar(&fixCWD, "cwd", false, "Use most recent session for current directory")
 	rootCmd.AddCommand(fixCmd)
 }
