@@ -356,6 +356,8 @@ func resolveSessionPath(arg string) string {
 	if err != nil {
 		return arg + ".jsonl"
 	}
+
+	// First try exact match
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
@@ -365,6 +367,34 @@ func resolveSessionPath(arg string) string {
 			return candidate
 		}
 	}
+
+	// Then try prefix match (short ID like "5d624f4a")
+	if !strings.Contains(arg, "-") || len(arg) < 36 {
+		var match string
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			files, err := os.ReadDir(filepath.Join(projectsDir, e.Name()))
+			if err != nil {
+				continue
+			}
+			for _, f := range files {
+				name := f.Name()
+				if strings.HasPrefix(name, arg) && strings.HasSuffix(name, ".jsonl") && !strings.Contains(name, ".bak") {
+					if match != "" {
+						// Ambiguous — multiple matches, fall through
+						return arg + ".jsonl"
+					}
+					match = filepath.Join(projectsDir, e.Name(), name)
+				}
+			}
+		}
+		if match != "" {
+			return match
+		}
+	}
+
 	return arg + ".jsonl"
 }
 
