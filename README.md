@@ -16,45 +16,43 @@ A real session: 14,311 lines, 36.6 MB, 15 compactions, $291 spent. Signal F — 
 
 ## The problem
 
-Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays.
+Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. Not all context ages equally: **exploratory** reasoning (temporary, unstable) becomes **reasoning contamination** once a decision is made — old scaffolding biasing future responses off-vector.
 
-The deeper problem: not all context ages equally. LLM sessions have three reasoning phases: **exploratory** (temporary, unstable), **decision** (commit point), and **operational** (forward-only execution). Claude Code mixes them all permanently. Once you've decided, the scaffolding that got you there becomes noise — or worse, it pulls future reasoning off-vector. That's not token waste. That's **reasoning contamination**.
-
-The hidden problem: a single long session can cost hundreds of dollars. Most of that is cache reads — re-processing the same context every turn. A debugging detour that gets compacted away still cost real money. Without visibility into where tokens and dollars go, optimization is impossible.
-
-And it's not limited to one session. Long projects span dozens of sessions across branches, refactors, and debugging threads. Users re-explain the same architecture, re-read the same files, re-state the same constraints in every new session. This **re-explanation tax** is invisible and cumulative. Valuable reasoning is scattered across session files with no way to find it, extract it, or carry it forward.
+A single long session can cost hundreds of dollars. Most of that is cache reads — re-processing the same context every turn. A debugging detour that gets compacted away still cost real money. Across sessions, the **re-explanation tax** compounds: re-stating the same architecture, re-reading the same files, re-stating the same constraints because prior sessions are inaccessible.
 
 ## What it is
 
-ContextSpectre reads Claude Code's local JSONL session files — from both Claude Code CLI and Claude for Mac — and gives you visibility and control over what fills your context window:
+ContextSpectre reads Claude Code's local JSONL session files — from both Claude Code CLI and Claude for Mac — and gives you visibility and control over what fills your context window.
 
-**Shipped:**
+**Visibility**
+- Context meter with compaction history and turn estimates
+- Session cost attribution from actual API usage data
+- Vector health score (A-F signal-to-noise grade)
+- Compaction archaeology and epoch timeline
+- Scope drift detection with dollar-cost quantification
 
-- **Context meter** — current token usage, percentage of window, color-coded distance to compaction
-- **Compaction history** — compaction count, token drops, growth rate, post-compaction visual distinction
-- **Turn estimate** — approximately how many turns remain before the next compaction
-- **Session browser** — all projects grouped by name, with search/filter (`/`), context bars, and active session detection
-- **Message browser** — every message with estimated token cost, type, and content preview
-- **Selective deletion** — remove exploratory branches, progress noise, stale file reads, and oversized images
-- **Impact prediction** — before you delete, see the new context percentage and turns gained
-- **Live session cleanup** — safely clean active sessions between Claude's turns with mtime-based race detection
-- **Batch cleanup** — `clean --all` runs 9 operations in one pass; `quick-clean` finds and cleans the most recent session automatically
-- **Chain repair** — parentUuid links are automatically repaired when messages are removed
-- **Session cost attribution** — actual dollar cost per session and per compaction epoch. Uses `message.usage` data with model pricing — no estimation, no heuristics
-- **Mandatory backup** — every edit creates a `.bak` first, restorable with one key
-- **Compaction archaeology** — forensic view of what each compaction preserved and discarded: files touched, tools used, decisions made, compression ratio
-- **Epoch timeline** — git-log-style view of compaction epochs with topic, cost, turns, and drift indicators
-- **Predictive cleanup** — turn-gain estimates per cleanup category, sorted by impact, with projected context reduction
-- **Scope drift detection** — tracks when tool calls leave the session's project directory, flags tangent sequences, quantifies cost of out-of-scope work per epoch
-- **Split surgery** — extract a range of entries to portable markdown, optionally prune from the source session
-- **Conversation branches** — segment sessions by compaction boundaries and time gaps, drill into individual branches
-- **Reasoning phase markers** — tag entries as exploratory, decision, or operational; dim exploratory noise in the TUI
-- **Keep markers and commit points** — human-driven intent labeling: mark entries to keep or discard, set decision boundaries, collapse exploration above commit points
-- **Vector health score** — signal-to-noise ratio (A-F grade) measuring how much of the session file is useful content vs noise
-- **Amputation surgery** — surgically remove entries to unblock stuck sessions (context deadlock, content filter blocks)
-- **CWD-based session targeting** — `quick-clean --cwd` finds the session for the current working directory instead of most-recent-by-mtime
+**Cleanup**
+- 9 cleanup operations across 7 safety tiers
+- Batch cleanup (`clean --all`) and quick-clean discovery
+- Live session cleanup with mtime-based race detection
+- Predictive cleanup with turn-gain estimates
+- Mandatory backup with one-key undo
 
-**Planned:** Branch export (separation surgery), ghost context detection, cross-session context distillation, context unification across sessions, vector snapshot (decisions-only project north star), cross-session reasoning continuity score. See [Roadmap](#roadmap) for details.
+**Navigation**
+- Session browser with search, context bars, active detection
+- Message browser with type/cost/preview per entry
+- Conversation branches by compaction boundaries
+- Reasoning phase markers (exploratory/decision/operational)
+- Keep markers and commit points for intent labeling
+
+**Surgery**
+- Selective deletion with impact prediction
+- Split surgery (extract ranges to portable markdown)
+- Amputation for [context deadlock](docs/deadlock.md) recovery
+- Chain repair for parentUuid integrity
+- CWD-based session targeting
+
+**Planned:** Branch export (separation surgery), ghost context detection, cross-session context distillation, context unification, vector snapshot. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -75,13 +73,9 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 
 **Mirrors, not oracles.** The tool presents evidence and lets you decide. It does not auto-trim, does not guess what matters, and does not modify files without your explicit confirmation and a backup.
 
-**Context distillation over context deletion.** The goal is not to make sessions smaller. It's to increase the signal-to-noise ratio of what Claude sees. Progress messages, stale file reads, failed retries, and decorative separators are pure noise. Decisions, constraints, and working code are pure signal.
-
-**Expose the hidden economics of reasoning.** Tokens are abstract. Percentages are abstract. Dollars are visceral. "$32 for that debugging detour that got compacted away" changes behavior faster than "82% context usage" ever will.
-
 **Structural detection over semantic guessing.** Every analysis uses observable facts — token counts, file paths, compaction boundaries, parentUuid chains, usage fields. No ML, no heuristics that guess meaning, no probabilistic classification. When the tool doesn't know, it says so.
 
-**The historian, not the operator.** ContextSpectre does not run your sessions or tell you what to do next. It records what happened, shows what it cost, and lets you decide what to carry forward. The operator explores and decides. The historian preserves the decisions and discards the scaffolding.
+See [Workflow Patterns](docs/workflow.md) for usage philosophy and the explore-execute-collapse cycle.
 
 ## Installation
 
@@ -116,208 +110,32 @@ contextspectre clean <session-id> --all
 contextspectre sessions --format json
 ```
 
-## TUI
+> **60-second demo:** Run `contextspectre` to open the TUI. Pick your largest session. Press `a` to select all noise. Read the impact prediction. Press `d` to clean. Done.
 
-Running `contextspectre` without arguments opens the interactive TUI.
+See [CLI & TUI Reference](docs/commands.md) for the full command list, keybindings, and cleanup tiers.
 
-**Session browser** — sessions grouped by project with message count, file size, context bars, compaction count, and last modified time. Press `/` to search by project name, branch, or session ID. Active sessions (modified <60s ago) are highlighted and read-only.
-
-**Message viewer** — every message in the session with type, estimated tokens, timestamp, and preview. The context meter at the top shows current usage, compaction history, and estimated turns remaining. Stale reads, failed retries, sidechains, and tangents are labeled.
-
-**Selection and deletion** — Space to select individual messages, `x` to select all progress, `h` snapshots, `r` stale reads, `c` sidechains, `g` tangents, `i` to replace images, `s` to strip separators, `t` to truncate large outputs, `a` to clean all. Selected messages show live impact prediction: token savings, new context percentage, and turns gained. `d` to delete with confirmation, `u` to undo from backup.
-
-## CLI commands
-
-| Command | Description |
-|---------|-------------|
-| `contextspectre` | Launch interactive TUI |
-| `contextspectre sessions` | List all sessions with context stats |
-| `contextspectre stats <id>` | Print detailed context analysis |
-| `contextspectre clean <id> --all` | Run all 9 cleanup operations |
-| `contextspectre clean <id> --live` | Safe cleanup for active sessions (Tier 1-3) |
-| `contextspectre clean <id> --live --aggressive` | Live cleanup including images/separators/truncation (Tier 1-5) |
-| `contextspectre clean --auto` | Find and clean the most recent session |
-| `contextspectre quick-clean` | Discover most recent session, clean it |
-| `contextspectre quick-clean --project <name>` | Scoped to a specific project |
-| `contextspectre quick-clean --live` | Live cleanup on most recent session |
-| `contextspectre amputate <id> --last N --apply` | Surgically remove last N entries to unblock stuck sessions |
-| `contextspectre split <id> --from N --to M` | Export entry range to markdown |
-| `contextspectre mark <id> <uuid> keep` | Mark an entry to protect from cleanup |
-| `contextspectre collapse <id> --commit-point <uuid>` | Collapse exploration above a commit point |
-| `contextspectre fix <id>` | Diagnose and repair session issues |
-| `contextspectre doctor` | Health check across all sessions |
-| `contextspectre relocate --scan` | Find orphaned sessions after project moves |
-| `contextspectre relocate --from <old> --to <new>` | Migrate sessions to new project path |
-| `contextspectre version` | Print version, commit, and build date |
-
-**Global flags:**
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--claude-dir` | `~/.claude` | Override Claude Code data directory |
-| `--format` | `text` | Output format (`text` or `json`) |
-| `--verbose` | `false` | Enable verbose logging |
-
-## Cleanup operations
-
-| Tier | Operation | Flag | Safe for live? |
-|------|-----------|------|----------------|
-| 1 | Remove progress messages | `--progress` | Yes |
-| 2 | Remove file-history-snapshots | `--snapshots` | Yes |
-| 3 | Remove stale duplicate file reads | `--dedup-reads` | No |
-| 4 | Replace base64 images with text placeholders | `--images` | Aggressive |
-| 4 | Strip decorative separator lines | `--separators` | Aggressive |
-| 5 | Truncate large Bash outputs (keep first/last N lines) | `--truncate-output` | Aggressive |
-| 6 | Remove failed tool retries | `--failed-retries` | No |
-| 6 | Remove sidechain entries | `--sidechains` | No |
-| 7 | Remove cross-repo tangent sequences | `--tangents` | No |
-
-`--all` runs all 9. `--live` runs Tier 1-2. `--live --aggressive` runs Tier 1-5.
-
-## How it works
-
-**Session discovery.** Scans `~/.claude/projects/` for JSONL session files. Both Claude Code CLI and Claude for Mac store sessions in the same directory with the same schema. Reads `sessions-index.json` when available, falls back to glob.
-
-**Token estimation.** Text: `len / 4`. Images: `len(base64) / 750`. Tool use: `(name + input) / 4`. These are estimates — actual tokenization varies, but they track closely enough for relative comparison.
-
-**Compaction detection.** Monitors `message.usage` fields on assistant messages. A drop of >50K tokens between consecutive assistant messages indicates compaction. The period between two compactions is a **compaction epoch** — the fundamental unit of reasoning history.
-
-**Compaction distance.** `(165,000 - current_tokens) / avg_tokens_per_turn` = estimated turns remaining.
-
-**Cost attribution.** Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation — the data is in the JSONL.
-
-**Chain repair.** When deleting message D, all entries where `parentUuid == D.uuid` get `parentUuid = D.parentUuid`. Walks up deletion chains to find the nearest surviving ancestor.
-
-**Image replacement.** Replaces `{type: "image"}` blocks with `{type: "text", text: "[image removed by contextspectre]"}`. The image data is fully removed — no placeholder images that could cause API validation errors. Context cost drops from megabytes to a few bytes.
-
-**Live cleanup.** Uses mtime-based race detection: check mtime before each sub-operation, abort and restore from backup if Claude wrote to the file during cleanup. Requires 2s idle period before starting. Safe because Claude Code re-reads the JSONL between turns.
-
-## Safety
-
-- **Mandatory backup.** Every modification creates a `.bak` file first. Refuses to proceed if `.bak` already exists (preventing accidental double-edits).
-- **Active session protection.** Sessions modified less than 60 seconds ago are read-only in the TUI.
-- **Race detection.** Live cleanup aborts and restores the original file if the session is modified during cleanup.
-- **Undo.** Restore from backup with `u` key in the TUI.
-- **Chain validation.** Verifies parentUuid integrity after edits.
-- **No network.** ContextSpectre never phones home, never sends data anywhere.
-- **Multi-instance awareness.** Claude Code CLI and Claude for Mac can have separate sessions in the same project directory. Cleaning one session does not affect others, but you must identify the correct session before modifying it. See [Session Architecture](docs/session-architecture.md) for details on how sessions are stored and how to avoid cleaning the wrong one.
-
-## Context deadlock
-
-A session can reach a state where it cannot continue AND cannot compact. This is a terminal condition that cleanup cannot fix.
-
-**How it happens.** Claude Code's context meter shows conversation tokens as a percentage of 200K. But the API request includes more than the conversation — system prompt, tool definitions, project instructions, and framework overhead add ~40-60K tokens that the meter doesn't show. A session reporting 75% (150K tokens) is actually consuming ~190-210K at the API level. When the total exceeds the API limit, new messages are rejected with "Prompt is too long."
-
-**Why compaction fails too.** Compaction is itself an API call — Claude Code sends the full conversation and asks the model to summarize it. If the conversation is too large for a normal API call, it's too large for the compaction call. The session is stuck: too big to continue, too big to compress.
-
-**Why `clean --all` doesn't fix it.** Cleanup removes disk noise: progress messages, file-history-snapshots, stale reads, and failed retries. These are JSONL metadata that bloat the file on disk but are NOT sent to the API. The entries that fill API context are user messages, assistant responses, and system entries — the actual conversation. Cleanup reduces the file from 36MB to 17MB while the API request stays exactly the same size.
-
-**How to recover.** The `amputate` command surgically removes entries from the end of the conversation, dropping the token count below the compaction threshold:
-
-```bash
-contextspectre amputate <session-id> --last 20 --apply
-```
-
-This removes the last 20 entries (typically the oversized message that triggered the deadlock plus error responses), allowing Claude Code to resume and compact normally. Always runs in dry-run mode first — add `--apply` to execute.
-
-## Architecture
-
-```
-contextspectre/
-├── cmd/contextspectre/main.go      # Entry point (LDFLAGS version injection)
-├── internal/
-│   ├── commands/                   # Cobra CLI: sessions, stats, clean, quick-clean, fix, doctor, relocate
-│   ├── jsonl/                      # JSONL parser, types, writer (streaming, 10MB buffer)
-│   ├── session/                    # Session discovery, relocation, path encoding
-│   ├── analyzer/                   # Context stats, compaction detection, token estimation,
-│   │   │                           #   deletion impact, duplicate reads, failed retries, tangents
-│   ├── editor/                     # Deletion, image replacement, separator stripping,
-│   │   │                           #   output truncation, CleanAll orchestrator, CleanLive orchestrator
-│   ├── safecopy/                   # .bak create/restore/clean
-│   ├── tui/                        # Bubbletea TUI (sessions, messages, confirm views)
-│   └── logging/                    # slog initialization
-├── testdata/                       # Session fixtures for testing
-├── Makefile
-└── go.mod
-```
-
-Key design decisions:
-
-- **Streaming parser.** JSONL files can be hundreds of megabytes. The parser uses `bufio.Scanner` with a 1MB buffer, not `ioutil.ReadAll`.
-- **Atomic writes.** File modifications write to a temp file then rename — no partial writes on crash.
-- **No Claude API dependency.** Works entirely on local files. No network, no tokens consumed.
-- **Bubbletea TUI.** Keyboard-driven, no mouse required. Lipgloss for styling.
-- **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.
-- **Tiered operations.** Cleanup operations are classified by safety level. Live mode only runs the safest tiers.
-- **Structural, not semantic.** All analysis uses observable facts: token counts, file paths, UUID chains, usage fields. No ML, no probabilistic guessing.
-
-## See also: CLI status line
-
-Claude Code CLI supports a custom status line hook that shows context usage in real time:
-
-```
-Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
-```
-
-This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it*, *what it costs*, and lets you act on it.
-
-## Workflow patterns
-
-For large projects, separating exploratory reasoning from structured execution reduces context drift. One effective pattern:
-
-- **Explore and design** in a conversational interface (Claude for Mac, or a fresh CLI session).
-- **Execute structured work** in Claude Code CLI with focused, scoped prompts.
-- **Use ContextSpectre at decision boundaries** — collapse exploration into decisions before continuing. The scaffolding that got you to the decision becomes noise once you've committed.
-
-ContextSpectre does not require this workflow — it works with any Claude Code session. But it complements structured development particularly well.
-
-## Roadmap
-
-**Phase 1: Entropy control** (complete)
-Control noise within a session. Remove progress messages, stale reads, failed retries, oversized images, decorative separators, and cross-repo tangents. Live cleanup between turns. Batch operations.
-
-**Phase 2: Reasoning economics** (complete)
-Expose the hidden costs of reasoning. Session cost attribution from actual usage data. Compaction epoch timeline — git log for reasoning with cost, turns, and topic per epoch. Compaction archaeology — forensic view of what 165K tokens compressed to 250 characters. Predictive cleanup with turn-gain estimates.
-
-**Phase 3: Reasoning navigation** (complete)
-Turn the flat message list into a navigable structure. Scope drift detection — track when tool calls leave the session's project directory, flag tangent sequences, quantify re-explanation tax in dollars, and offer split surgery to extract tangents into portable markdown before compaction erases the original context. Segment sessions into conversation branches by compaction boundaries and time gaps. Reasoning phase markers (exploratory/decision/operational). Keep markers and commit points for human-driven intent labeling. Vector health score showing signal/noise ratio. Amputation surgery for stuck sessions.
-
-**Phase 4: Selective continuity** (next)
-Extract healthy conversation branches into portable markdown context files. Separation surgery: mark branches worth continuing, export them, optionally prune from the source session. Start a new Claude Code session with `"read docs/branch-export.md"` — full context, zero compactions. Session distillation across all sessions for a project.
-
-**Phase 5: Context distillation**
-Synthesize across all sessions for a project. Unite multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting. Vector snapshot — extract only canonical decisions and constraints as a project north star. Cross-session continuity score to measure re-explanation tax. Ghost context detection to flag stale compaction summaries.
-
-## Glossary
+## Key concepts
 
 | Term | Definition |
 |------|------------|
-| **Compaction** | Claude Code's automatic context compression. Triggers at ~165K tokens, summarizes the conversation, resets to ~40-50K. You lose specificity. |
-| **Compaction epoch** | The period between two compactions. The fundamental unit of reasoning history — each epoch has its own topic, cost, and drift profile. |
-| **Compaction archaeology** | Forensic reconstruction of what a compaction preserved and discarded: files touched, tools used, decisions made, compression ratio. |
-| **Context deadlock** | Terminal state where a session is too large to continue (API rejects new messages) and too large to compact (compaction is itself an API call). |
-| **Signal / Noise** | Signal = content that contributes to productive reasoning. Noise = waste that fills the session file without value: progress metadata, duplicate file reads, failed retries, decorative separators, cross-repo tangents. Some noise is never sent to the API (progress, snapshots). Some is sent but adds nothing (stale reads, tangents). |
-| **Vector health score** | A-F grade measuring signal-to-noise ratio. A = >95% signal. F = <20% signal. |
-| **Reasoning contamination** | Old exploratory scaffolding persisting in context and biasing future responses off-vector. Not token waste — reasoning drift. |
-| **Reasoning phases** | Three lifecycle stages: **exploratory** (searching, reading, brainstorming — temporary), **decision** (commit point — permanent), **operational** (execution after a decision — forward-only). |
-| **Scope drift** | When tool calls leave the session's project directory. Detected structurally by comparing file paths against the session's root. |
-| **Tangent** | A sequence of entries operating in a different repository. A specific type of scope drift. |
-| **Sidechain** | An orphaned conversation branch — tool results referencing tool uses that no longer exist. |
-| **Re-read tax** | The cost of cache reads. Every turn, the full context is re-processed by the API. Noise tokens are re-read alongside signal — you pay for the bloat on every message. |
-| **Compaction tax** | The quality cost of lossy compression. When compaction triggers, reasoning is summarized — decisions lose specificity, nuance disappears, and Claude works from a shadow of what existed. |
-| **Re-explanation tax** | The cumulative cost of re-stating architecture, constraints, and decisions in every new session because prior sessions are inaccessible. |
-| **Keep marker** | Human tag protecting an entry from cleanup. Survives all automated operations. |
-| **Commit point** | A decision boundary. Exploration above it can be collapsed — the scaffolding served its purpose. |
-| **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. |
-| **Split surgery** | Extracting a range of entries to portable markdown. Non-destructive by default; optionally prunes from the source. |
-| **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Planned (Phase 4). |
-| **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. Planned (Phase 5). |
-| **Context distillation** | Increasing the signal-to-noise ratio — not making sessions smaller, but making what remains more useful. |
-| **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. Planned (Phase 5). |
-| **Ghost context** | Stale compaction summaries that describe code or decisions that no longer exist. Planned detection (Phase 5). |
-| **Live cleanup** | Cleaning an active session between Claude's turns. Uses mtime-based race detection to avoid corrupting a session Claude is writing to. |
-| **Tier (1-7)** | Safety classification for cleanup operations. Tier 1 (progress removal) is always safe. Tier 7 (tangent removal) requires the session to be inactive. |
-| **Conversation branch** | A segment of a session between compaction boundaries or significant time gaps. The navigable unit within a long session. |
+| **Compaction** | Auto-compression at ~165K tokens. You lose specificity. |
+| **Compaction epoch** | Period between two compactions. Unit of reasoning history. |
+| **Context deadlock** | Too large to continue, too large to compact. See [recovery](docs/deadlock.md). |
+| **Signal / Noise** | Signal = productive reasoning. Noise = progress, stale reads, tangents. |
+| **Reasoning contamination** | Old scaffolding persisting in context, biasing future responses. |
+| **Vector health score** | A-F grade. A = >95% signal. F = <20% signal. |
+
+Full glossary: [Concepts & Glossary](docs/concepts.md)
+
+## Roadmap
+
+| Phase | Status | Summary |
+|-------|--------|---------|
+| 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
+| 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
+| 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health |
+| 4. Selective continuity | Next | Branch export, separation surgery, session distillation |
+| 5. Context distillation | Planned | Cross-session unification, vector snapshot, ghost context |
 
 ## Known limitations
 
@@ -328,6 +146,17 @@ Synthesize across all sessions for a project. Unite multiple branch exports into
 - **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating. Works with both CLI and Mac desktop sessions.
 - **Large files are slow to parse.** Sessions over 100MB take a few seconds to load. The parser is streaming but analysis is in-memory.
 - **Branch detection is structural, not semantic.** Branches are identified by compaction boundaries and time gaps, not by understanding what was discussed.
+
+## Documentation
+
+| Document | Contents |
+|----------|----------|
+| [CLI & TUI Reference](docs/commands.md) | All commands, flags, keybindings, cleanup tiers |
+| [Concepts & Glossary](docs/concepts.md) | Full 26-term glossary, reasoning phases |
+| [Architecture](docs/architecture.md) | How it works, safety model, design decisions |
+| [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
+| [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
+| [Session Architecture](docs/session-architecture.md) | Session storage, multi-instance safety |
 
 ## License
 
