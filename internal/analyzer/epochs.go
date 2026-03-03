@@ -42,7 +42,7 @@ func BuildEpochs(epochCosts []EpochCost, archaeology *CompactionReport, activeTo
 			epochs[i].IsActive = true
 			epochs[i].SurvivedChars = -1
 			if activeTopicHint != "" {
-				epochs[i].Topic = truncateHint(activeTopicHint, 30)
+				epochs[i].Topic = TruncateHint(activeTopicHint, 30)
 			} else {
 				epochs[i].Topic = fmt.Sprintf("Epoch %d (active)", i)
 			}
@@ -61,10 +61,10 @@ func extractTopic(index int, arch *CompactionArchaeology) string {
 		return fmt.Sprintf("Epoch %d", index)
 	}
 	if len(arch.Before.UserQuestions) > 0 {
-		return truncateHint(arch.Before.UserQuestions[0], 30)
+		return TruncateHint(arch.Before.UserQuestions[0], 30)
 	}
 	if arch.After.SummaryText != "" {
-		return truncateHint(arch.After.SummaryText, 30)
+		return TruncateHint(arch.After.SummaryText, 30)
 	}
 	return fmt.Sprintf("Epoch %d", index)
 }

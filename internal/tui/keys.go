@@ -28,6 +28,7 @@ type keyMap struct {
 	Cancel         key.Binding
 	MarkKeep       key.Binding
 	MarkNoise      key.Binding
+	CommitPoint    key.Binding
 }
 
 var keys = keyMap{
@@ -130,5 +131,9 @@ var keys = keyMap{
 	MarkNoise: key.NewBinding(
 		key.WithKeys("N"),
 		key.WithHelp("N", "toggle noise"),
+	),
+	CommitPoint: key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "commit point"),
 	),
 }

@@ -11,6 +11,7 @@ var (
 	colorAccent = lipgloss.Color("#7B68EE")
 	colorWhite  = lipgloss.Color("#FFFFFF")
 	colorDim    = lipgloss.Color("#555555")
+	colorCyan   = lipgloss.Color("#00CCCC")
 )
 
 var (
@@ -49,6 +50,10 @@ var (
 	styleWarning = lipgloss.NewStyle().
 			Foreground(colorRed).
 			Bold(true)
+
+	styleCommitPoint = lipgloss.NewStyle().
+				Foreground(colorCyan).
+				Bold(true)
 )
 
 func contextColor(pct float64) lipgloss.Color {

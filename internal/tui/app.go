@@ -18,6 +18,7 @@ const (
 	viewBranches
 	viewMessages
 	viewConfirm
+	viewCommitPoint
 	viewEpochs
 )
 
@@ -28,6 +29,7 @@ type AppModel struct {
 	branches      branchesModel
 	messages      messagesModel
 	confirm       confirmModel
+	commitPoint   commitPointModel
 	epochs        epochsModel
 	claudeDir     string
 	version       string
@@ -68,6 +70,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages.height = msg.Height
 		m.confirm.width = msg.Width
 		m.confirm.height = msg.Height
+		m.commitPoint.width = msg.Width
+		m.commitPoint.height = msg.Height
 		m.epochs.width = msg.Width
 		m.epochs.height = msg.Height
 		return m, nil
@@ -146,6 +150,30 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.currentView = viewMessages
 		return m, nil
 
+	case showCommitPointMsg:
+		m.commitPoint = newCommitPointModel(msg.commitPoint, msg.cursorIdx)
+		m.commitPoint.width = m.width
+		m.commitPoint.height = m.height
+		m.currentView = viewCommitPoint
+		return m, nil
+
+	case confirmCommitPointMsg:
+		m.messages.markers.AddCommitPoint(msg.commitPoint)
+		for i := 0; i < msg.cursorIdx; i++ {
+			uuid := m.messages.entries[i].UUID
+			if uuid != "" && !m.messages.markers.IsKeep(uuid) {
+				m.messages.markers.Set(uuid, editor.MarkerCandidate)
+			}
+		}
+		_ = editor.SaveMarkers(m.messages.session.FullPath, m.messages.markers)
+		m.messages.statusMsg = fmt.Sprintf("Commit point set — %d entries marked CANDIDATE", msg.cursorIdx)
+		m.currentView = viewMessages
+		return m, nil
+
+	case cancelCommitPointMsg:
+		m.currentView = viewMessages
+		return m, nil
+
 	case openEpochsMsg:
 		m.epochs = newEpochsModel(msg.epochs, msg.info)
 		m.epochs.driftResult = msg.drift
@@ -173,6 +201,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages, cmd = m.messages.Update(msg)
 	case viewConfirm:
 		m.confirm, cmd = m.confirm.Update(msg)
+	case viewCommitPoint:
+		m.commitPoint, cmd = m.commitPoint.Update(msg)
 	case viewEpochs:
 		m.epochs, cmd = m.epochs.Update(msg)
 	}
@@ -188,6 +218,8 @@ func (m AppModel) View() string {
 		return m.messages.View()
 	case viewConfirm:
 		return m.confirm.View()
+	case viewCommitPoint:
+		return m.commitPoint.View()
 	case viewEpochs:
 		return m.epochs.View()
 	default:
