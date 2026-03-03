@@ -25,7 +25,7 @@ func TestProjectNameFromDir(t *testing.T) {
 		dir  string
 		want string
 	}{
-		{"/home/user/.claude/projects/-Users-user-dev-ppiankov-github", "github"},
+		{"/home/user/.claude/projects/-Users-user-dev-myproject", "myproject"},
 		{"/home/user/.claude/projects/-Users-dev-myproject", "myproject"},
 		{"/home/user/.claude/projects/simple", "simple"},
 	}
