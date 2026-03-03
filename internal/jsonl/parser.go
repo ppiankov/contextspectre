@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-const maxLineSize = 1 << 20 // 1MB buffer per line
+const maxLineSize = 10 << 20 // 10MB buffer per line
 
 // Parse reads a JSONL file and returns all entries with computed metadata.
 func Parse(path string) ([]Entry, error) {
