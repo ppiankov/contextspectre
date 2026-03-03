@@ -15,6 +15,7 @@ const (
 	viewSessions viewState = iota
 	viewMessages
 	viewConfirm
+	viewEpochs
 )
 
 // AppModel is the top-level Bubble Tea model.
@@ -23,6 +24,7 @@ type AppModel struct {
 	sessions      sessionsModel
 	messages      messagesModel
 	confirm       confirmModel
+	epochs        epochsModel
 	claudeDir     string
 	version       string
 	width, height int
@@ -60,6 +62,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages.height = msg.Height
 		m.confirm.width = msg.Width
 		m.confirm.height = msg.Height
+		m.epochs.width = msg.Width
+		m.epochs.height = msg.Height
 		return m, nil
 
 	case tea.KeyMsg:
@@ -100,6 +104,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case cancelDeleteMsg:
 		m.currentView = viewMessages
 		return m, nil
+
+	case openEpochsMsg:
+		m.epochs = newEpochsModel(msg.epochs, msg.info)
+		m.epochs.width = m.width
+		m.epochs.height = m.height
+		m.currentView = viewEpochs
+		return m, nil
+
+	case backFromEpochsMsg:
+		m.currentView = viewMessages
+		return m, nil
 	}
 
 	// Delegate to current view
@@ -114,6 +129,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages, cmd = m.messages.Update(msg)
 	case viewConfirm:
 		m.confirm, cmd = m.confirm.Update(msg)
+	case viewEpochs:
+		m.epochs, cmd = m.epochs.Update(msg)
 	}
 
 	return m, cmd
@@ -125,6 +142,8 @@ func (m AppModel) View() string {
 		return m.messages.View()
 	case viewConfirm:
 		return m.confirm.View()
+	case viewEpochs:
+		return m.epochs.View()
 	default:
 		return m.sessions.View()
 	}

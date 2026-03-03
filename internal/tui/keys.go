@@ -18,6 +18,7 @@ type keyMap struct {
 	SelectChains   key.Binding
 	SelectTangents key.Binding
 	CleanAll       key.Binding
+	Epochs         key.Binding
 	Delete         key.Binding
 	Undo           key.Binding
 	Search         key.Binding
@@ -87,6 +88,10 @@ var keys = keyMap{
 	CleanAll: key.NewBinding(
 		key.WithKeys("a"),
 		key.WithHelp("a", "clean all"),
+	),
+	Epochs: key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "epoch timeline"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
