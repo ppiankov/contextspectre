@@ -204,6 +204,24 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
 			}
 		}
+	case key.Matches(msg, keys.CommitPoint):
+		if !m.isActive && m.cursor > 0 && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid == "" {
+				m.statusMsg = "Entry has no UUID."
+				break
+			}
+			if m.markers.HasCommitPoint(uuid) {
+				m.markers.RemoveCommitPoint(uuid)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+				m.statusMsg = "Commit point removed."
+			} else {
+				cp := editor.ExtractCanonicalState(m.entries, m.cursor)
+				return m, func() tea.Msg {
+					return showCommitPointMsg{cursorIdx: m.cursor, commitPoint: cp}
+				}
+			}
+		}
 	case key.Matches(msg, keys.Undo):
 		if !m.isActive {
 			return m.undoLastChange()
@@ -251,6 +269,16 @@ func (m messagesModel) View() string {
 		isSelected := i == m.cursor
 		isMarked := m.selected[i]
 
+		// Commit point separator
+		if e.UUID != "" && m.markers != nil && m.markers.HasCommitPoint(e.UUID) {
+			sepWidth := m.width - 4
+			if sepWidth < 20 {
+				sepWidth = 20
+			}
+			b.WriteString(styleCommitPoint.Render(" " + strings.Repeat("─", 2) + " commit point " + strings.Repeat("─", sepWidth-16)))
+			b.WriteString("\n")
+		}
+
 		// Marker
 		marker := "  "
 		if isMarked {
@@ -265,13 +293,17 @@ func (m messagesModel) View() string {
 			typeStr = styleWarning.Render("!") + typeStr
 		}
 		if e.UUID != "" && m.markers != nil {
-			switch m.markers.Get(e.UUID) {
-			case editor.MarkerKeep:
-				typeStr = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[K]") + typeStr
-			case editor.MarkerNoise:
-				typeStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[N]") + typeStr
-			case editor.MarkerCandidate:
-				typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("[C]") + typeStr
+			if m.markers.HasCommitPoint(e.UUID) {
+				typeStr = lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("[P]") + typeStr
+			} else {
+				switch m.markers.Get(e.UUID) {
+				case editor.MarkerKeep:
+					typeStr = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[K]") + typeStr
+				case editor.MarkerNoise:
+					typeStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[N]") + typeStr
+				case editor.MarkerCandidate:
+					typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("[C]") + typeStr
+				}
 			}
 		}
 
@@ -342,7 +374,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -783,6 +815,10 @@ func (m messagesModel) visibleRows() int {
 				reserved++
 			}
 		}
+	}
+	// Extra lines for commit point separators in visible range
+	if m.markers != nil && len(m.markers.CommitPoints) > 0 {
+		reserved += len(m.markers.CommitPoints)
 	}
 	avail := m.height - reserved
 	if avail < 3 {

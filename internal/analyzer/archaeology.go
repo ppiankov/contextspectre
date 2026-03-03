@@ -91,7 +91,7 @@ func AnalyzeCompactions(entries []jsonl.Entry, compactions []CompactionEvent) *C
 
 		// Post-compaction summary: entry at compaction LineIndex
 		if c.LineIndex >= 0 && c.LineIndex < len(entries) {
-			arch.After.SummaryText = extractSummaryText(entries[c.LineIndex])
+			arch.After.SummaryText = ExtractSummaryText(entries[c.LineIndex])
 			arch.After.SummaryCharCount = utf8.RuneCountInString(arch.After.SummaryText)
 		}
 
@@ -140,13 +140,13 @@ func extractEpochSummary(entries []jsonl.Entry) EpochSummary {
 			for _, b := range blocks {
 				if b.Type == "tool_use" {
 					summary.ToolCallCounts[b.Name]++
-					path := extractToolInputPath(b.Input)
+					path := ExtractToolInputPath(b.Input)
 					if path != "" {
 						fileSet[path] = true
 					}
 				}
 				if b.Type == "text" && len(summary.DecisionHints) < 5 {
-					if hint := extractDecisionHint(b.Text); hint != "" {
+					if hint := ExtractDecisionHint(b.Text); hint != "" {
 						summary.DecisionHints = append(summary.DecisionHints, hint)
 					}
 				}
@@ -158,7 +158,7 @@ func extractEpochSummary(entries []jsonl.Entry) EpochSummary {
 				if b.Type == "text" && len(summary.UserQuestions) < 10 {
 					text := strings.TrimSpace(b.Text)
 					if strings.HasSuffix(text, "?") {
-						summary.UserQuestions = append(summary.UserQuestions, truncateHint(text, 120))
+						summary.UserQuestions = append(summary.UserQuestions, TruncateHint(text, 120))
 					}
 				}
 			}
@@ -172,8 +172,8 @@ func extractEpochSummary(entries []jsonl.Entry) EpochSummary {
 	return summary
 }
 
-// extractSummaryText extracts concatenated text content from an entry.
-func extractSummaryText(e jsonl.Entry) string {
+// ExtractSummaryText extracts concatenated text content from an entry.
+func ExtractSummaryText(e jsonl.Entry) string {
 	if e.Message == nil {
 		return ""
 	}
@@ -190,8 +190,8 @@ func extractSummaryText(e jsonl.Entry) string {
 	return strings.Join(parts, "\n")
 }
 
-// extractToolInputPath extracts file_path, path, or pattern from tool_use input.
-func extractToolInputPath(input json.RawMessage) string {
+// ExtractToolInputPath extracts file_path, path, or pattern from tool_use input.
+func ExtractToolInputPath(input json.RawMessage) string {
 	var fields struct {
 		FilePath string `json:"file_path"`
 		Path     string `json:"path"`
@@ -215,8 +215,8 @@ var decisionKeywords = []string{
 	"opted", "trade-off", "rather than", "because",
 }
 
-// extractDecisionHint returns a truncated hint if the text contains decision keywords.
-func extractDecisionHint(text string) string {
+// ExtractDecisionHint returns a truncated hint if the text contains decision keywords.
+func ExtractDecisionHint(text string) string {
 	lower := strings.ToLower(text)
 	for _, kw := range decisionKeywords {
 		idx := strings.Index(lower, kw)
@@ -227,14 +227,14 @@ func extractDecisionHint(text string) string {
 				start = idx - 20
 			}
 			snippet := text[start:]
-			return truncateHint(snippet, 120)
+			return TruncateHint(snippet, 120)
 		}
 	}
 	return ""
 }
 
-// truncateHint truncates text to maxLen runes, adding "..." if needed.
-func truncateHint(s string, maxLen int) string {
+// TruncateHint truncates text to maxLen runes, adding "..." if needed.
+func TruncateHint(s string, maxLen int) string {
 	runes := []rune(s)
 	if len(runes) <= maxLen {
 		return s

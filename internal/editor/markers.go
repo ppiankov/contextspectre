@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"time"
 )
 
 // MarkerType represents an explicit user intent label for a session entry.
@@ -15,10 +16,22 @@ const (
 	MarkerNoise     MarkerType = "noise"
 )
 
+// CommitPoint represents a user-marked decision boundary in a session.
+type CommitPoint struct {
+	UUID        string    `json:"uuid"`
+	Timestamp   time.Time `json:"timestamp"`
+	Goal        string    `json:"goal"`
+	Decisions   []string  `json:"decisions"`
+	Constraints []string  `json:"constraints,omitempty"`
+	Questions   []string  `json:"questions,omitempty"`
+	Files       []string  `json:"files,omitempty"`
+}
+
 // MarkerFile holds persisted markers in a sidecar file alongside a session JSONL.
 type MarkerFile struct {
-	Version int                   `json:"version"`
-	Markers map[string]MarkerType `json:"markers"`
+	Version      int                   `json:"version"`
+	Markers      map[string]MarkerType `json:"markers"`
+	CommitPoints []CommitPoint         `json:"commit_points,omitempty"`
 }
 
 // MarkerPath returns the sidecar file path for a given session JSONL path.
@@ -98,4 +111,46 @@ func (mf *MarkerFile) IsKeep(uuid string) bool {
 // IsNoise returns true if the UUID is marked as NOISE.
 func (mf *MarkerFile) IsNoise(uuid string) bool {
 	return mf.Get(uuid) == MarkerNoise
+}
+
+// AddCommitPoint appends a commit point.
+func (mf *MarkerFile) AddCommitPoint(cp CommitPoint) {
+	mf.CommitPoints = append(mf.CommitPoints, cp)
+}
+
+// RemoveCommitPoint removes a commit point by UUID.
+func (mf *MarkerFile) RemoveCommitPoint(uuid string) {
+	var filtered []CommitPoint
+	for _, cp := range mf.CommitPoints {
+		if cp.UUID != uuid {
+			filtered = append(filtered, cp)
+		}
+	}
+	mf.CommitPoints = filtered
+}
+
+// HasCommitPoint returns true if a commit point exists at the given UUID.
+func (mf *MarkerFile) HasCommitPoint(uuid string) bool {
+	if mf == nil {
+		return false
+	}
+	for _, cp := range mf.CommitPoints {
+		if cp.UUID == uuid {
+			return true
+		}
+	}
+	return false
+}
+
+// GetCommitPoint returns the commit point for a UUID, or nil if not found.
+func (mf *MarkerFile) GetCommitPoint(uuid string) *CommitPoint {
+	if mf == nil {
+		return nil
+	}
+	for i := range mf.CommitPoints {
+		if mf.CommitPoints[i].UUID == uuid {
+			return &mf.CommitPoints[i]
+		}
+	}
+	return nil
 }

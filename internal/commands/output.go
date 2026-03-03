@@ -559,6 +559,16 @@ type MarkListOutput struct {
 	Total   int               `json:"total"`
 }
 
+// CollapseOutput is the JSON output for the collapse command.
+type CollapseOutput struct {
+	SessionID       string `json:"session_id"`
+	CommitPointUUID string `json:"commit_point_uuid"`
+	EntriesRemoved  int    `json:"entries_removed"`
+	ChainRepairs    int    `json:"chain_repairs"`
+	BytesSaved      int64  `json:"bytes_saved"`
+	DryRun          bool   `json:"dry_run,omitempty"`
+}
+
 // SplitOutput is the JSON output for the split command.
 type SplitOutput struct {
 	SessionID        string          `json:"session_id"`
