@@ -52,6 +52,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Not multi-vendor. It works with Claude Code's local session format (CLI and Mac). ChatGPT is server-side — there is nothing to edit.
 - Not an AI summarizer. It extracts existing content. It does not generate new summaries.
 - Not a cost optimizer. It exposes the hidden economics of reasoning. You decide what to do about it.
+- Not a runtime hook. It does not modify Claude, intercept API calls, or alter model behavior. It reads your local session files — your data, your history.
 
 ## Philosophy
 
