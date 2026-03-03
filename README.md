@@ -35,7 +35,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - **Session cost attribution** — actual dollar cost per session and per compaction epoch. Uses `message.usage` data with model pricing — no estimation, no heuristics
 - **Mandatory backup** — every edit creates a `.bak` first, restorable with one key
 
-**Planned:** Compaction archaeology, ghost context detection, epoch timeline, predictive cleanup, reasoning phase markers, conversation branch navigation, separation and amputation surgery, cross-session context distillation. See [Roadmap](#roadmap) for details.
+**Planned:** Compaction archaeology, ghost context detection, epoch timeline, predictive cleanup, scope drift detection with split surgery, reasoning phase markers, conversation branch navigation, separation and amputation surgery, cross-session context distillation. See [Roadmap](#roadmap) for details.
 
 ## What it is NOT
 
@@ -237,7 +237,7 @@ Control noise within a session. Remove progress messages, stale reads, failed re
 Expose the hidden costs of reasoning. Session cost attribution from actual usage data. Compaction epoch timeline — git log for reasoning with cost, turns, and topic per epoch. Compaction archaeology — forensic view of what 165K tokens compressed to 250 characters. Predictive cleanup with turn-gain estimates.
 
 **Phase 3: Reasoning navigation**
-Turn the flat message list into a navigable structure. Segment sessions into conversation branches by compaction boundaries and time gaps. Reasoning phase markers (exploratory/decision/operational). Keep markers and commit points for human-driven intent labeling. Stale branch detection. Vector health score showing signal/noise ratio.
+Turn the flat message list into a navigable structure. Scope drift detection — track when tool calls leave the session's project directory, flag tangent sequences, quantify re-explanation tax in dollars, and offer split surgery to extract tangents into portable markdown before compaction erases the original context. Segment sessions into conversation branches by compaction boundaries and time gaps. Reasoning phase markers (exploratory/decision/operational). Keep markers and commit points for human-driven intent labeling. Stale branch detection. Vector health score showing signal/noise ratio.
 
 **Phase 4: Selective continuity**
 Extract healthy conversation branches into portable markdown context files. Separation surgery: mark branches worth continuing, export them, optionally prune from the source session. Amputation surgery for content-filter false positives. Start a new Claude Code session with `"read docs/branch-export.md"` — full context, zero compactions.
