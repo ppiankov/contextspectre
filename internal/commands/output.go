@@ -38,15 +38,46 @@ type SessionsOutput struct {
 
 // StatsOutput is the JSON output for the stats command.
 type StatsOutput struct {
-	SessionID   string          `json:"session_id"`
-	Project     string          `json:"project,omitempty"`
-	Context     ContextJSON     `json:"context"`
-	Cost        *CostJSON       `json:"cost,omitempty"`
-	EpochCosts  []EpochCostJSON `json:"epoch_costs,omitempty"`
-	Compactions CompactionsJSON `json:"compactions"`
-	Messages    MessagesJSON    `json:"messages"`
-	Images      ImagesJSON      `json:"images"`
-	GrowthRate  GrowthRateJSON  `json:"growth_rate"`
+	SessionID   string           `json:"session_id"`
+	Project     string           `json:"project,omitempty"`
+	Context     ContextJSON      `json:"context"`
+	Cost        *CostJSON        `json:"cost,omitempty"`
+	EpochCosts  []EpochCostJSON  `json:"epoch_costs,omitempty"`
+	Archaeology *ArchaeologyJSON `json:"archaeology,omitempty"`
+	Compactions CompactionsJSON  `json:"compactions"`
+	Messages    MessagesJSON     `json:"messages"`
+	Images      ImagesJSON       `json:"images"`
+	GrowthRate  GrowthRateJSON   `json:"growth_rate"`
+}
+
+// ArchaeologyJSON holds compaction archaeology for JSON output.
+type ArchaeologyJSON struct {
+	Events []CompactionArchJSON `json:"events"`
+}
+
+// CompactionArchJSON is a single compaction's archaeology data.
+type CompactionArchJSON struct {
+	CompactionIndex int              `json:"compaction_index"`
+	LineIndex       int              `json:"line_index"`
+	Before          EpochSummaryJSON `json:"before"`
+	After           CompSummaryJSON  `json:"after"`
+}
+
+// EpochSummaryJSON holds pre-compaction epoch metadata.
+type EpochSummaryJSON struct {
+	TurnCount       int            `json:"turn_count"`
+	TokensPeak      int            `json:"tokens_peak"`
+	FilesReferenced []string       `json:"files_referenced"`
+	ToolCallCounts  map[string]int `json:"tool_call_counts"`
+	UserQuestions   []string       `json:"user_questions,omitempty"`
+	DecisionHints   []string       `json:"decision_hints,omitempty"`
+}
+
+// CompSummaryJSON holds post-compaction summary.
+type CompSummaryJSON struct {
+	SummaryText      string  `json:"summary_text"`
+	SummaryCharCount int     `json:"summary_char_count"`
+	CompressionRatio float64 `json:"compression_ratio"`
 }
 
 // CostJSON holds session cost attribution.
@@ -235,6 +266,40 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats) *StatsOutp
 				TotalCost:  ec.Cost.TotalCost,
 			})
 		}
+	}
+
+	// Compaction archaeology
+	if stats.Archaeology != nil && len(stats.Archaeology.Events) > 0 {
+		arch := &ArchaeologyJSON{}
+		for _, ev := range stats.Archaeology.Events {
+			files := ev.Before.FilesReferenced
+			if files == nil {
+				files = []string{}
+			}
+			tools := ev.Before.ToolCallCounts
+			if tools == nil {
+				tools = map[string]int{}
+			}
+			ae := CompactionArchJSON{
+				CompactionIndex: ev.CompactionIndex,
+				LineIndex:       ev.LineIndex,
+				Before: EpochSummaryJSON{
+					TurnCount:       ev.Before.TurnCount,
+					TokensPeak:      ev.Before.TokensPeak,
+					FilesReferenced: files,
+					ToolCallCounts:  tools,
+					UserQuestions:   ev.Before.UserQuestions,
+					DecisionHints:   ev.Before.DecisionHints,
+				},
+				After: CompSummaryJSON{
+					SummaryText:      ev.After.SummaryText,
+					SummaryCharCount: ev.After.SummaryCharCount,
+					CompressionRatio: ev.After.CompressionRatio,
+				},
+			}
+			arch.Events = append(arch.Events, ae)
+		}
+		out.Archaeology = arch
 	}
 
 	return out

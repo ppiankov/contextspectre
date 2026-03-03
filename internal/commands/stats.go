@@ -76,6 +76,62 @@ func runStats(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
+	// Compaction archaeology
+	if stats.Archaeology != nil && len(stats.Archaeology.Events) > 0 {
+		for _, arch := range stats.Archaeology.Events {
+			fmt.Printf("Compaction #%d archaeology:\n", arch.CompactionIndex+1)
+			fmt.Printf("  Before: %d turns, %s peak, %d files, %d tool calls\n",
+				arch.Before.TurnCount,
+				formatTokens(arch.Before.TokensPeak),
+				len(arch.Before.FilesReferenced),
+				arch.Before.TotalToolCalls())
+
+			// Top tool calls
+			if arch.Before.TotalToolCalls() > 0 {
+				fmt.Printf("  Tools:")
+				for name, count := range arch.Before.ToolCallCounts {
+					fmt.Printf(" %s(%d)", name, count)
+				}
+				fmt.Println()
+			}
+
+			// User questions
+			if len(arch.Before.UserQuestions) > 0 {
+				fmt.Printf("  Questions (%d):\n", len(arch.Before.UserQuestions))
+				for j, q := range arch.Before.UserQuestions {
+					if j >= 3 {
+						fmt.Printf("    ... and %d more\n", len(arch.Before.UserQuestions)-3)
+						break
+					}
+					fmt.Printf("    - %s\n", q)
+				}
+			}
+
+			// Decision hints
+			if len(arch.Before.DecisionHints) > 0 {
+				fmt.Printf("  Decisions (%d):\n", len(arch.Before.DecisionHints))
+				for j, d := range arch.Before.DecisionHints {
+					if j >= 3 {
+						break
+					}
+					fmt.Printf("    - %s\n", d)
+				}
+			}
+
+			// Summary
+			fmt.Printf("  After: %d chars summary, %.1fx compression\n",
+				arch.After.SummaryCharCount, arch.After.CompressionRatio)
+			if arch.After.SummaryText != "" {
+				preview := arch.After.SummaryText
+				if len(preview) > 200 {
+					preview = preview[:197] + "..."
+				}
+				fmt.Printf("  Summary: \"%s\"\n", preview)
+			}
+			fmt.Println()
+		}
+	}
+
 	// Growth and distance
 	fmt.Printf("Token growth rate: ~%.0f tokens/turn\n", stats.TokenGrowthRate)
 	if stats.EstimatedTurnsLeft >= 0 {

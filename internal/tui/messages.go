@@ -419,6 +419,18 @@ func (m messagesModel) renderContextMeter() string {
 			m.tangentResult.TotalEntries, len(m.tangentResult.Groups), formatTokensShort(m.tangentResult.TotalTokens))))
 	}
 
+	// Compaction archaeology summary lines
+	if m.stats.Archaeology != nil {
+		for _, arch := range m.stats.Archaeology.Events {
+			b.WriteString("\n")
+			archLine := fmt.Sprintf("  #%d: %d turns, %d files, %d tools → %d chars (%.0fx compression)",
+				arch.CompactionIndex+1, arch.Before.TurnCount,
+				len(arch.Before.FilesReferenced), arch.Before.TotalToolCalls(),
+				arch.After.SummaryCharCount, arch.After.CompressionRatio)
+			b.WriteString(styleMuted.Render(archLine))
+		}
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -618,6 +630,10 @@ func (m messagesModel) visibleRows() int {
 	// Extra line for ghost bar when session has compacted
 	if m.stats != nil && m.stats.CompactionCount > 0 {
 		reserved++
+	}
+	// Extra lines for compaction archaeology
+	if m.stats != nil && m.stats.Archaeology != nil {
+		reserved += len(m.stats.Archaeology.Events)
 	}
 	// Extra line for image weight warning
 	if m.stats != nil && m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
