@@ -39,11 +39,11 @@ func SplitToMarkdown(entries []jsonl.Entry, from, to int, meta *analyzer.RangeMe
 	// Summary table
 	b.WriteString("| Metric | Value |\n")
 	b.WriteString("|--------|-------|\n")
-	b.WriteString(fmt.Sprintf("| Entries | %d |\n", to-from+1))
-	b.WriteString(fmt.Sprintf("| Tokens | ~%s |\n", formatTokensCompact(meta.TokenCost)))
-	b.WriteString(fmt.Sprintf("| Cost | %s |\n", analyzer.FormatCost(meta.DollarCost)))
+	fmt.Fprintf(&b, "| Entries | %d |\n", to-from+1)
+	fmt.Fprintf(&b, "| Tokens | ~%s |\n", formatTokensCompact(meta.TokenCost))
+	fmt.Fprintf(&b, "| Cost | %s |\n", analyzer.FormatCost(meta.DollarCost))
 	if len(meta.ReExplFiles) > 0 {
-		b.WriteString(fmt.Sprintf("| Re-explanation files | %d |\n", len(meta.ReExplFiles)))
+		fmt.Fprintf(&b, "| Re-explanation files | %d |\n", len(meta.ReExplFiles))
 	}
 	b.WriteString("\n---\n\n")
 
@@ -62,7 +62,7 @@ func SplitToMarkdown(entries []jsonl.Entry, from, to int, meta *analyzer.RangeMe
 			ts = e.Timestamp.Format("2006-01-02 15:04")
 		}
 
-		b.WriteString(fmt.Sprintf("## Turn %d (entry %d) %s %s\n\n", turnNum, i, e.Type, ts))
+		fmt.Fprintf(&b, "## Turn %d (entry %d) %s %s\n\n", turnNum, i, e.Type, ts)
 
 		if e.Message == nil {
 			b.WriteString("*(empty)*\n\n")
@@ -86,7 +86,7 @@ func SplitToMarkdown(entries []jsonl.Entry, from, to int, meta *analyzer.RangeMe
 		b.WriteString("---\n\n")
 		b.WriteString("*Re-explanation files after return:*\n")
 		for _, f := range meta.ReExplFiles {
-			b.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&b, "- %s\n", f)
 		}
 	}
 
