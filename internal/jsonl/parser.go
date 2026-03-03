@@ -90,15 +90,20 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 
 // LightStats holds minimal stats extracted without full parsing.
 type LightStats struct {
-	LineCount            int
-	FileSizeBytes        int64
-	TypeCounts           map[MessageType]int
-	LastUsage            *Usage
-	MaxContext           int
-	ImageCount           int
-	CompactionCount      int
-	LastCompactionBefore int
-	LastCompactionAfter  int
+	LineCount             int
+	FileSizeBytes         int64
+	TypeCounts            map[MessageType]int
+	LastUsage             *Usage
+	MaxContext            int
+	ImageCount            int
+	CompactionCount       int
+	LastCompactionBefore  int
+	LastCompactionAfter   int
+	TotalInputTokens      int
+	TotalOutputTokens     int
+	TotalCacheWriteTokens int
+	TotalCacheReadTokens  int
+	Model                 string
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -143,6 +148,17 @@ func ScanLight(path string) (*LightStats, error) {
 			ctx := e.Message.Usage.TotalContextTokens()
 			if ctx > stats.MaxContext {
 				stats.MaxContext = ctx
+			}
+
+			// Accumulate token counts for cost attribution
+			u := e.Message.Usage
+			stats.TotalInputTokens += u.InputTokens
+			stats.TotalOutputTokens += u.OutputTokens
+			stats.TotalCacheWriteTokens += u.CacheCreationInputTokens
+			stats.TotalCacheReadTokens += u.CacheReadInputTokens
+
+			if stats.Model == "" && e.Message.Model != "" {
+				stats.Model = e.Message.Model
 			}
 
 			// Detect compaction: large drop in context tokens
