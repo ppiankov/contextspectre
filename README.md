@@ -288,6 +288,37 @@ Extract healthy conversation branches into portable markdown context files. Sepa
 **Phase 5: Context distillation**
 Synthesize across all sessions for a project. Unite multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting. Vector snapshot — extract only canonical decisions and constraints as a project north star. Cross-session continuity score to measure re-explanation tax. Ghost context detection to flag stale compaction summaries.
 
+## Glossary
+
+| Term | Definition |
+|------|------------|
+| **Compaction** | Claude Code's automatic context compression. Triggers at ~165K tokens, summarizes the conversation, resets to ~40-50K. You lose specificity. |
+| **Compaction epoch** | The period between two compactions. The fundamental unit of reasoning history — each epoch has its own topic, cost, and drift profile. |
+| **Compaction archaeology** | Forensic reconstruction of what a compaction preserved and discarded: files touched, tools used, decisions made, compression ratio. |
+| **Context deadlock** | Terminal state where a session is too large to continue (API rejects new messages) and too large to compact (compaction is itself an API call). |
+| **Signal / Noise** | Signal = content that contributes to productive reasoning. Noise = waste that fills the session file without value: progress metadata, duplicate file reads, failed retries, decorative separators, cross-repo tangents. Some noise is never sent to the API (progress, snapshots). Some is sent but adds nothing (stale reads, tangents). |
+| **Vector health score** | A-F grade measuring signal-to-noise ratio. A = >95% signal. F = <20% signal. |
+| **Reasoning contamination** | Old exploratory scaffolding persisting in context and biasing future responses off-vector. Not token waste — reasoning drift. |
+| **Reasoning phases** | Three lifecycle stages: **exploratory** (searching, reading, brainstorming — temporary), **decision** (commit point — permanent), **operational** (execution after a decision — forward-only). |
+| **Scope drift** | When tool calls leave the session's project directory. Detected structurally by comparing file paths against the session's root. |
+| **Tangent** | A sequence of entries operating in a different repository. A specific type of scope drift. |
+| **Sidechain** | An orphaned conversation branch — tool results referencing tool uses that no longer exist. |
+| **Re-read tax** | The cost of cache reads. Every turn, the full context is re-processed by the API. Noise tokens are re-read alongside signal — you pay for the bloat on every message. |
+| **Compaction tax** | The quality cost of lossy compression. When compaction triggers, reasoning is summarized — decisions lose specificity, nuance disappears, and Claude works from a shadow of what existed. |
+| **Re-explanation tax** | The cumulative cost of re-stating architecture, constraints, and decisions in every new session because prior sessions are inaccessible. |
+| **Keep marker** | Human tag protecting an entry from cleanup. Survives all automated operations. |
+| **Commit point** | A decision boundary. Exploration above it can be collapsed — the scaffolding served its purpose. |
+| **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. |
+| **Split surgery** | Extracting a range of entries to portable markdown. Non-destructive by default; optionally prunes from the source. |
+| **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Planned (Phase 4). |
+| **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. Planned (Phase 5). |
+| **Context distillation** | Increasing the signal-to-noise ratio — not making sessions smaller, but making what remains more useful. |
+| **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. Planned (Phase 5). |
+| **Ghost context** | Stale compaction summaries that describe code or decisions that no longer exist. Planned detection (Phase 5). |
+| **Live cleanup** | Cleaning an active session between Claude's turns. Uses mtime-based race detection to avoid corrupting a session Claude is writing to. |
+| **Tier (1-7)** | Safety classification for cleanup operations. Tier 1 (progress removal) is always safe. Tier 7 (tangent removal) requires the session to be inactive. |
+| **Conversation branch** | A segment of a session between compaction boundaries or significant time gaps. The navigable unit within a long session. |
+
 ## Known limitations
 
 - **Token estimates are approximate.** The 4 chars/token heuristic is close but not exact. Actual BPE tokenization varies by content.
