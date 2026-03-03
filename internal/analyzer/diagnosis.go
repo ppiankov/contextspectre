@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"encoding/base64"
 	"fmt"
 
 	"github.com/ppiankov/contextspectre/internal/jsonl"
@@ -14,10 +15,11 @@ const OversizedImageThreshold = 5 * 1024 * 1024
 type IssueKind string
 
 const (
-	IssueFilterBlock    IssueKind = "filter_block"
-	IssueOversizedImage IssueKind = "oversized_image"
-	IssueOrphanedResult IssueKind = "orphaned_result"
-	IssueMalformed      IssueKind = "malformed"
+	IssueFilterBlock       IssueKind = "filter_block"
+	IssueOversizedImage    IssueKind = "oversized_image"
+	IssueOrphanedResult    IssueKind = "orphaned_result"
+	IssueMalformed         IssueKind = "malformed"
+	IssueMediaTypeMismatch IssueKind = "media_type_mismatch"
 )
 
 // Issue describes a single detected problem in a session.
@@ -72,6 +74,25 @@ func Diagnose(entries []jsonl.Entry) *DiagnosisResult {
 							EntryIndex:  i,
 							Description: fmt.Sprintf("oversized image: %.1f MB", sizeMB),
 						})
+					}
+				}
+			}
+		}
+
+		// Image media type mismatches: declared type doesn't match actual data
+		if e.HasImages() {
+			blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+			if err == nil {
+				for _, b := range blocks {
+					if b.Type == "image" && b.Source != nil && len(b.Source.Data) > 8 {
+						actual := DetectImageType(b.Source.Data)
+						if actual != "" && actual != b.Source.MediaType {
+							result.Issues = append(result.Issues, Issue{
+								Kind:        IssueMediaTypeMismatch,
+								EntryIndex:  i,
+								Description: fmt.Sprintf("image declares %s but data is %s", b.Source.MediaType, actual),
+							})
+						}
 					}
 				}
 			}
@@ -139,4 +160,32 @@ func findPrecedingUser(entries []jsonl.Entry, assistantIdx int) int {
 		}
 	}
 	return -1
+}
+
+// DetectImageType returns the MIME type based on the base64-encoded image data magic bytes.
+func DetectImageType(b64data string) string {
+	if len(b64data) < 8 {
+		return ""
+	}
+	raw, err := base64.StdEncoding.DecodeString(b64data[:8])
+	if err != nil {
+		// Try with padding
+		raw, err = base64.StdEncoding.DecodeString(b64data[:8] + "==")
+		if err != nil {
+			return ""
+		}
+	}
+	if len(raw) >= 4 && raw[0] == 0x89 && raw[1] == 'P' && raw[2] == 'N' && raw[3] == 'G' {
+		return "image/png"
+	}
+	if len(raw) >= 3 && raw[0] == 0xFF && raw[1] == 0xD8 && raw[2] == 0xFF {
+		return "image/jpeg"
+	}
+	if len(raw) >= 4 && string(raw[:4]) == "GIF8" {
+		return "image/gif"
+	}
+	if len(raw) >= 4 && string(raw[:4]) == "RIFF" {
+		return "image/webp"
+	}
+	return ""
 }
