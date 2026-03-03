@@ -126,25 +126,25 @@ func TestReplaceImages(t *testing.T) {
 		t.Error("expected positive bytes saved")
 	}
 
-	// Verify images were replaced
+	// Verify images were replaced with text placeholders
 	entries, err := jsonl.Parse(path)
 	if err != nil {
 		t.Fatalf("re-parse: %v", err)
 	}
+	placeholders := 0
 	for _, e := range entries {
-		if e.HasImages() {
-			blocks, _ := jsonl.ParseContentBlocks(e.Message.Content)
-			for _, b := range blocks {
-				if b.Type == "image" && b.Source != nil {
-					if b.Source.Data != TransparentPNG1x1 {
-						t.Error("expected image to be replaced with placeholder")
-					}
-					if b.Source.MediaType != "image/png" {
-						t.Errorf("expected media_type image/png after replacement, got %s", b.Source.MediaType)
-					}
-				}
+		blocks, _ := jsonl.ParseContentBlocks(e.Message.Content)
+		for _, b := range blocks {
+			if b.Type == "image" {
+				t.Error("expected image blocks to be replaced with text blocks")
+			}
+			if b.Type == "text" && b.Text == "[image removed by contextspectre]" {
+				placeholders++
 			}
 		}
+	}
+	if placeholders != 2 {
+		t.Errorf("expected 2 text placeholders, got %d", placeholders)
 	}
 
 	// Backup should exist
