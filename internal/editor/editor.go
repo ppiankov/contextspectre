@@ -162,6 +162,7 @@ func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 				saved := len(blocks[j].Source.Data) - len(TransparentPNG1x1)
 				result.BytesSaved += int64(saved)
 				blocks[j].Source.Data = TransparentPNG1x1
+				blocks[j].Source.MediaType = "image/png"
 				result.ImagesReplaced++
 				lineModified = true
 			}

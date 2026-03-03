@@ -26,6 +26,7 @@ func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
 	// Collect entries to delete and images to replace
 	toDelete := make(map[int]bool)
 	oversizedEntries := make(map[int]bool)
+	mismatchEntries := make(map[int]bool)
 
 	for _, issue := range issues {
 		switch issue.Kind {
@@ -40,18 +41,29 @@ func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
 			toDelete[issue.EntryIndex] = true
 		case analyzer.IssueOversizedImage:
 			oversizedEntries[issue.EntryIndex] = true
+		case analyzer.IssueMediaTypeMismatch:
+			mismatchEntries[issue.EntryIndex] = true
 		}
 	}
 
 	result := &RepairResult{IssuesFixed: len(issues)}
 
-	// Handle oversized images first (modifies content, not deletion)
+	// Handle media type mismatches first (lightest fix)
+	if len(mismatchEntries) > 0 {
+		fixed, err := fixMediaTypes(path, mismatchEntries)
+		if err != nil {
+			return nil, fmt.Errorf("fix media types: %w", err)
+		}
+		result.ImagesReplaced += fixed
+	}
+
+	// Handle oversized images (modifies content, not deletion)
 	if len(oversizedEntries) > 0 {
 		imgResult, err := replaceOversizedImages(path, oversizedEntries)
 		if err != nil {
 			return nil, fmt.Errorf("replace oversized images: %w", err)
 		}
-		result.ImagesReplaced = imgResult
+		result.ImagesReplaced += imgResult
 	}
 
 	// Handle deletions
@@ -95,6 +107,7 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 		for j := range blocks {
 			if blocks[j].Type == "image" && blocks[j].Source != nil && len(blocks[j].Source.Data) > analyzer.OversizedImageThreshold {
 				blocks[j].Source.Data = TransparentPNG1x1
+				blocks[j].Source.MediaType = "image/png"
 				replaced++
 				lineModified = true
 			}
@@ -125,4 +138,67 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 	}
 
 	return replaced, nil
+}
+
+// fixMediaTypes corrects image media_type declarations to match actual data.
+func fixMediaTypes(path string, indices map[int]bool) (int, error) {
+	entries, rawLines, err := jsonl.ParseRaw(path)
+	if err != nil {
+		return 0, fmt.Errorf("parse: %w", err)
+	}
+
+	fixed := 0
+	modified := false
+
+	for i := range entries {
+		if !indices[i] {
+			continue
+		}
+		e := entries[i]
+		if !e.HasImages() {
+			continue
+		}
+
+		blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+		if err != nil {
+			continue
+		}
+
+		lineModified := false
+		for j := range blocks {
+			if blocks[j].Type != "image" || blocks[j].Source == nil || len(blocks[j].Source.Data) < 8 {
+				continue
+			}
+			actual := analyzer.DetectImageType(blocks[j].Source.Data)
+			if actual != "" && actual != blocks[j].Source.MediaType {
+				blocks[j].Source.MediaType = actual
+				fixed++
+				lineModified = true
+			}
+		}
+
+		if lineModified {
+			updated, err := reserializeContent(rawLines[i], blocks)
+			if err != nil {
+				continue
+			}
+			rawLines[i] = updated
+			modified = true
+		}
+	}
+
+	if !modified {
+		return 0, nil
+	}
+
+	if err := safecopy.CreateIfMissing(path); err != nil {
+		return 0, fmt.Errorf("backup: %w", err)
+	}
+
+	if err := jsonl.WriteLines(path, rawLines); err != nil {
+		_ = safecopy.Restore(path)
+		return 0, fmt.Errorf("write: %w", err)
+	}
+
+	return fixed, nil
 }

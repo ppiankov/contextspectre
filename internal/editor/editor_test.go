@@ -139,6 +139,9 @@ func TestReplaceImages(t *testing.T) {
 					if b.Source.Data != TransparentPNG1x1 {
 						t.Error("expected image to be replaced with placeholder")
 					}
+					if b.Source.MediaType != "image/png" {
+						t.Errorf("expected media_type image/png after replacement, got %s", b.Source.MediaType)
+					}
 				}
 			}
 		}
