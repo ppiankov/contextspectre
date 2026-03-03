@@ -10,9 +10,7 @@ Reasoning hygiene layer for Claude Code. Not a cleanup utility — a tool you op
 
 A real session: 625 lines, 2.0MB, Signal F (255K noise tokens, $19.80). After cleanup: 232 lines, 1.1MB, Signal A (0 noise, $6.12).
 
-| Before | After |
-|--------|-------|
-| ![Before cleanup](assets/stats-before.png) | ![After cleanup](assets/stats-after.png) |
+![After cleanup](assets/stats-after.png)
 
 ## The problem
 
