@@ -19,6 +19,7 @@ var (
 		RunE:  runStats,
 	}
 	showEpochs bool
+	showScope  bool
 )
 
 func runStats(cmd *cobra.Command, args []string) error {
@@ -41,8 +42,11 @@ func runStats(cmd *cobra.Command, args []string) error {
 	tangentResult := analyzer.FindTangents(entries)
 	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
 
+	// Scope drift analysis
+	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
+
 	if isJSON() {
-		out := buildStatsOutput(sessionID, stats, rec)
+		out := buildStatsOutput(sessionID, stats, rec, driftResult)
 		return printJSON(out)
 	}
 
@@ -279,6 +283,46 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	// Scope drift analysis
+	if showScope && driftResult != nil && driftResult.TotalOutScope > 0 {
+		fmt.Println("Scope drift analysis:")
+		fmt.Printf("  Project: %s\n", driftResult.SessionProject)
+		fmt.Printf("  Overall drift: %.1f%% (%d/%d entries out of scope)\n",
+			driftResult.OverallDrift*100, driftResult.TotalOutScope,
+			driftResult.TotalInScope+driftResult.TotalOutScope)
+		fmt.Println()
+
+		// Per-epoch table
+		fmt.Printf("  %-7s %6s %6s %8s %9s  %s\n",
+			"Epoch", "In", "Out", "Drift", "Cost", "External repos")
+		fmt.Println("  " + strings.Repeat("─", 70))
+		for _, es := range driftResult.EpochScopes {
+			if es.InScope+es.OutScope == 0 {
+				continue
+			}
+			repos := ""
+			for repo, count := range es.OutScopeByRepo {
+				repos += fmt.Sprintf("%s(%d) ", filepath.Base(repo), count)
+			}
+			fmt.Printf("  #%-6d %6d %6d %7.1f%% %9s  %s\n",
+				es.EpochIndex, es.InScope, es.OutScope,
+				es.DriftRatio*100, analyzer.FormatCost(es.DriftCost),
+				strings.TrimSpace(repos))
+		}
+
+		// Tangent sequences
+		if len(driftResult.TangentSeqs) > 0 {
+			fmt.Println()
+			fmt.Printf("  Tangent sequences (%d):\n", len(driftResult.TangentSeqs))
+			for _, ts := range driftResult.TangentSeqs {
+				fmt.Printf("    [%d-%d] → %s  %s tokens  %s\n",
+					ts.StartIdx, ts.EndIdx, ts.TargetRepo,
+					formatTokens(ts.TokenCost), analyzer.FormatCost(ts.DollarCost))
+			}
+		}
+		fmt.Println()
+	}
+
 	return nil
 }
 
@@ -357,4 +401,5 @@ func extractFirstUserText(entries []jsonl.Entry, stats *analyzer.ContextStats) s
 func init() {
 	rootCmd.AddCommand(statsCmd)
 	statsCmd.Flags().BoolVar(&showEpochs, "epochs", false, "Show epoch timeline")
+	statsCmd.Flags().BoolVar(&showScope, "scope", false, "Show scope drift analysis")
 }

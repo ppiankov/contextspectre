@@ -13,6 +13,7 @@ import (
 type openEpochsMsg struct {
 	epochs []analyzer.Epoch
 	info   session.Info
+	drift  *analyzer.ScopeDrift
 }
 
 type backFromEpochsMsg struct{}
@@ -20,6 +21,7 @@ type backFromEpochsMsg struct{}
 type epochsModel struct {
 	epochs       []analyzer.Epoch
 	session      session.Info
+	driftResult  *analyzer.ScopeDrift
 	cursor       int
 	scrollOffset int
 	detailOpen   bool
@@ -93,8 +95,8 @@ func (m epochsModel) View() string {
 	b.WriteString("\n\n")
 
 	// Column header
-	header := fmt.Sprintf("   %-7s %6s %10s %9s  %-30s %10s",
-		"Epoch", "Turns", "Peak", "Cost", "Topic", "Survived")
+	header := fmt.Sprintf("   %-7s %6s %10s %9s %7s  %-28s %10s",
+		"Epoch", "Turns", "Peak", "Cost", "Drift", "Topic", "Survived")
 	b.WriteString(styleHeader.Render(header))
 	b.WriteString("\n")
 	sepWidth := m.width - 2
@@ -135,13 +137,22 @@ func (m epochsModel) View() string {
 			survived = "(active)"
 		}
 
-		line := fmt.Sprintf("%s#%-6d %6d %10s %9s  %-30s %10s",
+		driftStr := "    —"
+		if m.driftResult != nil && ep.Index < len(m.driftResult.EpochScopes) {
+			es := m.driftResult.EpochScopes[ep.Index]
+			if es.InScope+es.OutScope > 0 {
+				driftStr = fmt.Sprintf("%5.0f%%", es.DriftRatio*100)
+			}
+		}
+
+		line := fmt.Sprintf("%s#%-6d %6d %10s %9s %7s  %-28s %10s",
 			prefix,
 			ep.Index,
 			ep.TurnCount,
 			formatTokensShort(ep.PeakTokens),
 			analyzer.FormatCost(ep.Cost),
-			truncateStr(ep.Topic, 30),
+			driftStr,
+			truncateStr(ep.Topic, 28),
 			survived)
 
 		if isSelected {

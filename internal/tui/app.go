@@ -107,6 +107,7 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case openEpochsMsg:
 		m.epochs = newEpochsModel(msg.epochs, msg.info)
+		m.epochs.driftResult = msg.drift
 		m.epochs.width = m.width
 		m.epochs.height = m.height
 		m.currentView = viewEpochs
