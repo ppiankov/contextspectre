@@ -34,6 +34,7 @@ type messagesModel struct {
 	selected       map[int]bool
 	impact         *analyzer.DeletionImpact
 	isActive       bool
+	branchOrigin   bool
 	statusMsg      string
 	width, height  int
 }
