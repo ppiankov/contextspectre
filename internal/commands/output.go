@@ -591,3 +591,15 @@ type SplitCleanJSON struct {
 	EntriesRemoved int `json:"entries_removed"`
 	ChainRepairs   int `json:"chain_repairs"`
 }
+
+// ExportOutput is the JSON output for the export command.
+type ExportOutput struct {
+	SessionID        string          `json:"session_id"`
+	BranchesExported int             `json:"branches_exported"`
+	EntriesExtracted int             `json:"entries_extracted"`
+	TokenCost        int             `json:"token_cost"`
+	DollarCost       float64         `json:"dollar_cost"`
+	OutputPath       string          `json:"output_path"`
+	Wiped            bool            `json:"wiped,omitempty"`
+	WipeResult       *SplitCleanJSON `json:"wipe_result,omitempty"`
+}

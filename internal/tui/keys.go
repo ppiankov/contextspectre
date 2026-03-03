@@ -33,6 +33,8 @@ type keyMap struct {
 	PhaseDecision    key.Binding
 	PhaseOperational key.Binding
 	PhaseClear       key.Binding
+	Export           key.Binding
+	ExportWipe       key.Binding
 }
 
 var keys = keyMap{
@@ -155,5 +157,13 @@ var keys = keyMap{
 	PhaseClear: key.NewBinding(
 		key.WithKeys("0"),
 		key.WithHelp("0", "clear phase"),
+	),
+	Export: key.NewBinding(
+		key.WithKeys("e"),
+		key.WithHelp("e", "export"),
+	),
+	ExportWipe: key.NewBinding(
+		key.WithKeys("W"),
+		key.WithHelp("W", "export+wipe"),
 	),
 }
