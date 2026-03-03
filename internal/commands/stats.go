@@ -32,8 +32,14 @@ func runStats(cmd *cobra.Command, args []string) error {
 	stats := analyzer.Analyze(entries)
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 
+	// Compute cleanup recommendations
+	dupResult := analyzer.FindDuplicateReads(entries)
+	retryResult := analyzer.FindFailedRetries(entries)
+	tangentResult := analyzer.FindTangents(entries)
+	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+
 	if isJSON() {
-		out := buildStatsOutput(sessionID, stats)
+		out := buildStatsOutput(sessionID, stats, rec)
 		return printJSON(out)
 	}
 
@@ -204,6 +210,28 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf(" (%.1f MB)", float64(stats.ImageBytesTotal)/1024/1024)
 	}
 	fmt.Println()
+
+	// Cleanup recommendations
+	if rec != nil && len(rec.Items) > 0 {
+		fmt.Println()
+		fmt.Println("Cleanup recommendations:")
+		for _, item := range rec.Items {
+			turnsStr := ""
+			if item.TurnsGained > 0 {
+				turnsStr = fmt.Sprintf(" (+~%d turns)", item.TurnsGained)
+			}
+			fmt.Printf("  %-20s %3d items,  %s tokens%s\n",
+				item.Label+":", item.Count, formatTokens(item.TokensSaved), turnsStr)
+		}
+		turnsStr := ""
+		if rec.TotalTurnsGained > 0 {
+			turnsStr = fmt.Sprintf(" (~%d additional turns)", rec.TotalTurnsGained)
+		}
+		fmt.Printf("  Total recoverable: %s tokens%s\n",
+			formatTokens(rec.TotalTokens), turnsStr)
+		fmt.Printf("  Projected: %.1f%% → %.1f%%\n",
+			rec.CurrentPercent, rec.ProjectedPercent)
+	}
 
 	return nil
 }

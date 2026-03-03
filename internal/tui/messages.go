@@ -25,6 +25,7 @@ type messagesModel struct {
 	failedIndices  map[int]bool
 	tangentResult  *analyzer.TangentResult
 	tangentIndices map[int]bool
+	recommendation *analyzer.CleanupRecommendation
 	cursor         int
 	scrollOffset   int
 	selected       map[int]bool
@@ -56,6 +57,8 @@ func newMessagesModel(info session.Info) messagesModel {
 	retryResult := analyzer.FindFailedRetries(entries)
 	tangentResult := analyzer.FindTangents(entries)
 
+	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+
 	return messagesModel{
 		session:        info,
 		entries:        entries,
@@ -67,6 +70,7 @@ func newMessagesModel(info session.Info) messagesModel {
 		failedIndices:  retryResult.AllFailedIndices(),
 		tangentResult:  tangentResult,
 		tangentIndices: tangentResult.AllTangentIndices(),
+		recommendation: rec,
 		selected:       make(map[int]bool),
 		isActive:       info.IsActive(),
 	}
@@ -442,6 +446,28 @@ func (m messagesModel) renderContextMeter() string {
 		}
 	}
 
+	// Cleanup recommendation when context is >60% full
+	if m.recommendation != nil && len(m.recommendation.Items) > 0 && m.stats.UsagePercent > 60 {
+		b.WriteString("\n")
+		b.WriteString(styleWarning.Render(fmt.Sprintf(" Cleanup: %s tokens recoverable → +%d turns (%.1f%% → %.1f%%)",
+			formatTokensShort(m.recommendation.TotalTokens),
+			m.recommendation.TotalTurnsGained,
+			m.recommendation.CurrentPercent,
+			m.recommendation.ProjectedPercent)))
+		for _, item := range m.recommendation.Items {
+			if item.TokensSaved == 0 {
+				continue
+			}
+			turnsStr := ""
+			if item.TurnsGained > 0 {
+				turnsStr = fmt.Sprintf("  +%d turns", item.TurnsGained)
+			}
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("   %-20s %3d items  %s tokens%s",
+				item.Label+":", item.Count, formatTokensShort(item.TokensSaved), turnsStr)))
+		}
+	}
+
 	return b.String()
 }
 
@@ -616,6 +642,7 @@ func (m messagesModel) reload() messagesModel {
 	m.failedIndices = m.retryResult.AllFailedIndices()
 	m.tangentResult = analyzer.FindTangents(entries)
 	m.tangentIndices = m.tangentResult.AllTangentIndices()
+	m.recommendation = analyzer.Recommend(m.stats, m.dupResult, m.retryResult, m.tangentResult)
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {
@@ -641,6 +668,15 @@ func (m messagesModel) visibleRows() int {
 		imgPct := float64(imgTokens) / float64(m.stats.CurrentContextTokens) * 100
 		if imgPct > 10 {
 			reserved++
+		}
+	}
+	// Extra lines for cleanup recommendation
+	if m.recommendation != nil && len(m.recommendation.Items) > 0 && m.stats != nil && m.stats.UsagePercent > 60 {
+		reserved++ // header line
+		for _, item := range m.recommendation.Items {
+			if item.TokensSaved > 0 {
+				reserved++
+			}
 		}
 	}
 	avail := m.height - reserved

@@ -44,6 +44,8 @@ type ContextStats struct {
 	TangentCount         int
 	TangentEntries       int
 	TangentTokens        int
+	ProgressCount        int
+	ProgressTokens       int
 	ConversationalTurns  int
 	LastCompactionLine   int
 	Cost                 *CostBreakdown
@@ -77,6 +79,12 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 		if e.IsConversational() {
 			stats.ConversationalTurns++
+		}
+
+		// Track progress messages
+		if e.Type == jsonl.TypeProgress {
+			stats.ProgressCount++
+			stats.ProgressTokens += e.RawSize / 4
 		}
 
 		// Track snapshots

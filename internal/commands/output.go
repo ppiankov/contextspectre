@@ -38,16 +38,17 @@ type SessionsOutput struct {
 
 // StatsOutput is the JSON output for the stats command.
 type StatsOutput struct {
-	SessionID   string           `json:"session_id"`
-	Project     string           `json:"project,omitempty"`
-	Context     ContextJSON      `json:"context"`
-	Cost        *CostJSON        `json:"cost,omitempty"`
-	EpochCosts  []EpochCostJSON  `json:"epoch_costs,omitempty"`
-	Archaeology *ArchaeologyJSON `json:"archaeology,omitempty"`
-	Compactions CompactionsJSON  `json:"compactions"`
-	Messages    MessagesJSON     `json:"messages"`
-	Images      ImagesJSON       `json:"images"`
-	GrowthRate  GrowthRateJSON   `json:"growth_rate"`
+	SessionID      string              `json:"session_id"`
+	Project        string              `json:"project,omitempty"`
+	Context        ContextJSON         `json:"context"`
+	Cost           *CostJSON           `json:"cost,omitempty"`
+	EpochCosts     []EpochCostJSON     `json:"epoch_costs,omitempty"`
+	Archaeology    *ArchaeologyJSON    `json:"archaeology,omitempty"`
+	Compactions    CompactionsJSON     `json:"compactions"`
+	Messages       MessagesJSON        `json:"messages"`
+	Images         ImagesJSON          `json:"images"`
+	GrowthRate     GrowthRateJSON      `json:"growth_rate"`
+	Recommendation *RecommendationJSON `json:"recommendation,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -149,6 +150,24 @@ type GrowthRateJSON struct {
 	SinceLastCompaction bool    `json:"since_last_compaction"`
 }
 
+// RecommendationJSON holds cleanup recommendations for JSON output.
+type RecommendationJSON struct {
+	Items            []CleanupItemJSON `json:"items"`
+	TotalTokens      int               `json:"total_tokens"`
+	TotalTurnsGained int               `json:"total_turns_gained"`
+	CurrentPercent   float64           `json:"current_percent"`
+	ProjectedPercent float64           `json:"projected_percent"`
+}
+
+// CleanupItemJSON is a single cleanup recommendation item.
+type CleanupItemJSON struct {
+	Category    string `json:"category"`
+	Label       string `json:"label"`
+	Count       int    `json:"count"`
+	TokensSaved int    `json:"tokens_saved"`
+	TurnsGained int    `json:"turns_gained"`
+}
+
 // CleanOutput is the JSON output for the clean command.
 type CleanOutput struct {
 	SessionID  string           `json:"session_id"`
@@ -186,7 +205,7 @@ func printJSON(v any) error {
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
-func buildStatsOutput(sessionID string, stats *analyzer.ContextStats) *StatsOutput {
+func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation) *StatsOutput {
 	out := &StatsOutput{
 		SessionID: sessionID,
 		Context: ContextJSON{
@@ -300,6 +319,26 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats) *StatsOutp
 			arch.Events = append(arch.Events, ae)
 		}
 		out.Archaeology = arch
+	}
+
+	// Cleanup recommendations
+	if rec != nil && len(rec.Items) > 0 {
+		rj := &RecommendationJSON{
+			TotalTokens:      rec.TotalTokens,
+			TotalTurnsGained: rec.TotalTurnsGained,
+			CurrentPercent:   rec.CurrentPercent,
+			ProjectedPercent: rec.ProjectedPercent,
+		}
+		for _, item := range rec.Items {
+			rj.Items = append(rj.Items, CleanupItemJSON{
+				Category:    item.Category,
+				Label:       item.Label,
+				Count:       item.Count,
+				TokensSaved: item.TokensSaved,
+				TurnsGained: item.TurnsGained,
+			})
+		}
+		out.Recommendation = rj
 	}
 
 	return out
