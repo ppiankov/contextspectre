@@ -4,7 +4,7 @@
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Reasoning version control for Claude Code. See what fills your context, cut what no longer matters, and carry forward what does.
+Reasoning lifecycle manager for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, cut what no longer matters, and carry forward what does.
 
 ## The problem
 
