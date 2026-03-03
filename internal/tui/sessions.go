@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/session"
 )
 
@@ -295,22 +296,24 @@ func (m sessionsModel) View() string {
 	}
 
 	// Column widths
-	projW := 28
+	projW := 24
 	branchW := 14
 	msgsW := 6
 	sizeW := 8
 	barW := 10
 	pctW := 7
+	costW := 9
 	modW := 10
 
 	// Column header
-	header := fmt.Sprintf("   %-*s %-*s %*s %*s %-*s %*s %*s",
+	header := fmt.Sprintf("   %-*s %-*s %*s %*s %-*s %*s %*s %*s",
 		projW, "Project",
 		branchW, "Branch",
 		msgsW, "Msgs",
 		sizeW, "Size",
 		barW, "Context",
 		pctW, "",
+		costW, "Cost",
 		modW, "Modified",
 	)
 	b.WriteString(styleHeader.Render(header))
@@ -371,7 +374,12 @@ func (m sessionsModel) View() string {
 
 		mod := timeAgoStr(s.Modified)
 
-		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s",
+		costStr := "—"
+		if s.ContextStats != nil && s.ContextStats.EstimatedCost > 0 {
+			costStr = analyzer.FormatCost(s.ContextStats.EstimatedCost)
+		}
+
+		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s %*s",
 			prefix,
 			projW, project,
 			branchW, branch,
@@ -380,6 +388,7 @@ func (m sessionsModel) View() string {
 			bar,
 			pctW, pct,
 			compactLabel,
+			costW, costStr,
 			modW, mod,
 		)
 

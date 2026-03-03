@@ -53,6 +53,8 @@ func runSessions(cmd *cobra.Command, args []string) error {
 				sj.ContextPercent = s.ContextStats.ContextPct
 				sj.Compactions = s.ContextStats.CompactionCount
 				sj.Images = s.ContextStats.ImageCount
+				sj.EstimatedCost = s.ContextStats.EstimatedCost
+				sj.Model = s.ContextStats.Model
 			}
 			out.Sessions = append(out.Sessions, sj)
 		}

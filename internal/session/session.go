@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 )
 
@@ -36,6 +37,8 @@ type QuickStats struct {
 	CompactionCount      int
 	LastCompactionBefore int
 	LastCompactionAfter  int
+	EstimatedCost        float64
+	Model                string
 }
 
 // IsActive returns true if the session was modified within the last 60 seconds.
@@ -171,11 +174,17 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 				CompactionCount:      stats.CompactionCount,
 				LastCompactionBefore: stats.LastCompactionBefore,
 				LastCompactionAfter:  stats.LastCompactionAfter,
+				Model:                stats.Model,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100
 			}
+			info.ContextStats.EstimatedCost = analyzer.QuickCost(
+				stats.TotalInputTokens, stats.TotalOutputTokens,
+				stats.TotalCacheWriteTokens, stats.TotalCacheReadTokens,
+				stats.Model,
+			)
 		}
 
 		sessions = append(sessions, info)
@@ -217,11 +226,17 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 				CompactionCount:      stats.CompactionCount,
 				LastCompactionBefore: stats.LastCompactionBefore,
 				LastCompactionAfter:  stats.LastCompactionAfter,
+				Model:                stats.Model,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100
 			}
+			info.ContextStats.EstimatedCost = analyzer.QuickCost(
+				stats.TotalInputTokens, stats.TotalOutputTokens,
+				stats.TotalCacheWriteTokens, stats.TotalCacheReadTokens,
+				stats.Model,
+			)
 		}
 
 		sessions = append(sessions, info)

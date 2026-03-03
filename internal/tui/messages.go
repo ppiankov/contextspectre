@@ -370,10 +370,19 @@ func (m messagesModel) renderContextMeter() string {
 	if isCompacted {
 		turnsLabel = "turns until next (since last compaction)"
 	}
-	b.WriteString(styleMuted.Render(fmt.Sprintf(" Compactions: %d  |  %s %s  |  Images: %d",
+	// Cost attribution
+	costStr := ""
+	if m.stats.Cost != nil && m.stats.Cost.TurnCount > 0 {
+		costStr = fmt.Sprintf("  |  Cost: %s (%s/t)",
+			analyzer.FormatCost(m.stats.Cost.TotalCost),
+			analyzer.FormatCost(m.stats.Cost.CostPerTurn))
+	}
+
+	b.WriteString(styleMuted.Render(fmt.Sprintf(" Compactions: %d  |  %s %s%s  |  Images: %d",
 		m.stats.CompactionCount,
 		turnsStr,
 		turnsLabel,
+		costStr,
 		m.stats.ImageCount)))
 
 	if m.stats.ImageBytesTotal > 0 {

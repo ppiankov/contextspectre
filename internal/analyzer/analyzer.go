@@ -46,6 +46,9 @@ type ContextStats struct {
 	TangentTokens        int
 	ConversationalTurns  int
 	LastCompactionLine   int
+	Cost                 *CostBreakdown
+	EpochCosts           []EpochCost
+	Model                string
 }
 
 // CompactionEvent records a detected context compaction.
@@ -172,6 +175,11 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 	// Estimate turns until next compaction
 	stats.EstimatedTurnsLeft = CompactionDistance(stats)
+
+	// Calculate cost attribution
+	stats.Cost = CalculateCost(entries)
+	stats.Model = stats.Cost.Model
+	stats.EpochCosts = CalculateEpochCosts(entries, stats.Compactions)
 
 	return stats
 }

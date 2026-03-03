@@ -26,6 +26,8 @@ type SessionJSON struct {
 	LastModified   time.Time `json:"last_modified"`
 	Active         bool      `json:"active"`
 	Images         int       `json:"images"`
+	EstimatedCost  float64   `json:"estimated_cost,omitempty"`
+	Model          string    `json:"model,omitempty"`
 }
 
 // SessionsOutput is the JSON output for the sessions command.
@@ -39,10 +41,36 @@ type StatsOutput struct {
 	SessionID   string          `json:"session_id"`
 	Project     string          `json:"project,omitempty"`
 	Context     ContextJSON     `json:"context"`
+	Cost        *CostJSON       `json:"cost,omitempty"`
+	EpochCosts  []EpochCostJSON `json:"epoch_costs,omitempty"`
 	Compactions CompactionsJSON `json:"compactions"`
 	Messages    MessagesJSON    `json:"messages"`
 	Images      ImagesJSON      `json:"images"`
 	GrowthRate  GrowthRateJSON  `json:"growth_rate"`
+}
+
+// CostJSON holds session cost attribution.
+type CostJSON struct {
+	Model            string  `json:"model,omitempty"`
+	TotalCost        float64 `json:"total_cost"`
+	CostPerTurn      float64 `json:"cost_per_turn"`
+	InputCost        float64 `json:"input_cost"`
+	OutputCost       float64 `json:"output_cost"`
+	CacheWriteCost   float64 `json:"cache_write_cost"`
+	CacheReadCost    float64 `json:"cache_read_cost"`
+	InputTokens      int     `json:"input_tokens"`
+	OutputTokens     int     `json:"output_tokens"`
+	CacheWriteTokens int     `json:"cache_write_tokens"`
+	CacheReadTokens  int     `json:"cache_read_tokens"`
+	TurnCount        int     `json:"turn_count"`
+}
+
+// EpochCostJSON holds cost for a single compaction epoch.
+type EpochCostJSON struct {
+	EpochIndex int     `json:"epoch_index"`
+	TurnCount  int     `json:"turn_count"`
+	PeakTokens int     `json:"peak_tokens"`
+	TotalCost  float64 `json:"total_cost"`
 }
 
 // ContextJSON holds context usage info.
@@ -181,6 +209,32 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats) *StatsOutp
 	// Estimate image tokens
 	if stats.ImageBytesTotal > 0 {
 		out.Images.EstimatedTokens = int(stats.ImageBytesTotal / 750)
+	}
+
+	// Cost attribution
+	if stats.Cost != nil && stats.Cost.TurnCount > 0 {
+		out.Cost = &CostJSON{
+			Model:            stats.Cost.Model,
+			TotalCost:        stats.Cost.TotalCost,
+			CostPerTurn:      stats.Cost.CostPerTurn,
+			InputCost:        stats.Cost.InputCost,
+			OutputCost:       stats.Cost.OutputCost,
+			CacheWriteCost:   stats.Cost.CacheWriteCost,
+			CacheReadCost:    stats.Cost.CacheReadCost,
+			InputTokens:      stats.Cost.InputTokens,
+			OutputTokens:     stats.Cost.OutputTokens,
+			CacheWriteTokens: stats.Cost.CacheWriteTokens,
+			CacheReadTokens:  stats.Cost.CacheReadTokens,
+			TurnCount:        stats.Cost.TurnCount,
+		}
+		for _, ec := range stats.EpochCosts {
+			out.EpochCosts = append(out.EpochCosts, EpochCostJSON{
+				EpochIndex: ec.EpochIndex,
+				TurnCount:  ec.TurnCount,
+				PeakTokens: ec.PeakTokens,
+				TotalCost:  ec.Cost.TotalCost,
+			})
+		}
 	}
 
 	return out

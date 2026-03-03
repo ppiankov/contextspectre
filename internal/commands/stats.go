@@ -85,6 +85,63 @@ func runStats(cmd *cobra.Command, args []string) error {
 	}
 	fmt.Println()
 
+	// Session cost
+	if stats.Cost != nil && stats.Cost.TurnCount > 0 {
+		fmt.Println("Session cost:")
+		modelName := stats.Cost.Model
+		if p := analyzer.PricingForModel(modelName); p.Name != "" {
+			modelName = p.Name
+		}
+		if modelName != "" {
+			fmt.Printf("  Model:         %s\n", modelName)
+		}
+		fmt.Printf("  Total:         %s (%s/turn)\n",
+			analyzer.FormatCost(stats.Cost.TotalCost),
+			analyzer.FormatCost(stats.Cost.CostPerTurn))
+
+		// Breakdown by component, sorted by magnitude
+		type costLine struct {
+			label string
+			cost  float64
+		}
+		lines := []costLine{
+			{"Cache read", stats.Cost.CacheReadCost},
+			{"Cache write", stats.Cost.CacheWriteCost},
+			{"Output", stats.Cost.OutputCost},
+			{"Input", stats.Cost.InputCost},
+		}
+		for _, l := range lines {
+			pct := analyzer.CostPercent(l.cost, stats.Cost.TotalCost)
+			if pct < 1 {
+				fmt.Printf("  %-14s %s (<1%%)\n", l.label+":", analyzer.FormatCost(l.cost))
+			} else {
+				fmt.Printf("  %-14s %s (%.0f%%)\n", l.label+":", analyzer.FormatCost(l.cost), pct)
+			}
+		}
+		fmt.Println()
+
+		// Epoch costs summary
+		if len(stats.EpochCosts) > 1 {
+			var mostExpIdx, cheapestIdx int
+			for i, ec := range stats.EpochCosts {
+				if ec.Cost.TotalCost > stats.EpochCosts[mostExpIdx].Cost.TotalCost {
+					mostExpIdx = i
+				}
+				if ec.Cost.TotalCost < stats.EpochCosts[cheapestIdx].Cost.TotalCost {
+					cheapestIdx = i
+				}
+			}
+			fmt.Println("Epoch costs:")
+			fmt.Printf("  Most expensive: #%d (%s, %d turns)\n",
+				mostExpIdx, analyzer.FormatCost(stats.EpochCosts[mostExpIdx].Cost.TotalCost),
+				stats.EpochCosts[mostExpIdx].TurnCount)
+			fmt.Printf("  Cheapest:       #%d (%s, %d turns)\n",
+				cheapestIdx, analyzer.FormatCost(stats.EpochCosts[cheapestIdx].Cost.TotalCost),
+				stats.EpochCosts[cheapestIdx].TurnCount)
+			fmt.Println()
+		}
+	}
+
 	// Images
 	fmt.Printf("Images: %d", stats.ImageCount)
 	if stats.ImageBytesTotal > 0 {
