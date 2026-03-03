@@ -16,6 +16,15 @@ const (
 	MarkerNoise     MarkerType = "noise"
 )
 
+// PhaseType represents a reasoning phase label for a session entry.
+type PhaseType string
+
+const (
+	PhaseExploratory PhaseType = "exploratory"
+	PhaseDecision    PhaseType = "decision"
+	PhaseOperational PhaseType = "operational"
+)
+
 // CommitPoint represents a user-marked decision boundary in a session.
 type CommitPoint struct {
 	UUID        string    `json:"uuid"`
@@ -31,6 +40,7 @@ type CommitPoint struct {
 type MarkerFile struct {
 	Version      int                   `json:"version"`
 	Markers      map[string]MarkerType `json:"markers"`
+	Phases       map[string]PhaseType  `json:"phases,omitempty"`
 	CommitPoints []CommitPoint         `json:"commit_points,omitempty"`
 }
 
@@ -57,6 +67,9 @@ func LoadMarkers(sessionPath string) (*MarkerFile, error) {
 	}
 	if mf.Markers == nil {
 		mf.Markers = map[string]MarkerType{}
+	}
+	if mf.Phases == nil {
+		mf.Phases = map[string]PhaseType{}
 	}
 	return &mf, nil
 }
@@ -111,6 +124,36 @@ func (mf *MarkerFile) IsKeep(uuid string) bool {
 // IsNoise returns true if the UUID is marked as NOISE.
 func (mf *MarkerFile) IsNoise(uuid string) bool {
 	return mf.Get(uuid) == MarkerNoise
+}
+
+// GetPhase returns the phase for a UUID, or "" if unset.
+func (mf *MarkerFile) GetPhase(uuid string) PhaseType {
+	if mf == nil || mf.Phases == nil {
+		return ""
+	}
+	return mf.Phases[uuid]
+}
+
+// SetPhase assigns a phase to a UUID.
+func (mf *MarkerFile) SetPhase(uuid string, phase PhaseType) {
+	if mf.Phases == nil {
+		mf.Phases = map[string]PhaseType{}
+	}
+	mf.Phases[uuid] = phase
+}
+
+// ClearPhase removes a phase from a UUID.
+func (mf *MarkerFile) ClearPhase(uuid string) {
+	delete(mf.Phases, uuid)
+}
+
+// TogglePhase sets the phase if unset or different, clears it if same.
+func (mf *MarkerFile) TogglePhase(uuid string, phase PhaseType) {
+	if mf.GetPhase(uuid) == phase {
+		mf.ClearPhase(uuid)
+	} else {
+		mf.SetPhase(uuid, phase)
+	}
 }
 
 // AddCommitPoint appends a commit point.

@@ -54,6 +54,16 @@ var (
 	styleCommitPoint = lipgloss.NewStyle().
 				Foreground(colorCyan).
 				Bold(true)
+
+	stylePhaseExplore = lipgloss.NewStyle().
+				Foreground(colorDim)
+
+	stylePhaseDecision = lipgloss.NewStyle().
+				Foreground(colorAccent).
+				Bold(true)
+
+	stylePhaseOperational = lipgloss.NewStyle().
+				Foreground(colorGreen)
 )
 
 func contextColor(pct float64) lipgloss.Color {

@@ -222,6 +222,38 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 				}
 			}
 		}
+	case key.Matches(msg, keys.PhaseExplore):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.TogglePhase(uuid, editor.PhaseExploratory)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
+	case key.Matches(msg, keys.PhaseDecision):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.TogglePhase(uuid, editor.PhaseDecision)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
+	case key.Matches(msg, keys.PhaseOperational):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.TogglePhase(uuid, editor.PhaseOperational)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
+	case key.Matches(msg, keys.PhaseClear):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.ClearPhase(uuid)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
 	case key.Matches(msg, keys.Undo):
 		if !m.isActive {
 			return m.undoLastChange()
@@ -305,6 +337,14 @@ func (m messagesModel) View() string {
 					typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("[C]") + typeStr
 				}
 			}
+			switch m.markers.GetPhase(e.UUID) {
+			case editor.PhaseExploratory:
+				typeStr = stylePhaseExplore.Render("[E]") + typeStr
+			case editor.PhaseDecision:
+				typeStr = stylePhaseDecision.Render("[D]") + typeStr
+			case editor.PhaseOperational:
+				typeStr = stylePhaseOperational.Render("[O]") + typeStr
+			}
 		}
 
 		// Tokens
@@ -357,6 +397,8 @@ func (m messagesModel) View() string {
 			b.WriteString(styleSelected.Render(line))
 		} else if isMarked {
 			b.WriteString(styleMarked.Render(line))
+		} else if e.UUID != "" && m.markers != nil && m.markers.GetPhase(e.UUID) == editor.PhaseExploratory {
+			b.WriteString(stylePhaseExplore.Render(line))
 		} else if e.Type == jsonl.TypeProgress || e.IsSidechain || m.tangentIndices[i] || m.driftIndices[i] {
 			b.WriteString(styleMuted.Render(line))
 		} else {
@@ -374,7 +416,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  1 explore  2 decide  3 oper  0 clear  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
