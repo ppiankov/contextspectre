@@ -16,6 +16,7 @@ import (
 // Info holds metadata about a single conversation session.
 type Info struct {
 	SessionID    string
+	Slug         string
 	FullPath     string
 	FirstPrompt  string
 	MessageCount int
@@ -27,6 +28,22 @@ type Info struct {
 	FileSizeMB   float64
 	IsSidechain  bool
 	ContextStats *QuickStats
+}
+
+// ShortID returns the first 8 characters of the session ID.
+func (i Info) ShortID() string {
+	if len(i.SessionID) >= 8 {
+		return i.SessionID[:8]
+	}
+	return i.SessionID
+}
+
+// DisplayName returns the slug if available, otherwise the short ID.
+func (i Info) DisplayName() string {
+	if i.Slug != "" {
+		return i.Slug
+	}
+	return i.ShortID()
 }
 
 // QuickStats holds lightweight context stats for the session browser.
@@ -143,7 +160,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 		return nil, fmt.Errorf("parse sessions-index: %w", err)
 	}
 
-	projectName := projectNameFromDir(projectDir)
+	projectName := ProjectNameFromDir(projectDir)
 
 	var sessions []Info
 	for _, e := range idx.Entries {
@@ -170,6 +187,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 
 		// Quick context stats
 		if stats, err := jsonl.ScanLight(e.FullPath); err == nil {
+			info.Slug = stats.Slug
 			info.ContextStats = &QuickStats{
 				ImageCount:           stats.ImageCount,
 				CompactionCount:      stats.CompactionCount,
@@ -201,7 +219,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 		return nil, fmt.Errorf("glob %s: %w", pattern, err)
 	}
 
-	projectName := projectNameFromDir(projectDir)
+	projectName := ProjectNameFromDir(projectDir)
 
 	var sessions []Info
 	for _, path := range matches {
@@ -222,6 +240,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 		}
 
 		if stats, err := jsonl.ScanLight(path); err == nil {
+			info.Slug = stats.Slug
 			info.MessageCount = stats.LineCount
 			info.ContextStats = &QuickStats{
 				ImageCount:           stats.ImageCount,
@@ -247,7 +266,8 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 	return sessions, nil
 }
 
-func projectNameFromDir(dir string) string {
+// ProjectNameFromDir extracts a human-readable project name from a Claude project directory path.
+func ProjectNameFromDir(dir string) string {
 	name := filepath.Base(dir)
 	// Project dirs are URL-encoded paths like "-Users-user-dev-ppiankov-github"
 	// Extract the last meaningful segment

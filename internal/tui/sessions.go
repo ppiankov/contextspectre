@@ -173,7 +173,8 @@ func (m *sessionsModel) filterSessions() {
 		for _, s := range m.sessions {
 			if strings.Contains(strings.ToLower(s.ProjectName), q) ||
 				strings.Contains(strings.ToLower(s.GitBranch), q) ||
-				strings.Contains(strings.ToLower(s.SessionID), q) {
+				strings.Contains(strings.ToLower(s.SessionID), q) ||
+				strings.Contains(strings.ToLower(s.Slug), q) {
 				m.filtered = append(m.filtered, s)
 			}
 		}
@@ -296,8 +297,10 @@ func (m sessionsModel) View() string {
 	}
 
 	// Column widths
-	projW := 24
-	branchW := 14
+	projW := 20
+	slugW := 22
+	idW := 8
+	branchW := 12
 	msgsW := 6
 	sizeW := 8
 	barW := 10
@@ -307,8 +310,10 @@ func (m sessionsModel) View() string {
 	modW := 10
 
 	// Column header
-	header := fmt.Sprintf("   %-*s %-*s %*s %*s %-*s %*s %*s %*s %*s",
+	header := fmt.Sprintf("   %-*s %-*s %-*s %-*s %*s %*s %-*s %*s %*s %*s %*s",
 		projW, "Project",
+		slugW, "Slug",
+		idW, "ID",
 		branchW, "Branch",
 		msgsW, "Msgs",
 		sizeW, "Size",
@@ -353,6 +358,14 @@ func (m sessionsModel) View() string {
 		}
 
 		project := truncateStr(active+s.ProjectName, projW)
+
+		slug := truncateStr(s.Slug, slugW)
+		if slug == "" {
+			slug = "\u2014"
+		}
+
+		shortID := s.ShortID()
+
 		branch := truncateStr(s.GitBranch, branchW)
 		if branch == "" {
 			branch = "\u2014"
@@ -388,9 +401,11 @@ func (m sessionsModel) View() string {
 			sigStr = gradeStyle(grade).Render(grade)
 		}
 
-		line := fmt.Sprintf("%s%-*s %-*s %*d %*s %s %*s%s %*s %*s %*s",
+		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s %*s %*s",
 			prefix,
 			projW, project,
+			slugW, slug,
+			idW, shortID,
 			branchW, branch,
 			msgsW, s.MessageCount,
 			sizeW, size,

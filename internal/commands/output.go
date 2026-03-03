@@ -16,6 +16,7 @@ var outputFormat string
 // SessionJSON is the JSON output for a single session.
 type SessionJSON struct {
 	ID             string    `json:"id"`
+	Slug           string    `json:"slug,omitempty"`
 	Project        string    `json:"project"`
 	Branch         string    `json:"branch,omitempty"`
 	Messages       int       `json:"messages"`
@@ -228,6 +229,7 @@ type TangentSeqJSON struct {
 // CleanOutput is the JSON output for the clean command.
 type CleanOutput struct {
 	SessionID  string           `json:"session_id"`
+	Slug       string           `json:"slug,omitempty"`
 	Mode       string           `json:"mode,omitempty"`
 	Operations []CleanOpJSON    `json:"operations"`
 	Summary    CleanSummaryJSON `json:"summary"`

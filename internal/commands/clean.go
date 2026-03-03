@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
@@ -74,7 +76,14 @@ func runClean(cmd *cobra.Command, args []string) error {
 			cleanDedupReads || cleanTruncate || cleanFailedRetries || cleanSidechains || cleanTangents {
 			return fmt.Errorf("--live cannot be combined with --all or individual operation flags")
 		}
+		if !isJSON() {
+			printSessionIdentity(path)
+		}
 		return runCleanLive(path)
+	}
+
+	if !isJSON() {
+		printSessionIdentity(path)
 	}
 
 	if cleanAll {
@@ -287,6 +296,10 @@ func runCleanAuto() error {
 		return fmt.Errorf("session file not found: %s", path)
 	}
 
+	if !isJSON() {
+		printSessionIdentity(path)
+	}
+
 	result, err := editor.CleanAll(path)
 	if err != nil {
 		return fmt.Errorf("clean auto: %w", err)
@@ -357,6 +370,39 @@ func formatBytes(b int64) string {
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
+}
+
+// printSessionIdentity prints a one-line identity summary before destructive operations.
+func printSessionIdentity(path string) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+
+	slug := "—"
+	msgs := 0
+	if stats, err := jsonl.ScanLight(path); err == nil {
+		if stats.Slug != "" {
+			slug = stats.Slug
+		}
+		msgs = stats.LineCount
+	}
+
+	base := filepath.Base(path)
+	sessionID := strings.TrimSuffix(base, ".jsonl")
+	shortID := sessionID
+	if len(shortID) > 8 {
+		shortID = shortID[:8]
+	}
+
+	// Derive project name from parent directory
+	project := session.ProjectNameFromDir(filepath.Dir(path))
+
+	size := float64(fi.Size()) / 1024 / 1024
+	mod := timeAgo(fi.ModTime())
+
+	fmt.Printf("Cleaning: %s (%s) | %s | %d msgs | %.1f MB | modified %s\n",
+		slug, shortID, project, msgs, size, mod)
 }
 
 func init() {
