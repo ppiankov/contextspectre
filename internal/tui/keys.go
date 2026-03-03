@@ -35,6 +35,7 @@ type keyMap struct {
 	PhaseClear       key.Binding
 	Export           key.Binding
 	ExportWipe       key.Binding
+	Amputate         key.Binding
 }
 
 var keys = keyMap{
@@ -165,5 +166,9 @@ var keys = keyMap{
 	ExportWipe: key.NewBinding(
 		key.WithKeys("W"),
 		key.WithHelp("W", "export+wipe"),
+	),
+	Amputate: key.NewBinding(
+		key.WithKeys("!"),
+		key.WithHelp("!", "amputate range"),
 	),
 }

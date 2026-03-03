@@ -38,6 +38,8 @@ type messagesModel struct {
 	isActive       bool
 	branchOrigin   bool
 	statusMsg      string
+	amputateMode   bool
+	amputateFrom   int
 	width, height  int
 }
 
@@ -102,6 +104,13 @@ func (m messagesModel) Update(msg tea.Msg) (messagesModel, tea.Cmd) {
 }
 
 func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
+	// Cancel amputate mode on Esc (before other handlers)
+	if m.amputateMode && key.Matches(msg, keys.Escape) {
+		m.amputateMode = false
+		m.statusMsg = ""
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, keys.Up):
 		if m.cursor > 0 {
@@ -254,6 +263,36 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
 			}
 		}
+	case key.Matches(msg, keys.Amputate):
+		if !m.amputateMode {
+			// First press: set start
+			m.amputateMode = true
+			m.amputateFrom = m.cursor
+			if m.isActive {
+				m.statusMsg = fmt.Sprintf("Amputate from: %d — session is active, ensure it is stuck. Move to end and press ! (Esc cancel)", m.cursor)
+			} else {
+				m.statusMsg = fmt.Sprintf("Amputate from: %d — move to end entry and press ! (Esc cancel)", m.cursor)
+			}
+		} else {
+			// Second press: select range, show confirm
+			from, to := m.amputateFrom, m.cursor
+			if from > to {
+				from, to = to, from
+			}
+			m.amputateMode = false
+			m.selected = make(map[int]bool)
+			for i := from; i <= to; i++ {
+				m.selected[i] = true
+			}
+			m.updateImpact()
+			m.statusMsg = ""
+			return m, func() tea.Msg {
+				return showConfirmMsg{
+					selected: m.selected,
+					impact:   m.impact,
+				}
+			}
+		}
 	case key.Matches(msg, keys.Undo):
 		if !m.isActive {
 			return m.undoLastChange()
@@ -391,7 +430,21 @@ func (m messagesModel) View() string {
 		line := fmt.Sprintf("%s%-12s %8s  %-8s  %s%s%s",
 			marker, typeStr, tokenStr, timeStr, truncateStr(preview, previewWidth), staleLabel, imgLabel)
 
-		if isSelected && isMarked {
+		// Amputate range highlighting
+		inAmputateRange := false
+		if m.amputateMode {
+			aFrom, aTo := m.amputateFrom, m.cursor
+			if aFrom > aTo {
+				aFrom, aTo = aTo, aFrom
+			}
+			inAmputateRange = i >= aFrom && i <= aTo
+		}
+
+		if inAmputateRange && isSelected {
+			b.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("#5B0000")).Foreground(colorWhite).Render(line))
+		} else if inAmputateRange {
+			b.WriteString(styleAmputate.Render(line))
+		} else if isSelected && isMarked {
 			b.WriteString(lipgloss.NewStyle().Background(colorRed).Foreground(colorWhite).Render(line))
 		} else if isSelected {
 			b.WriteString(styleSelected.Render(line))
@@ -416,7 +469,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  1 explore  2 decide  3 oper  0 clear  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  ! amputate  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {

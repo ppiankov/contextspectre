@@ -594,6 +594,18 @@ type SplitCleanJSON struct {
 	ChainRepairs   int `json:"chain_repairs"`
 }
 
+// AmputateOutput is the JSON output for the amputate command.
+type AmputateOutput struct {
+	SessionID      string `json:"session_id"`
+	Slug           string `json:"slug,omitempty"`
+	From           int    `json:"from"`
+	To             int    `json:"to"`
+	EntriesRemoved int    `json:"entries_removed"`
+	TokensSaved    int    `json:"tokens_saved"`
+	ChainRepairs   int    `json:"chain_repairs"`
+	DryRun         bool   `json:"dry_run"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
