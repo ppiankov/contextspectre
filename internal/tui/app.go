@@ -5,7 +5,9 @@ import (
 	"log/slog"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
+	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/ppiankov/contextspectre/internal/session"
 )
 
@@ -13,6 +15,7 @@ type viewState int
 
 const (
 	viewSessions viewState = iota
+	viewBranches
 	viewMessages
 	viewConfirm
 	viewEpochs
@@ -22,6 +25,7 @@ const (
 type AppModel struct {
 	currentView   viewState
 	sessions      sessionsModel
+	branches      branchesModel
 	messages      messagesModel
 	confirm       confirmModel
 	epochs        epochsModel
@@ -58,6 +62,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.sessions.width = msg.Width
 		m.sessions.height = msg.Height
+		m.branches.width = msg.Width
+		m.branches.height = msg.Height
 		m.messages.width = msg.Width
 		m.messages.height = msg.Height
 		m.confirm.width = msg.Width
@@ -72,14 +78,49 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case openSessionMsg:
+		entries, err := jsonl.Parse(msg.info.FullPath)
+		if err != nil {
+			m.messages = messagesModel{session: msg.info, statusMsg: fmt.Sprintf("Error: %v", err)}
+			m.messages.width = m.width
+			m.messages.height = m.height
+			m.currentView = viewMessages
+			return m, nil
+		}
+		stats := analyzer.Analyze(entries)
+		branches := analyzer.FindBranches(entries, stats.Compactions)
+		if len(branches) > 1 {
+			m.branches = newBranchesModel(branches, msg.info)
+			m.branches.width = m.width
+			m.branches.height = m.height
+			m.currentView = viewBranches
+		} else {
+			m.messages = newMessagesModel(msg.info)
+			m.messages.width = m.width
+			m.messages.height = m.height
+			m.currentView = viewMessages
+		}
+		return m, nil
+
+	case drillIntoBranchMsg:
 		m.messages = newMessagesModel(msg.info)
+		m.messages.cursor = msg.startIdx
+		m.messages.scrollOffset = msg.startIdx
+		m.messages.branchOrigin = true
 		m.messages.width = m.width
 		m.messages.height = m.height
 		m.currentView = viewMessages
 		return m, nil
 
-	case backToSessionsMsg:
+	case backFromBranchesMsg:
 		m.currentView = viewSessions
+		return m, nil
+
+	case backToSessionsMsg:
+		if m.messages.branchOrigin {
+			m.currentView = viewBranches
+		} else {
+			m.currentView = viewSessions
+		}
 		return m, nil
 
 	case showConfirmMsg:
@@ -126,6 +167,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.sessions, cmd = m.sessions.Update(msg)
+	case viewBranches:
+		m.branches, cmd = m.branches.Update(msg)
 	case viewMessages:
 		m.messages, cmd = m.messages.Update(msg)
 	case viewConfirm:
@@ -139,6 +182,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m AppModel) View() string {
 	switch m.currentView {
+	case viewBranches:
+		return m.branches.View()
 	case viewMessages:
 		return m.messages.View()
 	case viewConfirm:
