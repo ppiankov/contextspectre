@@ -6,9 +6,9 @@
 
 Reasoning hygiene layer for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
-## Before and after
+## 100% drift epoch removed
 
-A real session: 625 lines, 2.0MB, Signal F (255K noise tokens, $19.80). After cleanup: 232 lines, 1.1MB, Signal A (0 noise, $6.12).
+A real session: 625 lines, 2.0MB, Signal F (255K noise tokens, $19.80). Epoch 1 was 100% out-of-scope work — a tangent into another repository that consumed 189K tokens and $11.69, displacing the original project context. After cleanup: 232 lines, 1.1MB, Signal A (0 noise, $6.12).
 
 ![After cleanup](assets/stats-after.png)
 
