@@ -30,6 +30,7 @@ type messagesModel struct {
 	driftIndices   map[int]bool
 	recommendation *analyzer.CleanupRecommendation
 	health         *analyzer.HealthScore
+	markers        *editor.MarkerFile
 	cursor         int
 	scrollOffset   int
 	selected       map[int]bool
@@ -65,6 +66,7 @@ func newMessagesModel(info session.Info) messagesModel {
 
 	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
 	health := analyzer.ComputeHealth(stats, rec)
+	markers, _ := editor.LoadMarkers(info.FullPath)
 
 	return messagesModel{
 		session:        info,
@@ -81,6 +83,7 @@ func newMessagesModel(info session.Info) messagesModel {
 		driftIndices:   driftResult.DriftIndices(),
 		recommendation: rec,
 		health:         health,
+		markers:        markers,
 		selected:       make(map[int]bool),
 		isActive:       info.IsActive(),
 	}
@@ -185,6 +188,22 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 				}
 			}
 		}
+	case key.Matches(msg, keys.MarkKeep):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.Toggle(uuid, editor.MarkerKeep)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
+	case key.Matches(msg, keys.MarkNoise):
+		if !m.isActive && m.cursor < len(m.entries) {
+			uuid := m.entries[m.cursor].UUID
+			if uuid != "" {
+				m.markers.Toggle(uuid, editor.MarkerNoise)
+				_ = editor.SaveMarkers(m.session.FullPath, m.markers)
+			}
+		}
 	case key.Matches(msg, keys.Undo):
 		if !m.isActive {
 			return m.undoLastChange()
@@ -240,10 +259,20 @@ func (m messagesModel) View() string {
 			marker = "▸ "
 		}
 
-		// Type with issue marker
+		// Type with issue/marker indicators
 		typeStr := typeIcon(e.Type)
 		if _, hasIssue := m.issues[i]; hasIssue {
 			typeStr = styleWarning.Render("!") + typeStr
+		}
+		if e.UUID != "" && m.markers != nil {
+			switch m.markers.Get(e.UUID) {
+			case editor.MarkerKeep:
+				typeStr = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[K]") + typeStr
+			case editor.MarkerNoise:
+				typeStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[N]") + typeStr
+			case editor.MarkerCandidate:
+				typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("[C]") + typeStr
+			}
 		}
 
 		// Tokens
@@ -313,7 +342,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -548,7 +577,7 @@ func (m *messagesModel) updateImpact() {
 
 func (m *messagesModel) selectAllProgress() {
 	for i, e := range m.entries {
-		if e.Type == jsonl.TypeProgress {
+		if e.Type == jsonl.TypeProgress && !m.markers.IsKeep(e.UUID) {
 			m.selected[i] = true
 		}
 	}
@@ -556,7 +585,7 @@ func (m *messagesModel) selectAllProgress() {
 
 func (m *messagesModel) selectAllSnapshots() {
 	for i, e := range m.entries {
-		if e.Type == jsonl.TypeFileHistorySnapshot {
+		if e.Type == jsonl.TypeFileHistorySnapshot && !m.markers.IsKeep(e.UUID) {
 			m.selected[i] = true
 		}
 	}
@@ -564,13 +593,15 @@ func (m *messagesModel) selectAllSnapshots() {
 
 func (m *messagesModel) selectAllStaleReads() {
 	for idx := range m.staleIndices {
-		m.selected[idx] = true
+		if idx < len(m.entries) && !m.markers.IsKeep(m.entries[idx].UUID) {
+			m.selected[idx] = true
+		}
 	}
 }
 
 func (m *messagesModel) selectAllSidechains() {
 	for i, e := range m.entries {
-		if e.IsSidechain {
+		if e.IsSidechain && !m.markers.IsKeep(e.UUID) {
 			m.selected[i] = true
 		}
 	}
@@ -578,7 +609,9 @@ func (m *messagesModel) selectAllSidechains() {
 
 func (m *messagesModel) selectAllTangents() {
 	for idx := range m.tangentIndices {
-		m.selected[idx] = true
+		if idx < len(m.entries) && !m.markers.IsKeep(m.entries[idx].UUID) {
+			m.selected[idx] = true
+		}
 	}
 }
 
@@ -714,6 +747,7 @@ func (m messagesModel) reload() messagesModel {
 	m.driftIndices = m.driftResult.DriftIndices()
 	m.recommendation = analyzer.Recommend(m.stats, m.dupResult, m.retryResult, m.tangentResult)
 	m.health = analyzer.ComputeHealth(m.stats, m.recommendation)
+	m.markers, _ = editor.LoadMarkers(m.session.FullPath)
 	m.selected = make(map[int]bool)
 	m.impact = nil
 	if m.cursor >= len(m.entries) {
