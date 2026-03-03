@@ -263,4 +263,4 @@ MIT License — see [LICENSE](LICENSE).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests welcome.
 
-Built by [Obsta Labs](https://obstalabs.dev).
+Built by [Obsta Labs](https://obstalabs.dev). Not affiliated with or endorsed by Anthropic.
