@@ -173,7 +173,7 @@ func TestDetectSessionCWD(t *testing.T) {
 		{Type: jsonl.TypeAssistant, CWD: "/home/user/dev/myproject"},
 		{Type: jsonl.TypeUser, CWD: "/home/user/dev/myproject"},
 	}
-	cwd := detectSessionCWD(entries)
+	cwd := DetectSessionCWD(entries)
 	if cwd != "/home/user/dev/myproject" {
 		t.Errorf("expected /home/user/dev/myproject, got %s", cwd)
 	}
@@ -184,7 +184,7 @@ func TestDetectSessionCWD_NoCWD(t *testing.T) {
 		{Type: jsonl.TypeUser},
 		{Type: jsonl.TypeAssistant},
 	}
-	cwd := detectSessionCWD(entries)
+	cwd := DetectSessionCWD(entries)
 	if cwd != "" {
 		t.Errorf("expected empty CWD, got %s", cwd)
 	}

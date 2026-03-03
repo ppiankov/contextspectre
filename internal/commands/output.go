@@ -516,3 +516,24 @@ func cleanLiveToJSON(path string, r *editor.CleanLiveResult) *CleanOutput {
 
 	return out
 }
+
+// SplitOutput is the JSON output for the split command.
+type SplitOutput struct {
+	SessionID        string          `json:"session_id"`
+	From             int             `json:"from"`
+	To               int             `json:"to"`
+	EntriesExtracted int             `json:"entries_extracted"`
+	TargetRepo       string          `json:"target_repo,omitempty"`
+	TokenCost        int             `json:"token_cost"`
+	DollarCost       float64         `json:"dollar_cost"`
+	ReExplFiles      []string        `json:"re_explanation_files,omitempty"`
+	OutputPath       string          `json:"output_path"`
+	Cleaned          bool            `json:"cleaned"`
+	CleanResult      *SplitCleanJSON `json:"clean_result,omitempty"`
+}
+
+// SplitCleanJSON holds the result of the --clean operation.
+type SplitCleanJSON struct {
+	EntriesRemoved int `json:"entries_removed"`
+	ChainRepairs   int `json:"chain_repairs"`
+}
