@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -19,8 +18,10 @@ var (
 	splitClean  bool
 )
 
+var splitCWD bool
+
 var splitCmd = &cobra.Command{
-	Use:   "split <session-id-or-path>",
+	Use:   "split [session-id-or-path]",
 	Short: "Extract a tangent sequence to markdown",
 	Long: `Extract entries from a session into a standalone markdown file.
 
@@ -28,15 +29,15 @@ Use 'stats --scope' to identify tangent sequences, then split them out.
 
 Examples:
   contextspectre split <id> --from 45 --to 82 --output tangent.md
-  contextspectre split <id> --from 45 --to 82 --output tangent.md --clean`,
-	Args: cobra.ExactArgs(1),
+  contextspectre split --cwd --from 45 --to 82 --output tangent.md --clean`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runSplit,
 }
 
 func runSplit(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("session not found: %s", path)
+	path, err := resolveSessionArg(args, splitCWD)
+	if err != nil {
+		return err
 	}
 
 	if splitFrom < 0 || splitTo < 0 {
@@ -137,5 +138,6 @@ func init() {
 	_ = splitCmd.MarkFlagRequired("from")
 	_ = splitCmd.MarkFlagRequired("to")
 	_ = splitCmd.MarkFlagRequired("output")
+	splitCmd.Flags().BoolVar(&splitCWD, "cwd", false, "Use most recent session for current directory")
 	rootCmd.AddCommand(splitCmd)
 }

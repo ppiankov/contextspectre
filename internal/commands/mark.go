@@ -8,10 +8,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var markList bool
+var (
+	markList bool
+	markCWD  bool
+)
 
 var markCmd = &cobra.Command{
-	Use:   "mark <session-id-or-path> <uuid> <action>",
+	Use:   "mark [session-id-or-path] <uuid> <action>",
 	Short: "Set a marker or phase on a session entry",
 	Long: `Set or clear a marker or reasoning phase on a session entry by UUID.
 Markers and phases persist in a sidecar file alongside the session JSONL.
@@ -29,27 +32,49 @@ Phases (reasoning stages):
   clear        — remove the marker and phase
 
 Use --list to show all markers and phases for a session:
-  contextspectre mark <session-id-or-path> --list`,
-	Args: cobra.RangeArgs(1, 3),
+  contextspectre mark <session-id-or-path> --list
+  contextspectre mark --cwd --list`,
+	Args: cobra.RangeArgs(0, 3),
 	RunE: runMark,
 }
 
 func runMark(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return fmt.Errorf("session not found: %s", path)
-	}
+	var path, uuid, action string
 
-	if markList {
-		return runMarkList(path)
+	if markCWD || (len(args) == 0 && os.Getenv("CLAUDECODE") == "1") {
+		// --cwd mode: args are [uuid action] or empty (for --list)
+		p, err := resolveSessionArg(nil, true)
+		if err != nil {
+			return err
+		}
+		path = p
+		if markList {
+			return runMarkList(path)
+		}
+		if len(args) != 2 {
+			return fmt.Errorf("usage: mark --cwd <uuid> <keep|candidate|noise|exploratory|decision|operational|clear>")
+		}
+		uuid = args[0]
+		action = args[1]
+	} else {
+		// Traditional mode: args are [session uuid action] or [session] (for --list)
+		if len(args) == 0 {
+			return fmt.Errorf("provide a session ID or use --cwd")
+		}
+		p, err := resolveSessionArg(args[:1], false)
+		if err != nil {
+			return err
+		}
+		path = p
+		if markList {
+			return runMarkList(path)
+		}
+		if len(args) != 3 {
+			return fmt.Errorf("usage: mark <session> <uuid> <keep|candidate|noise|exploratory|decision|operational|clear>")
+		}
+		uuid = args[1]
+		action = args[2]
 	}
-
-	if len(args) != 3 {
-		return fmt.Errorf("usage: mark <session> <uuid> <keep|candidate|noise|exploratory|decision|operational|clear>")
-	}
-
-	uuid := args[1]
-	action := args[2]
 
 	markers, err := editor.LoadMarkers(path)
 	if err != nil {
@@ -171,5 +196,6 @@ func runMarkList(path string) error {
 
 func init() {
 	markCmd.Flags().BoolVar(&markList, "list", false, "List all markers for a session")
+	markCmd.Flags().BoolVar(&markCWD, "cwd", false, "Use most recent session for current directory")
 	rootCmd.AddCommand(markCmd)
 }
