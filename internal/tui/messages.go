@@ -155,6 +155,16 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 		if !m.isActive {
 			return m.cleanAll()
 		}
+	case key.Matches(msg, keys.Epochs):
+		if m.stats != nil && m.stats.CompactionCount > 0 {
+			activeHint := m.extractActiveEpochTopic()
+			epochs := analyzer.BuildEpochs(m.stats.EpochCosts, m.stats.Archaeology, activeHint)
+			if len(epochs) > 0 {
+				return m, func() tea.Msg {
+					return openEpochsMsg{epochs: epochs, info: m.session}
+				}
+			}
+		}
 	case key.Matches(msg, keys.Delete):
 		if !m.isActive && len(m.selected) > 0 {
 			m.updateImpact()
@@ -286,7 +296,7 @@ func (m messagesModel) View() string {
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -604,6 +614,28 @@ func (m messagesModel) stripSeparators() (messagesModel, tea.Cmd) {
 	m.statusMsg = fmt.Sprintf("Stripped %d separator lines from %d messages, saved ~%d tokens",
 		result.LinesStripped, result.MessagesModified, result.CharsSaved/4)
 	return m.reload(), nil
+}
+
+func (m messagesModel) extractActiveEpochTopic() string {
+	if m.stats == nil || len(m.stats.Compactions) == 0 {
+		return ""
+	}
+	lastBoundary := m.stats.Compactions[len(m.stats.Compactions)-1].LineIndex
+	for i := lastBoundary; i < len(m.entries); i++ {
+		if m.entries[i].Type != jsonl.TypeUser || m.entries[i].Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(m.entries[i].Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+				return b.Text
+			}
+		}
+	}
+	return ""
 }
 
 func (m messagesModel) estimateTotalImageTokens() int {

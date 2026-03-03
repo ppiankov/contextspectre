@@ -49,6 +49,7 @@ type StatsOutput struct {
 	Images         ImagesJSON          `json:"images"`
 	GrowthRate     GrowthRateJSON      `json:"growth_rate"`
 	Recommendation *RecommendationJSON `json:"recommendation,omitempty"`
+	EpochTimeline  []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -103,6 +104,17 @@ type EpochCostJSON struct {
 	TurnCount  int     `json:"turn_count"`
 	PeakTokens int     `json:"peak_tokens"`
 	TotalCost  float64 `json:"total_cost"`
+}
+
+// EpochTimelineJSON is a unified epoch view for JSON output.
+type EpochTimelineJSON struct {
+	Index         int     `json:"index"`
+	TurnCount     int     `json:"turn_count"`
+	PeakTokens    int     `json:"peak_tokens"`
+	Cost          float64 `json:"cost"`
+	Topic         string  `json:"topic"`
+	SurvivedChars int     `json:"survived_chars"`
+	IsActive      bool    `json:"is_active,omitempty"`
 }
 
 // ContextJSON holds context usage info.
@@ -339,6 +351,22 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			})
 		}
 		out.Recommendation = rj
+	}
+
+	// Epoch timeline
+	if len(stats.EpochCosts) > 1 && stats.Archaeology != nil {
+		epochs := analyzer.BuildEpochs(stats.EpochCosts, stats.Archaeology, "")
+		for _, ep := range epochs {
+			out.EpochTimeline = append(out.EpochTimeline, EpochTimelineJSON{
+				Index:         ep.Index,
+				TurnCount:     ep.TurnCount,
+				PeakTokens:    ep.PeakTokens,
+				Cost:          ep.Cost,
+				Topic:         ep.Topic,
+				SurvivedChars: ep.SurvivedChars,
+				IsActive:      ep.IsActive,
+			})
+		}
 	}
 
 	return out

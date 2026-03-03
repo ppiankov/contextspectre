@@ -11,12 +11,15 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var statsCmd = &cobra.Command{
-	Use:   "stats <session-id-or-path>",
-	Short: "Show context statistics for a session",
-	Args:  cobra.ExactArgs(1),
-	RunE:  runStats,
-}
+var (
+	statsCmd = &cobra.Command{
+		Use:   "stats <session-id-or-path>",
+		Short: "Show context statistics for a session",
+		Args:  cobra.ExactArgs(1),
+		RunE:  runStats,
+	}
+	showEpochs bool
+)
 
 func runStats(cmd *cobra.Command, args []string) error {
 	path := resolveSessionPath(args[0])
@@ -233,6 +236,49 @@ func runStats(cmd *cobra.Command, args []string) error {
 			rec.CurrentPercent, rec.ProjectedPercent)
 	}
 
+	// Epoch timeline
+	if showEpochs && len(stats.EpochCosts) > 1 && stats.Archaeology != nil {
+		activeHint := extractFirstUserText(entries, stats)
+		epochs := analyzer.BuildEpochs(stats.EpochCosts, stats.Archaeology, activeHint)
+
+		fmt.Println()
+		fmt.Println("Epoch timeline:")
+		fmt.Printf("  %-7s %6s %10s %9s  %-30s %10s\n",
+			"Epoch", "Turns", "Peak", "Cost", "Topic", "Survived")
+		fmt.Println("  " + strings.Repeat("─", 78))
+
+		costliestIdx := 0
+		for i, ep := range epochs {
+			if ep.Cost > epochs[costliestIdx].Cost {
+				costliestIdx = i
+			}
+		}
+
+		for i, ep := range epochs {
+			survived := fmt.Sprintf("%d chars", ep.SurvivedChars)
+			if ep.IsActive {
+				survived = "(active)"
+			}
+
+			marker := " "
+			if i == costliestIdx {
+				marker = "*"
+			}
+
+			topic := ep.Topic
+			if len([]rune(topic)) > 30 {
+				topic = string([]rune(topic)[:27]) + "..."
+			}
+
+			fmt.Printf(" %s#%-6d %6d %10s %9s  %-30s %10s\n",
+				marker, ep.Index, ep.TurnCount,
+				formatTokens(ep.PeakTokens),
+				analyzer.FormatCost(ep.Cost),
+				topic, survived)
+		}
+		fmt.Println()
+	}
+
 	return nil
 }
 
@@ -286,6 +332,29 @@ func contextBar(pct float64, width int) string {
 	return strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 }
 
+func extractFirstUserText(entries []jsonl.Entry, stats *analyzer.ContextStats) string {
+	if len(stats.Compactions) == 0 {
+		return ""
+	}
+	lastBoundary := stats.Compactions[len(stats.Compactions)-1].LineIndex
+	for i := lastBoundary; i < len(entries); i++ {
+		if entries[i].Type != jsonl.TypeUser || entries[i].Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(entries[i].Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "text" && strings.TrimSpace(b.Text) != "" {
+				return b.Text
+			}
+		}
+	}
+	return ""
+}
+
 func init() {
 	rootCmd.AddCommand(statsCmd)
+	statsCmd.Flags().BoolVar(&showEpochs, "epochs", false, "Show epoch timeline")
 }
