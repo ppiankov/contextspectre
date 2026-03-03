@@ -182,7 +182,7 @@ func RemoveFailedRetries(path string, retryResult *analyzer.RetryResult) (*Retry
 		return result, nil
 	}
 
-	if err := safecopy.Create(path); err != nil {
+	if err := safecopy.CreateIfMissing(path); err != nil {
 		return nil, fmt.Errorf("backup: %w", err)
 	}
 

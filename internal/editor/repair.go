@@ -115,7 +115,7 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 	}
 
 	// Backup before writing
-	if err := safecopy.Create(path); err != nil {
+	if err := safecopy.CreateIfMissing(path); err != nil {
 		return 0, fmt.Errorf("backup: %w", err)
 	}
 

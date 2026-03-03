@@ -16,6 +16,16 @@ func Create(path string) error {
 	return copyFile(path, bakPath)
 }
 
+// CreateIfMissing copies the file at path to path + ".bak" only if no backup exists.
+// If a backup already exists, it is preserved (the oldest backup is the most valuable).
+func CreateIfMissing(path string) error {
+	bakPath := path + ".bak"
+	if _, err := os.Stat(bakPath); err == nil {
+		return nil // existing backup preserved
+	}
+	return copyFile(path, bakPath)
+}
+
 // Restore replaces the file at path with the backup file.
 func Restore(path string) error {
 	bakPath := path + ".bak"

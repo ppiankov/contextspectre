@@ -41,6 +41,9 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	}
 	result.BytesBefore = origInfo.Size()
 
+	// Clean stale .bak from prior operations before starting
+	_ = safecopy.Clean(path)
+
 	// Create original backup as .bak.orig (the single undo point)
 	origBak := path + ".bak.orig"
 	if err := copyFileForCleanAll(path, origBak); err != nil {
