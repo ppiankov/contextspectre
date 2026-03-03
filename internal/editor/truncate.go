@@ -127,7 +127,7 @@ func TruncateOutputs(path string, threshold, keepLines int) (*TruncateResult, er
 		return result, nil
 	}
 
-	if err := safecopy.Create(path); err != nil {
+	if err := safecopy.CreateIfMissing(path); err != nil {
 		return nil, fmt.Errorf("backup: %w", err)
 	}
 

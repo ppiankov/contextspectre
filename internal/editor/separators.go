@@ -75,7 +75,7 @@ func StripSeparators(path string) (*StripResult, error) {
 		return result, nil
 	}
 
-	if err := safecopy.Create(path); err != nil {
+	if err := safecopy.CreateIfMissing(path); err != nil {
 		return nil, fmt.Errorf("backup: %w", err)
 	}
 
