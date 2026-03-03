@@ -49,6 +49,7 @@ type ContextStats struct {
 	Cost                 *CostBreakdown
 	EpochCosts           []EpochCost
 	Model                string
+	Archaeology          *CompactionReport
 }
 
 // CompactionEvent records a detected context compaction.
@@ -180,6 +181,11 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 	stats.Cost = CalculateCost(entries)
 	stats.Model = stats.Cost.Model
 	stats.EpochCosts = CalculateEpochCosts(entries, stats.Compactions)
+
+	// Compaction archaeology
+	if len(stats.Compactions) > 0 {
+		stats.Archaeology = AnalyzeCompactions(entries, stats.Compactions)
+	}
 
 	return stats
 }
