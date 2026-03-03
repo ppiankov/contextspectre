@@ -8,9 +8,6 @@ import (
 	"github.com/ppiankov/contextspectre/internal/safecopy"
 )
 
-// TransparentPNG1x1 is a 1x1 transparent PNG encoded as base64.
-const TransparentPNG1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GQAAAAlwSFlzAAAWJQAAFiUBSVIk8AAAAA1JREFUCNdjYGBg+A8AAQIBAEK0UNsAAAAASUVORK5CYII="
-
 // DeleteResult holds the result of a delete operation.
 type DeleteResult struct {
 	EntriesRemoved int
@@ -135,7 +132,7 @@ type ReplaceImagesResult struct {
 	BytesSaved     int64
 }
 
-// ReplaceImages replaces all base64 images with 1x1 transparent PNG placeholders.
+// ReplaceImages replaces all base64 image blocks with text placeholders.
 // Always creates a backup before modifying.
 func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 	entries, rawLines, err := jsonl.ParseRaw(path)
@@ -158,11 +155,12 @@ func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 
 		lineModified := false
 		for j := range blocks {
-			if blocks[j].Type == "image" && blocks[j].Source != nil && len(blocks[j].Source.Data) > len(TransparentPNG1x1) {
-				saved := len(blocks[j].Source.Data) - len(TransparentPNG1x1)
-				result.BytesSaved += int64(saved)
-				blocks[j].Source.Data = TransparentPNG1x1
-				blocks[j].Source.MediaType = "image/png"
+			if blocks[j].Type == "image" && blocks[j].Source != nil && len(blocks[j].Source.Data) > 0 {
+				result.BytesSaved += int64(len(blocks[j].Source.Data))
+				blocks[j] = jsonl.ContentBlock{
+					Type: "text",
+					Text: "[image removed by contextspectre]",
+				}
 				result.ImagesReplaced++
 				lineModified = true
 			}

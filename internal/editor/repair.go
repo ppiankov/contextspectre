@@ -106,8 +106,10 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 		lineModified := false
 		for j := range blocks {
 			if blocks[j].Type == "image" && blocks[j].Source != nil && len(blocks[j].Source.Data) > analyzer.OversizedImageThreshold {
-				blocks[j].Source.Data = TransparentPNG1x1
-				blocks[j].Source.MediaType = "image/png"
+				blocks[j] = jsonl.ContentBlock{
+					Type: "text",
+					Text: "[image removed by contextspectre]",
+				}
 				replaced++
 				lineModified = true
 			}
