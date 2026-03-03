@@ -4,7 +4,7 @@
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Reasoning lifecycle manager for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, cut what no longer matters, and carry forward what does.
+Reasoning hygiene layer for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
 ## The problem
 
@@ -32,25 +32,10 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - **Live session cleanup** — safely clean active sessions between Claude's turns with mtime-based race detection
 - **Batch cleanup** — `clean --all` runs 9 operations in one pass; `quick-clean` finds and cleans the most recent session automatically
 - **Chain repair** — parentUuid links are automatically repaired when messages are removed
+- **Session cost attribution** — actual dollar cost per session and per compaction epoch. Uses `message.usage` data with model pricing — no estimation, no heuristics
 - **Mandatory backup** — every edit creates a `.bak` first, restorable with one key
 
-**Planned:**
-
-- **Session cost attribution** — actual dollar cost per session, per compaction epoch, per branch. Uses `message.usage` data with model pricing — no estimation, no heuristics
-- **Compaction archaeology** — forensic view of what was lost at each compaction: 165K tokens compressed to ~250 characters, with files, decisions, and tool calls that didn't survive
-- **Ghost context detection** — flag when compaction summaries reference files that were modified in later epochs. Claude is reasoning from stale premises — the most dangerous failure mode in long sessions
-- **Compaction epoch timeline** — git log for reasoning. Each epoch with turn count, peak tokens, cost, topic, and compression ratio
-- **Predictive cleanup** — "Clean 24K tokens to gain ~15 turns" with specific items and one-key execution
-- **Vector health score** — signal/noise ratio breakdown: % tokens in decisions vs. progress noise vs. images vs. dead weight
-- **Reasoning phase markers** — label messages as exploratory, decision, or operational. The entire pipeline becomes phase-aware
-- **Keep markers** — mark individual messages as KEEP (never touched) or NOISE (auto-selected). Human intent via sidecar file, no ML
-- **Commit points** — mark decision boundaries with a canonical state block (goal, decisions, constraints, rationale, next steps). Everything above becomes collapsible
-- **Branch navigator** — segment sessions into conversation branches by compaction boundaries and time gaps. Drill in, clean, or wipe entire branches. Stale branches flagged automatically
-- **Separation surgery** — extract healthy branches into portable markdown context files for new sessions
-- **Amputation surgery** — emergency removal of content-filter trigger zones to unblock stuck sessions
-- **Unite** — merge multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting
-- **Vector snapshot** — export only canonical decisions and constraints across all sessions. No logs, no tool noise — just the project operating vector
-- **Cross-session continuity score** — measure re-explanation tax: how much reasoning is rebuilt from scratch across sessions
+**Planned:** Compaction archaeology, ghost context detection, epoch timeline, predictive cleanup, reasoning phase markers, conversation branch navigation, separation and amputation surgery, cross-session context distillation. See [Roadmap](#roadmap) for details.
 
 ## What it is NOT
 
@@ -75,6 +60,8 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 **Expose the hidden economics of reasoning.** Tokens are abstract. Percentages are abstract. Dollars are visceral. "$32 for that debugging detour that got compacted away" changes behavior faster than "82% context usage" ever will.
 
 **Structural detection over semantic guessing.** Every analysis uses observable facts — token counts, file paths, compaction boundaries, parentUuid chains, usage fields. No ML, no heuristics that guess meaning, no probabilistic classification. When the tool doesn't know, it says so.
+
+**The historian, not the operator.** ContextSpectre does not run your sessions or tell you what to do next. It records what happened, shows what it cost, and lets you decide what to carry forward. The operator explores and decides. The historian preserves the decisions and discards the scaffolding.
 
 ## Installation
 
@@ -173,7 +160,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 **Compaction distance.** `(165,000 - current_tokens) / avg_tokens_per_turn` = estimated turns remaining.
 
-**Cost attribution.** (Planned) Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation — the data is in the JSONL.
+**Cost attribution.** Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation — the data is in the JSONL.
 
 **Chain repair.** When deleting message D, all entries where `parentUuid == D.uuid` get `parentUuid = D.parentUuid`. Walks up deletion chains to find the nearest surviving ancestor.
 
@@ -230,6 +217,16 @@ Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
 ```
 
 This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it*, *what it costs*, and lets you act on it.
+
+## Workflow patterns
+
+For large projects, separating exploratory reasoning from structured execution reduces context drift. One effective pattern:
+
+- **Explore and design** in a conversational interface (Claude for Mac, or a fresh CLI session).
+- **Execute structured work** in Claude Code CLI with focused, scoped prompts.
+- **Use ContextSpectre at decision boundaries** — collapse exploration into decisions before continuing. The scaffolding that got you to the decision becomes noise once you've committed.
+
+ContextSpectre does not require this workflow — it works with any Claude Code session. But it complements structured development particularly well.
 
 ## Roadmap
 
