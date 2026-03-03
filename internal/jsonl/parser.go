@@ -104,6 +104,7 @@ type LightStats struct {
 	TotalCacheWriteTokens int
 	TotalCacheReadTokens  int
 	Model                 string
+	SignalPercent         int // 0-100, estimated signal/noise ratio
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -129,6 +130,7 @@ func ScanLight(path string) (*LightStats, error) {
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
 
 	var prevContextTokens int
+	var noiseBytes int
 
 	for scanner.Scan() {
 		stats.LineCount++
@@ -142,6 +144,11 @@ func ScanLight(path string) (*LightStats, error) {
 			continue
 		}
 		stats.TypeCounts[e.Type]++
+
+		// Track noise entries (progress, snapshots) for signal percent
+		if e.Type == TypeProgress || e.Type == TypeFileHistorySnapshot {
+			noiseBytes += len(raw)
+		}
 
 		if e.Type == TypeAssistant && e.Message != nil && e.Message.Usage != nil {
 			stats.LastUsage = e.Message.Usage
@@ -177,6 +184,23 @@ func ScanLight(path string) (*LightStats, error) {
 			}
 		}
 	}
+	// Compute signal percent from noise bytes vs total context tokens
+	if stats.LastUsage != nil {
+		totalTokens := stats.LastUsage.TotalContextTokens()
+		noiseTokens := noiseBytes / 4 // rough estimate
+		if totalTokens > 0 {
+			signal := totalTokens - noiseTokens
+			if signal < 0 {
+				signal = 0
+			}
+			stats.SignalPercent = signal * 100 / totalTokens
+		} else {
+			stats.SignalPercent = 100
+		}
+	} else {
+		stats.SignalPercent = 100
+	}
+
 	return stats, scanner.Err()
 }
 

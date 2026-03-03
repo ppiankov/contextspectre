@@ -39,6 +39,7 @@ type QuickStats struct {
 	LastCompactionAfter  int
 	EstimatedCost        float64
 	Model                string
+	SignalPercent        int // 0-100, estimated signal/noise ratio
 }
 
 // IsActive returns true if the session was modified within the last 60 seconds.
@@ -175,6 +176,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 				LastCompactionBefore: stats.LastCompactionBefore,
 				LastCompactionAfter:  stats.LastCompactionAfter,
 				Model:                stats.Model,
+				SignalPercent:        stats.SignalPercent,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
@@ -227,6 +229,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 				LastCompactionBefore: stats.LastCompactionBefore,
 				LastCompactionAfter:  stats.LastCompactionAfter,
 				Model:                stats.Model,
+				SignalPercent:        stats.SignalPercent,
 			}
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
