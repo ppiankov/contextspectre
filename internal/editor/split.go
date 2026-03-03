@@ -29,11 +29,11 @@ func SplitToMarkdown(entries []jsonl.Entry, from, to int, meta *analyzer.RangeMe
 	var b strings.Builder
 
 	// Header
-	b.WriteString(fmt.Sprintf("# Split: session %s\n\n", sessionID))
+	fmt.Fprintf(&b, "# Split: session %s\n\n", sessionID)
 	if meta.TargetRepo != "" {
-		b.WriteString(fmt.Sprintf("Tangent to **%s** (entries %d-%d)\n\n", meta.TargetRepo, from, to))
+		fmt.Fprintf(&b, "Tangent to **%s** (entries %d-%d)\n\n", meta.TargetRepo, from, to)
 	} else {
-		b.WriteString(fmt.Sprintf("Entries %d-%d\n\n", from, to))
+		fmt.Fprintf(&b, "Entries %d-%d\n\n", from, to)
 	}
 
 	// Summary table
