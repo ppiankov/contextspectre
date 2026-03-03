@@ -606,6 +606,43 @@ type AmputateOutput struct {
 	DryRun         bool   `json:"dry_run"`
 }
 
+// DistillTopicJSON is a single topic in the distill topic list.
+type DistillTopicJSON struct {
+	Index       int     `json:"index"`
+	SessionID   string  `json:"session_id"`
+	SessionSlug string  `json:"session_slug,omitempty"`
+	Summary     string  `json:"summary"`
+	TimeStart   string  `json:"time_start,omitempty"`
+	TimeEnd     string  `json:"time_end,omitempty"`
+	UserTurns   int     `json:"user_turns"`
+	EntryCount  int     `json:"entry_count"`
+	FileCount   int     `json:"file_count"`
+	TokenCost   int     `json:"token_cost"`
+	DollarCost  float64 `json:"dollar_cost"`
+}
+
+// DistillTopicListJSON is the JSON output for --dry-run.
+type DistillTopicListJSON struct {
+	ProjectName string             `json:"project_name"`
+	Sessions    int                `json:"sessions"`
+	Topics      []DistillTopicJSON `json:"topics"`
+	Total       int                `json:"total"`
+	TotalTokens int                `json:"total_tokens"`
+	TotalCost   float64            `json:"total_cost"`
+}
+
+// DistillOutputJSON is the JSON output for a completed distill.
+type DistillOutputJSON struct {
+	ProjectName     string             `json:"project_name"`
+	TopicsIncluded  int                `json:"topics_included"`
+	SessionsSpanned int                `json:"sessions_spanned"`
+	TotalTokens     int                `json:"total_tokens"`
+	TotalCost       float64            `json:"total_cost"`
+	OutputPath      string             `json:"output_path"`
+	FullContent     bool               `json:"full_content"`
+	Topics          []DistillTopicJSON `json:"topics"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
@@ -616,4 +653,77 @@ type ExportOutput struct {
 	OutputPath       string          `json:"output_path"`
 	Wiped            bool            `json:"wiped,omitempty"`
 	WipeResult       *SplitCleanJSON `json:"wipe_result,omitempty"`
+}
+
+// buildDistillTopicListJSON converts a TopicSet to a dry-run JSON output.
+func buildDistillTopicListJSON(ts *analyzer.TopicSet) *DistillTopicListJSON {
+	out := &DistillTopicListJSON{
+		ProjectName: ts.ProjectName,
+		Sessions:    len(ts.Sessions),
+		Total:       len(ts.Topics),
+		TotalTokens: ts.TotalTokens,
+		TotalCost:   ts.TotalCost,
+	}
+	for i, t := range ts.Topics {
+		tj := DistillTopicJSON{
+			Index:       i,
+			SessionID:   t.SessionID,
+			SessionSlug: t.SessionSlug,
+			Summary:     t.Branch.Summary,
+			UserTurns:   t.Branch.UserTurns,
+			EntryCount:  t.Branch.EntryCount,
+			FileCount:   t.Branch.FileCount,
+			TokenCost:   t.Branch.TokenCost,
+			DollarCost:  t.CostDollars,
+		}
+		if !t.Branch.TimeStart.IsZero() {
+			tj.TimeStart = t.Branch.TimeStart.Format(time.RFC3339)
+		}
+		if !t.Branch.TimeEnd.IsZero() {
+			tj.TimeEnd = t.Branch.TimeEnd.Format(time.RFC3339)
+		}
+		out.Topics = append(out.Topics, tj)
+	}
+	if out.Topics == nil {
+		out.Topics = []DistillTopicJSON{}
+	}
+	return out
+}
+
+// buildDistillOutputJSON converts a completed distill result to JSON.
+func buildDistillOutputJSON(ts *analyzer.TopicSet, selectedIndices []int, result *editor.DistillResult) *DistillOutputJSON {
+	out := &DistillOutputJSON{
+		ProjectName:     ts.ProjectName,
+		TopicsIncluded:  result.TopicsIncluded,
+		SessionsSpanned: result.SessionsSpanned,
+		TotalTokens:     result.TotalTokens,
+		TotalCost:       result.TotalCost,
+		OutputPath:      result.OutputPath,
+		FullContent:     result.TopicsIncluded > 0 && len(selectedIndices) > 0,
+	}
+	for _, idx := range selectedIndices {
+		t := ts.Topics[idx]
+		tj := DistillTopicJSON{
+			Index:       idx,
+			SessionID:   t.SessionID,
+			SessionSlug: t.SessionSlug,
+			Summary:     t.Branch.Summary,
+			UserTurns:   t.Branch.UserTurns,
+			EntryCount:  t.Branch.EntryCount,
+			FileCount:   t.Branch.FileCount,
+			TokenCost:   t.Branch.TokenCost,
+			DollarCost:  t.CostDollars,
+		}
+		if !t.Branch.TimeStart.IsZero() {
+			tj.TimeStart = t.Branch.TimeStart.Format(time.RFC3339)
+		}
+		if !t.Branch.TimeEnd.IsZero() {
+			tj.TimeEnd = t.Branch.TimeEnd.Format(time.RFC3339)
+		}
+		out.Topics = append(out.Topics, tj)
+	}
+	if out.Topics == nil {
+		out.Topics = []DistillTopicJSON{}
+	}
+	return out
 }
