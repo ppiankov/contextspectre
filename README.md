@@ -4,24 +4,29 @@
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Claude Code conversation context manager. Shows how close you are to compaction and lets you selectively trim what no longer matters.
+Reasoning version control for Claude Code. See what fills your context, cut what no longer matters, and carry forward what does.
 
 ## The problem
 
-Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays. The Mac app shows nothing at all.
+Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays.
 
-The deeper problem: not all context ages equally. You ask a sharp question to correct trajectory. You get alignment. You decide. Now that exploratory branch is complete — but it stays in context forever, subtly biasing future responses. That's not token waste. That's reasoning contamination.
+The deeper problem: not all context ages equally. LLM sessions have three states of reasoning: **exploratory** (temporary, unstable), **decision** (commit point), and **operational** (forward-only execution). Claude Code mixes them all permanently. Once you've decided, the scaffolding that got you there becomes noise — or worse, it pulls future reasoning off-vector. That's not token waste. That's reasoning contamination.
+
+And it's not limited to one session. Long projects span dozens of sessions across branches, refactors, and debugging threads. Valuable reasoning is scattered across session files with no way to find it, extract it, or carry it forward.
 
 ## What it is
 
-ContextSpectre reads Claude Code's local JSONL session files and shows you exactly what's inside:
+ContextSpectre reads Claude Code's local JSONL session files and gives you visibility and control over what fills your context window:
 
 - **Context meter** — current token usage, percentage of window, color-coded distance to compaction
-- **Compaction history** — how many compactions occurred, token drops, growth rate
+- **Compaction history** — compaction count, token drops, growth rate, post-compaction visual distinction
 - **Turn estimate** — approximately how many turns remain before the next compaction
-- **Message browser** — every message with estimated token cost, type, and preview
-- **Selective deletion** — remove exploratory branches, progress noise, and stale images
+- **Session browser** — all projects grouped by name, with search/filter (`/`), context bars, and active session detection
+- **Message browser** — every message with estimated token cost, type, and content preview
+- **Selective deletion** — remove exploratory branches, progress noise, stale file reads, and oversized images
 - **Impact prediction** — before you delete, see the new context percentage and turns gained
+- **Live session cleanup** — safely clean active sessions between Claude's turns with mtime-based race detection
+- **Batch cleanup** — `clean --all` runs 9 operations in one pass; `quick-clean` finds and cleans the most recent session automatically
 - **Chain repair** — parentUuid links are automatically repaired when messages are removed
 - **Mandatory backup** — every edit creates a `.bak` first, restorable with one key
 
@@ -32,16 +37,17 @@ ContextSpectre reads Claude Code's local JSONL session files and shows you exact
 - Not a general JSONL editor. It understands Claude Code's specific schema and nothing else.
 - Not a monitoring daemon. It is a point-in-time tool you run when you need visibility.
 - Not multi-vendor. It works with Claude Code's local session format. ChatGPT is server-side — there is nothing to edit.
+- Not an AI summarizer. It extracts existing content. It does not generate new summaries.
 
 ## Philosophy
 
 *Principiis obsta* — resist the beginnings.
 
-LLM sessions have three states of reasoning: **exploratory** (temporary, unstable), **decision** (commit point), and **operational** (forward-only execution). Claude Code mixes them all permanently. Once you've decided, the scaffolding that got you there becomes noise — or worse, it pulls future reasoning off-vector.
+**Keep conclusions, remove scaffolding.** Exploratory reasoning is valuable while exploring. After a decision is made, it becomes dead weight that biases future responses. ContextSpectre lets you collapse exploration into decisions — that's not history editing, it's reasoning hygiene.
 
-ContextSpectre gives you the ability to collapse exploratory branches after a decision is made. Keep conclusions, remove scaffolding. That's not history editing — it's reasoning hygiene.
+**Mirrors, not oracles.** The tool presents evidence and lets you decide. It does not auto-trim, does not guess what matters, and does not modify files without your explicit confirmation and a backup.
 
-The tool presents evidence and lets you decide. It does not auto-trim, does not guess what matters, and does not modify files without your explicit confirmation and a backup.
+**Context distillation over context deletion.** The goal is not to make sessions smaller. It's to increase the signal-to-noise ratio of what Claude sees. Progress messages, stale file reads, failed retries, and decorative separators are pure noise. Decisions, constraints, and working code are pure signal.
 
 ## Installation
 
@@ -60,25 +66,31 @@ cd contextspectre && make build
 # Launch the TUI (default — browse all sessions)
 contextspectre
 
-# List sessions in terminal
-contextspectre sessions
+# Quick-clean the most recent session (one command, no session ID needed)
+contextspectre quick-clean
 
-# Show context stats for a session
+# Live cleanup on an active session (safe between Claude's turns)
+contextspectre quick-clean --live
+
+# Show context stats
 contextspectre stats <session-id>
 
-# Batch clean: replace images and remove progress messages
-contextspectre clean <session-id> --images --progress
+# Run all cleanup operations
+contextspectre clean <session-id> --all
+
+# JSON output for scripting
+contextspectre sessions --format json
 ```
 
 ## TUI
 
 Running `contextspectre` without arguments opens the interactive TUI.
 
-**Session browser** — lists all projects with message count, file size, context percentage, and last modified time. Active sessions (modified <60s ago) are marked and read-only.
+**Session browser** — sessions grouped by project with message count, file size, context bars, compaction count, and last modified time. Press `/` to search by project name, branch, or session ID. Active sessions (modified <60s ago) are highlighted and read-only.
 
-**Message viewer** — shows every message in the session with type, estimated tokens, timestamp, and preview. The context meter at the top shows current usage, compaction count, and estimated turns remaining.
+**Message viewer** — every message in the session with type, estimated tokens, timestamp, and preview. The context meter at the top shows current usage, compaction history, and estimated turns remaining. Stale reads, failed retries, sidechains, and tangents are labeled.
 
-**Selection and deletion** — Space to select individual messages, `x` to select all progress messages, `i` to replace images with 1x1 placeholders. Selected messages show live impact prediction: token savings, new context percentage, and turns gained. `d` to delete with confirmation, `u` to undo from backup.
+**Selection and deletion** — Space to select individual messages, `x` to select all progress, `h` snapshots, `r` stale reads, `c` sidechains, `g` tangents, `i` to replace images, `s` to strip separators, `t` to truncate large outputs, `a` to clean all. Selected messages show live impact prediction: token savings, new context percentage, and turns gained. `d` to delete with confirmation, `u` to undo from backup.
 
 ## CLI commands
 
@@ -87,8 +99,17 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre` | Launch interactive TUI |
 | `contextspectre sessions` | List all sessions with context stats |
 | `contextspectre stats <id>` | Print detailed context analysis |
-| `contextspectre clean <id> --images` | Replace base64 images with 1x1 placeholders |
-| `contextspectre clean <id> --progress` | Remove all progress messages |
+| `contextspectre clean <id> --all` | Run all 9 cleanup operations |
+| `contextspectre clean <id> --live` | Safe cleanup for active sessions (Tier 1-3) |
+| `contextspectre clean <id> --live --aggressive` | Live cleanup including images/separators/truncation (Tier 1-5) |
+| `contextspectre clean --auto` | Find and clean the most recent session |
+| `contextspectre quick-clean` | Discover most recent session, clean it |
+| `contextspectre quick-clean --project <name>` | Scoped to a specific project |
+| `contextspectre quick-clean --live` | Live cleanup on most recent session |
+| `contextspectre fix <id>` | Diagnose and repair session issues |
+| `contextspectre doctor` | Health check across all sessions |
+| `contextspectre relocate --scan` | Find orphaned sessions after project moves |
+| `contextspectre relocate --from <old> --to <new>` | Migrate sessions to new project path |
 | `contextspectre version` | Print version, commit, and build date |
 
 **Global flags:**
@@ -96,7 +117,24 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--claude-dir` | `~/.claude` | Override Claude Code data directory |
+| `--format` | `text` | Output format (`text` or `json`) |
 | `--verbose` | `false` | Enable verbose logging |
+
+## Cleanup operations
+
+| Tier | Operation | Flag | Safe for live? |
+|------|-----------|------|----------------|
+| 1 | Remove progress messages | `--progress` | Yes |
+| 2 | Remove file-history-snapshots | `--snapshots` | Yes |
+| 3 | Remove stale duplicate file reads | `--dedup-reads` | No |
+| 4 | Replace base64 images with 1x1 placeholders | `--images` | Aggressive |
+| 4 | Strip decorative separator lines | `--separators` | Aggressive |
+| 5 | Truncate large Bash outputs (keep first/last N lines) | `--truncate-output` | Aggressive |
+| 6 | Remove failed tool retries | `--failed-retries` | No |
+| 6 | Remove sidechain entries | `--sidechains` | No |
+| 7 | Remove cross-repo tangent sequences | `--tangents` | No |
+
+`--all` runs all 9. `--live` runs Tier 1-2. `--live --aggressive` runs Tier 1-5.
 
 ## How it works
 
@@ -112,14 +150,14 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 **Image replacement.** Replaces base64 image data with a 1x1 transparent PNG (68 bytes). The `{type: "image"}` structure is preserved — Claude sees `[image]` but the context cost drops from megabytes to bytes.
 
-**Post-compaction warning.** Messages from before the last compaction are already excluded from active context. Deleting them saves file size but not context tokens. The TUI warns about this.
+**Live cleanup.** Uses mtime-based race detection: check mtime before each sub-operation, abort and restore from backup if Claude wrote to the file during cleanup. Requires 2s idle period before starting. Safe because Claude Code re-reads the JSONL between turns.
 
 ## Safety
 
 - **Mandatory backup.** Every modification creates a `.bak` file first. Refuses to proceed if `.bak` already exists (preventing accidental double-edits).
 - **Active session protection.** Sessions modified less than 60 seconds ago are read-only in the TUI.
+- **Race detection.** Live cleanup aborts and restores the original file if the session is modified during cleanup.
 - **Undo.** Restore from backup with `u` key in the TUI.
-- **Dry-run.** Preview what would change without modifying anything.
 - **Chain validation.** Verifies parentUuid integrity after edits.
 - **No network.** ContextSpectre never phones home, never sends data anywhere.
 
@@ -129,15 +167,14 @@ Running `contextspectre` without arguments opens the interactive TUI.
 contextspectre/
 ├── cmd/contextspectre/main.go      # Entry point (LDFLAGS version injection)
 ├── internal/
-│   ├── commands/                   # Cobra CLI: sessions, stats, clean, version
+│   ├── commands/                   # Cobra CLI: sessions, stats, clean, quick-clean, fix, doctor, relocate
 │   ├── jsonl/                      # JSONL parser, types, writer (streaming, 1MB buffer)
-│   ├── session/                    # Session discovery from ~/.claude/projects/
-│   ├── analyzer/                   # Context stats, compaction detection, token estimation
-│   │   ├── analyzer.go            # Session analysis + compaction distance
-│   │   ├── estimator.go           # Per-message token estimation
-│   │   └── impact.go              # Deletion impact prediction
-│   ├── editor/                     # Message deletion, image replacement, chain repair
-│   ├── backup/                     # .bak create/restore
+│   ├── session/                    # Session discovery, relocation, path encoding
+│   ├── analyzer/                   # Context stats, compaction detection, token estimation,
+│   │   │                           #   deletion impact, duplicate reads, failed retries, tangents
+│   ├── editor/                     # Deletion, image replacement, separator stripping,
+│   │   │                           #   output truncation, CleanAll orchestrator, CleanLive orchestrator
+│   ├── safecopy/                   # .bak create/restore/clean
 │   ├── tui/                        # Bubbletea TUI (sessions, messages, confirm views)
 │   └── logging/                    # slog initialization
 ├── testdata/                       # Session fixtures for testing
@@ -152,6 +189,7 @@ Key design decisions:
 - **No Claude API dependency.** Works entirely on local files. No network, no tokens consumed.
 - **Bubbletea TUI.** Keyboard-driven, no mouse required. Lipgloss for styling.
 - **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.
+- **Tiered operations.** Cleanup operations are classified by safety level. Live mode only runs the safest tiers.
 
 ## See also: CLI status line
 
@@ -163,37 +201,19 @@ Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
 
 This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it* and lets you trim.
 
-To set up the status line, create `~/.claude/statusline.sh` that reads JSON from stdin and outputs a formatted line. Claude Code passes `context_window.used_percentage`, `model.display_name`, `cost.total_cost_usd`, and line change stats. Configure it in `~/.claude/settings.json`:
-
-```json
-{
-  "hooks": {
-    "statusLine": {
-      "type": "command",
-      "command": "~/.claude/statusline.sh",
-      "padding": 2
-    }
-  }
-}
-```
-
 ## Roadmap
 
-- **Session repair** (`contextspectre fix`) — detect and remove content filter blocks, oversized images, orphaned tool results, and malformed entries. Diagnose first (`--dry-run`), fix on demand (`--apply`).
-- **Post-compaction distinction** — visually differentiate "fresh session at 5%" from "just compacted from 82% to 5%."
-- **Compaction imminent warning** — `⚠ COMPACTION IMMINENT` label at >85% context usage.
-- **Image weight tracking** — per-message image cost display, warning when images dominate context budget.
-- **Decorative noise stripping** — detect and remove long separator lines (`────...`) that consume tokens with zero semantic value.
-- **File-history-snapshot cleanup** — remove bulk snapshot entries that capture full file states (often megabytes per session).
-- **Duplicate file read deduplication** — detect same file read N times, flag the first N-1 as stale, offer removal.
-- **Large Bash output truncation** — truncate test runs, build logs, and git diffs to first/last N lines while preserving structure.
-- **Failed tool retry cleanup** — remove failed tool attempts that were immediately retried and superseded.
-- **Sidechain cleanup** — remove completed subagent sidechain entries whose results have been folded into the main chain.
-- **Cross-repo tangent cleanup** — detect and remove off-topic Q&A exchanges about other repos that were asked in the wrong session.
-- **Unified cleanup** (`contextspectre clean --all`) — run all safe cleanups in one pass with a single backup and combined report.
-- **Live session cleanup** (research) — investigate whether the JSONL can be safely modified between turns during an active session. If proven safe, enable real-time noise removal to delay compaction.
-- **ANCC adoption** — add `--format json` to CLI commands, write SKILL.md, add `doctor` command. Makes contextspectre discoverable and composable by orchestration agents via the [Agent-Native CLI Convention](https://ancc.dev).
-- **Session relocation** (`contextspectre relocate`) — when a project moves on disk, migrate orphaned sessions to the new path. Renames the encoded directory, updates the session index, optionally rewrites `cwd` fields in JSONL entries.
+**Phase 1: Entropy control** (complete)
+Control noise within a session. Remove progress messages, stale reads, failed retries, oversized images, decorative separators, and cross-repo tangents. Live cleanup between turns. Batch operations.
+
+**Phase 2: Reasoning navigation** (next)
+Turn the flat message list into a navigable structure. Segment sessions into conversation branches by compaction boundaries, time gaps, and file clusters. Show each branch with a summary, token cost, and files touched. Drill in, clean, or wipe entire branches.
+
+**Phase 3: Selective continuity**
+Extract healthy conversation branches into portable markdown context files. Separation surgery: mark branches worth continuing, export them, optionally prune from the source session. Start a new Claude Code session with `"read docs/branch-export.md"` — full context, zero compactions.
+
+**Phase 4: Context distillation**
+Synthesize across all sessions for a project. Unite multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting. Distill the best reasoning from a project's entire history into one document a fresh session can load.
 
 ## Known limitations
 
@@ -202,7 +222,7 @@ To set up the status line, create `~/.claude/statusline.sh` that reads JSON from
 - **No real-time updates.** ContextSpectre reads the file once on open. It does not watch for changes during a live session.
 - **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating.
 - **Large files are slow to parse.** Sessions over 100MB take a few seconds to load. The parser is streaming but analysis is in-memory.
-- **Active session edits are blocked.** Files modified in the last 60 seconds are read-only. Close or wait before editing.
+- **Branch detection is structural, not semantic.** Branches are identified by compaction boundaries and time gaps, not by understanding what was discussed.
 
 ## License
 
