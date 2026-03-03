@@ -52,7 +52,7 @@ type entryInfo struct {
 func FindTangents(entries []jsonl.Entry) *TangentResult {
 	result := &TangentResult{}
 
-	cwd := detectSessionCWD(entries)
+	cwd := DetectSessionCWD(entries)
 	if cwd == "" {
 		return result
 	}
@@ -173,8 +173,8 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 	return result
 }
 
-// detectSessionCWD extracts the CWD from the first entry that has one set.
-func detectSessionCWD(entries []jsonl.Entry) string {
+// DetectSessionCWD extracts the CWD from the first entry that has one set.
+func DetectSessionCWD(entries []jsonl.Entry) string {
 	for _, e := range entries {
 		if e.CWD != "" {
 			return e.CWD

@@ -51,7 +51,7 @@ func AnalyzeScopeDrift(entries []jsonl.Entry, compactions []CompactionEvent, cwd
 	result := &ScopeDrift{}
 
 	if cwd == "" {
-		cwd = detectSessionCWD(entries)
+		cwd = DetectSessionCWD(entries)
 	}
 	if cwd == "" {
 		return result
@@ -398,4 +398,53 @@ func detectModel(entries []jsonl.Entry) string {
 		}
 	}
 	return ""
+}
+
+// RangeMetadata holds computed metadata for an entry range.
+type RangeMetadata struct {
+	TargetRepo  string
+	TokenCost   int
+	DollarCost  float64
+	ReExplFiles []string
+}
+
+// ComputeRangeMetadata computes tangent metadata for entries[from:to+1].
+func ComputeRangeMetadata(entries []jsonl.Entry, from, to int, cwd string) *RangeMetadata {
+	if from < 0 || to >= len(entries) || from > to {
+		return &RangeMetadata{}
+	}
+
+	model := detectModel(entries)
+	pricing := PricingForModel(model)
+
+	meta := &RangeMetadata{}
+	repoCount := make(map[string]int)
+
+	for i := from; i <= to; i++ {
+		e := entries[i]
+		meta.TokenCost += e.RawSize / 4
+
+		// Path analysis for repo detection
+		paths, _ := extractAllPaths(e)
+		for _, p := range paths {
+			if isOutsideCWD(p, cwd) {
+				root := externalRootDir(p, cwd)
+				repoCount[root]++
+			}
+		}
+
+		// Dollar cost from assistant usage
+		if e.Type == jsonl.TypeAssistant && e.Message != nil && e.Message.Usage != nil {
+			u := e.Message.Usage
+			meta.DollarCost += float64(u.InputTokens)/1_000_000*pricing.InputPerMillion +
+				float64(u.OutputTokens)/1_000_000*pricing.OutputPerMillion +
+				float64(u.CacheCreationInputTokens)/1_000_000*pricing.CacheWritePerMillion +
+				float64(u.CacheReadInputTokens)/1_000_000*pricing.CacheReadPerMillion
+		}
+	}
+
+	meta.TargetRepo = dominantRepo(repoCount)
+	meta.ReExplFiles = detectReExplanationFiles(entries, to+1, cwd)
+
+	return meta
 }
