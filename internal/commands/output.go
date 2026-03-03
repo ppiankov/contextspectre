@@ -643,6 +643,35 @@ type DistillOutputJSON struct {
 	Topics          []DistillTopicJSON `json:"topics"`
 }
 
+// UniteSectionJSON is a single section in the unite section list.
+type UniteSectionJSON struct {
+	Index         int    `json:"index"`
+	SourceFile    string `json:"source_file"`
+	Heading       string `json:"heading"`
+	Summary       string `json:"summary"`
+	TokenEstimate int    `json:"token_estimate"`
+	IsDuplicate   bool   `json:"is_duplicate,omitempty"`
+	DuplicateOf   int    `json:"duplicate_of,omitempty"`
+}
+
+// UniteListJSON is the JSON output for --dry-run.
+type UniteListJSON struct {
+	Sections    []UniteSectionJSON `json:"sections"`
+	Total       int                `json:"total"`
+	TotalTokens int                `json:"total_tokens"`
+	SourceFiles int                `json:"source_files"`
+	Duplicates  int                `json:"duplicates"`
+}
+
+// UniteOutputJSON is the JSON output for a completed unite.
+type UniteOutputJSON struct {
+	SectionsIncluded int                `json:"sections_included"`
+	SourceFiles      int                `json:"source_files"`
+	TotalTokens      int                `json:"total_tokens"`
+	OutputPath       string             `json:"output_path"`
+	Sections         []UniteSectionJSON `json:"sections"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
