@@ -11,17 +11,24 @@ import (
 var markList bool
 
 var markCmd = &cobra.Command{
-	Use:   "mark <session-id-or-path> <uuid> <keep|candidate|noise|clear>",
-	Short: "Set a marker on a session entry",
-	Long: `Set or clear a marker on a session entry by UUID. Markers persist in a
-sidecar file alongside the session JSONL.
+	Use:   "mark <session-id-or-path> <uuid> <action>",
+	Short: "Set a marker or phase on a session entry",
+	Long: `Set or clear a marker or reasoning phase on a session entry by UUID.
+Markers and phases persist in a sidecar file alongside the session JSONL.
 
-  keep       — protect entry from cleanup operations
-  candidate  — flag entry as safe to remove
-  noise      — flag entry as noise
-  clear      — remove the marker
+Markers (intent labels):
+  keep         — protect entry from cleanup operations
+  candidate    — flag entry as safe to remove
+  noise        — flag entry as noise
 
-Use --list to show all markers for a session:
+Phases (reasoning stages):
+  exploratory  — trying things, investigating, reading code
+  decision     — committing to an approach, choosing a design
+  operational  — executing the decision, writing code, running tests
+
+  clear        — remove the marker and phase
+
+Use --list to show all markers and phases for a session:
   contextspectre mark <session-id-or-path> --list`,
 	Args: cobra.RangeArgs(1, 3),
 	RunE: runMark,
@@ -38,7 +45,7 @@ func runMark(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(args) != 3 {
-		return fmt.Errorf("usage: mark <session> <uuid> <keep|candidate|noise|clear>")
+		return fmt.Errorf("usage: mark <session> <uuid> <keep|candidate|noise|exploratory|decision|operational|clear>")
 	}
 
 	uuid := args[1]
@@ -49,6 +56,34 @@ func runMark(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("load markers: %w", err)
 	}
 
+	// Phase actions
+	switch action {
+	case "exploratory", "decision", "operational":
+		var phase editor.PhaseType
+		switch action {
+		case "exploratory":
+			phase = editor.PhaseExploratory
+		case "decision":
+			phase = editor.PhaseDecision
+		case "operational":
+			phase = editor.PhaseOperational
+		}
+		markers.SetPhase(uuid, phase)
+		if err := editor.SaveMarkers(path, markers); err != nil {
+			return fmt.Errorf("save markers: %w", err)
+		}
+		if isJSON() {
+			return printJSON(MarkOutput{
+				UUID:   uuid,
+				Phase:  string(phase),
+				Action: "set",
+			})
+		}
+		fmt.Printf("Set %s phase on %s\n", action, uuid)
+		return nil
+	}
+
+	// Marker actions
 	var markerType editor.MarkerType
 	switch action {
 	case "keep":
@@ -59,20 +94,20 @@ func runMark(cmd *cobra.Command, args []string) error {
 		markerType = editor.MarkerNoise
 	case "clear":
 		markers.Clear(uuid)
+		markers.ClearPhase(uuid)
 		if err := editor.SaveMarkers(path, markers); err != nil {
 			return fmt.Errorf("save markers: %w", err)
 		}
 		if isJSON() {
 			return printJSON(MarkOutput{
 				UUID:   uuid,
-				Marker: "",
 				Action: "cleared",
 			})
 		}
-		fmt.Printf("Cleared marker on %s\n", uuid)
+		fmt.Printf("Cleared marker and phase on %s\n", uuid)
 		return nil
 	default:
-		return fmt.Errorf("invalid marker type %q: use keep, candidate, noise, or clear", action)
+		return fmt.Errorf("invalid action %q: use keep, candidate, noise, exploratory, decision, operational, or clear", action)
 	}
 
 	markers.Set(uuid, markerType)
@@ -100,22 +135,36 @@ func runMarkList(path string) error {
 	if isJSON() {
 		out := MarkListOutput{
 			Markers: make(map[string]string, len(markers.Markers)),
-			Total:   len(markers.Markers),
+			Total:   len(markers.Markers) + len(markers.Phases),
 		}
 		for uuid, mt := range markers.Markers {
 			out.Markers[uuid] = string(mt)
 		}
+		if len(markers.Phases) > 0 {
+			out.Phases = make(map[string]string, len(markers.Phases))
+			for uuid, pt := range markers.Phases {
+				out.Phases[uuid] = string(pt)
+			}
+		}
 		return printJSON(out)
 	}
 
-	if len(markers.Markers) == 0 {
-		fmt.Println("No markers set.")
+	if len(markers.Markers) == 0 && len(markers.Phases) == 0 {
+		fmt.Println("No markers or phases set.")
 		return nil
 	}
 
-	fmt.Printf("Markers (%d):\n", len(markers.Markers))
-	for uuid, mt := range markers.Markers {
-		fmt.Printf("  %s  %s\n", uuid, mt)
+	if len(markers.Markers) > 0 {
+		fmt.Printf("Markers (%d):\n", len(markers.Markers))
+		for uuid, mt := range markers.Markers {
+			fmt.Printf("  %s  %s\n", uuid, mt)
+		}
+	}
+	if len(markers.Phases) > 0 {
+		fmt.Printf("Phases (%d):\n", len(markers.Phases))
+		for uuid, pt := range markers.Phases {
+			fmt.Printf("  %s  %s\n", uuid, pt)
+		}
 	}
 	return nil
 }
