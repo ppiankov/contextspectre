@@ -148,7 +148,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | 1 | Remove progress messages | `--progress` | Yes |
 | 2 | Remove file-history-snapshots | `--snapshots` | Yes |
 | 3 | Remove stale duplicate file reads | `--dedup-reads` | No |
-| 4 | Replace base64 images with 1x1 placeholders | `--images` | Aggressive |
+| 4 | Replace base64 images with text placeholders | `--images` | Aggressive |
 | 4 | Strip decorative separator lines | `--separators` | Aggressive |
 | 5 | Truncate large Bash outputs (keep first/last N lines) | `--truncate-output` | Aggressive |
 | 6 | Remove failed tool retries | `--failed-retries` | No |
@@ -171,7 +171,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 **Chain repair.** When deleting message D, all entries where `parentUuid == D.uuid` get `parentUuid = D.parentUuid`. Walks up deletion chains to find the nearest surviving ancestor.
 
-**Image replacement.** Replaces base64 image data with a 1x1 transparent PNG (68 bytes). The `{type: "image"}` structure is preserved — Claude sees `[image]` but the context cost drops from megabytes to bytes.
+**Image replacement.** Replaces `{type: "image"}` blocks with `{type: "text", text: "[image removed by contextspectre]"}`. The image data is fully removed — no placeholder images that could cause API validation errors. Context cost drops from megabytes to a few bytes.
 
 **Live cleanup.** Uses mtime-based race detection: check mtime before each sub-operation, abort and restore from backup if Claude wrote to the file during cleanup. Requires 2s idle period before starting. Safe because Claude Code re-reads the JSONL between turns.
 
@@ -183,6 +183,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 - **Undo.** Restore from backup with `u` key in the TUI.
 - **Chain validation.** Verifies parentUuid integrity after edits.
 - **No network.** ContextSpectre never phones home, never sends data anywhere.
+- **Multi-instance awareness.** Claude Code CLI and Claude for Mac can have separate sessions in the same project directory. Cleaning one session does not affect others, but you must identify the correct session before modifying it. See [Session Architecture](docs/session-architecture.md) for details on how sessions are stored and how to avoid cleaning the wrong one.
 
 ## Architecture
 
