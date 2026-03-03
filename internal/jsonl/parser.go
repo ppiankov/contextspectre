@@ -95,6 +95,7 @@ type LightStats struct {
 	TypeCounts            map[MessageType]int
 	LastUsage             *Usage
 	MaxContext            int
+	Slug                  string
 	ImageCount            int
 	CompactionCount       int
 	LastCompactionBefore  int
@@ -144,6 +145,10 @@ func ScanLight(path string) (*LightStats, error) {
 			continue
 		}
 		stats.TypeCounts[e.Type]++
+
+		if stats.Slug == "" && e.Slug != "" {
+			stats.Slug = e.Slug
+		}
 
 		// Track noise entries (progress, snapshots) for signal percent
 		if e.Type == TypeProgress || e.Type == TypeFileHistorySnapshot {

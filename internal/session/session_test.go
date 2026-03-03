@@ -31,9 +31,9 @@ func TestProjectNameFromDir(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.dir, func(t *testing.T) {
-			got := projectNameFromDir(tt.dir)
+			got := ProjectNameFromDir(tt.dir)
 			if got != tt.want {
-				t.Errorf("projectNameFromDir(%q) = %q, want %q", tt.dir, got, tt.want)
+				t.Errorf("ProjectNameFromDir(%q) = %q, want %q", tt.dir, got, tt.want)
 			}
 		})
 	}

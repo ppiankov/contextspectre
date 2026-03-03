@@ -94,6 +94,10 @@ func runQuickClean(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("session file not found: %s", path)
 	}
 
+	if !isJSON() {
+		printSessionIdentity(path)
+	}
+
 	if quickCleanLive {
 		return runQuickCleanLive(path, target)
 	}
