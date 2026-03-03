@@ -50,6 +50,7 @@ type StatsOutput struct {
 	GrowthRate     GrowthRateJSON      `json:"growth_rate"`
 	Recommendation *RecommendationJSON `json:"recommendation,omitempty"`
 	EpochTimeline  []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
+	ScopeDrift     *ScopeDriftJSON     `json:"scope_drift,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -180,6 +181,36 @@ type CleanupItemJSON struct {
 	TurnsGained int    `json:"turns_gained"`
 }
 
+// ScopeDriftJSON holds scope drift analysis for JSON output.
+type ScopeDriftJSON struct {
+	SessionProject string           `json:"session_project"`
+	EpochScopes    []EpochScopeJSON `json:"epoch_scopes"`
+	TangentSeqs    []TangentSeqJSON `json:"tangent_sequences,omitempty"`
+	TotalInScope   int              `json:"total_in_scope"`
+	TotalOutScope  int              `json:"total_out_scope"`
+	OverallDrift   float64          `json:"overall_drift"`
+}
+
+// EpochScopeJSON holds per-epoch scope distribution.
+type EpochScopeJSON struct {
+	EpochIndex     int            `json:"epoch_index"`
+	InScope        int            `json:"in_scope"`
+	OutScope       int            `json:"out_scope"`
+	OutScopeByRepo map[string]int `json:"out_scope_by_repo,omitempty"`
+	DriftRatio     float64        `json:"drift_ratio"`
+	DriftCost      float64        `json:"drift_cost"`
+}
+
+// TangentSeqJSON holds a contiguous out-of-scope tangent sequence.
+type TangentSeqJSON struct {
+	StartIdx           int      `json:"start_idx"`
+	EndIdx             int      `json:"end_idx"`
+	TargetRepo         string   `json:"target_repo"`
+	TokenCost          int      `json:"token_cost"`
+	DollarCost         float64  `json:"dollar_cost"`
+	ReExplanationFiles []string `json:"re_explanation_files,omitempty"`
+}
+
 // CleanOutput is the JSON output for the clean command.
 type CleanOutput struct {
 	SessionID  string           `json:"session_id"`
@@ -217,7 +248,7 @@ func printJSON(v any) error {
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
-func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation) *StatsOutput {
+func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation, drift *analyzer.ScopeDrift) *StatsOutput {
 	out := &StatsOutput{
 		SessionID: sessionID,
 		Context: ContextJSON{
@@ -367,6 +398,41 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 				IsActive:      ep.IsActive,
 			})
 		}
+	}
+
+	// Scope drift
+	if drift != nil && drift.TotalOutScope > 0 {
+		dj := &ScopeDriftJSON{
+			SessionProject: drift.SessionProject,
+			TotalInScope:   drift.TotalInScope,
+			TotalOutScope:  drift.TotalOutScope,
+			OverallDrift:   drift.OverallDrift,
+		}
+		for _, es := range drift.EpochScopes {
+			repos := es.OutScopeByRepo
+			if repos == nil {
+				repos = map[string]int{}
+			}
+			dj.EpochScopes = append(dj.EpochScopes, EpochScopeJSON{
+				EpochIndex:     es.EpochIndex,
+				InScope:        es.InScope,
+				OutScope:       es.OutScope,
+				OutScopeByRepo: repos,
+				DriftRatio:     es.DriftRatio,
+				DriftCost:      es.DriftCost,
+			})
+		}
+		for _, ts := range drift.TangentSeqs {
+			dj.TangentSeqs = append(dj.TangentSeqs, TangentSeqJSON{
+				StartIdx:           ts.StartIdx,
+				EndIdx:             ts.EndIdx,
+				TargetRepo:         ts.TargetRepo,
+				TokenCost:          ts.TokenCost,
+				DollarCost:         ts.DollarCost,
+				ReExplanationFiles: ts.ReExplanationFiles,
+			})
+		}
+		out.ScopeDrift = dj
 	}
 
 	return out

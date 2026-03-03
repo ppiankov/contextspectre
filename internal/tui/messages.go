@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -25,6 +26,8 @@ type messagesModel struct {
 	failedIndices  map[int]bool
 	tangentResult  *analyzer.TangentResult
 	tangentIndices map[int]bool
+	driftResult    *analyzer.ScopeDrift
+	driftIndices   map[int]bool
 	recommendation *analyzer.CleanupRecommendation
 	cursor         int
 	scrollOffset   int
@@ -56,6 +59,7 @@ func newMessagesModel(info session.Info) messagesModel {
 	dupResult := analyzer.FindDuplicateReads(entries)
 	retryResult := analyzer.FindFailedRetries(entries)
 	tangentResult := analyzer.FindTangents(entries)
+	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 
 	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
 
@@ -70,6 +74,8 @@ func newMessagesModel(info session.Info) messagesModel {
 		failedIndices:  retryResult.AllFailedIndices(),
 		tangentResult:  tangentResult,
 		tangentIndices: tangentResult.AllTangentIndices(),
+		driftResult:    driftResult,
+		driftIndices:   driftResult.DriftIndices(),
 		recommendation: rec,
 		selected:       make(map[int]bool),
 		isActive:       info.IsActive(),
@@ -161,7 +167,7 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 			epochs := analyzer.BuildEpochs(m.stats.EpochCosts, m.stats.Archaeology, activeHint)
 			if len(epochs) > 0 {
 				return m, func() tea.Msg {
-					return openEpochsMsg{epochs: epochs, info: m.session}
+					return openEpochsMsg{epochs: epochs, info: m.session, drift: m.driftResult}
 				}
 			}
 		}
@@ -245,9 +251,16 @@ func (m messagesModel) View() string {
 			}
 		}
 
-		// Stale/failed/tangent indicators
+		// Stale/failed/tangent/drift indicators
 		staleLabel := ""
-		if m.tangentIndices[i] {
+		if m.driftIndices[i] {
+			repo := m.driftResult.DriftRepoForIndex(i)
+			if repo != "" {
+				staleLabel = styleMuted.Render(fmt.Sprintf(" ⇢%s", filepath.Base(repo)))
+			} else {
+				staleLabel = styleMuted.Render(" drift")
+			}
+		} else if m.tangentIndices[i] {
 			staleLabel = styleMuted.Render(" tangent")
 		} else if m.staleIndices[i] {
 			staleLabel = styleMuted.Render(" stale")
@@ -279,7 +292,7 @@ func (m messagesModel) View() string {
 			b.WriteString(styleSelected.Render(line))
 		} else if isMarked {
 			b.WriteString(styleMarked.Render(line))
-		} else if e.Type == jsonl.TypeProgress || e.IsSidechain || m.tangentIndices[i] {
+		} else if e.Type == jsonl.TypeProgress || e.IsSidechain || m.tangentIndices[i] || m.driftIndices[i] {
 			b.WriteString(styleMuted.Render(line))
 		} else {
 			b.WriteString(line)
@@ -431,6 +444,11 @@ func (m messagesModel) renderContextMeter() string {
 	if m.tangentResult != nil && m.tangentResult.TotalEntries > 0 {
 		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Tangents: %d entries, %d groups (~%s tok)",
 			m.tangentResult.TotalEntries, len(m.tangentResult.Groups), formatTokensShort(m.tangentResult.TotalTokens))))
+	}
+
+	if m.driftResult != nil && m.driftResult.TotalOutScope > 0 {
+		b.WriteString(styleMuted.Render(fmt.Sprintf("  |  Scope drift: %.0f%% (%d entries)",
+			m.driftResult.OverallDrift*100, m.driftResult.TotalOutScope)))
 	}
 
 	// Compaction archaeology summary lines
@@ -674,6 +692,8 @@ func (m messagesModel) reload() messagesModel {
 	m.failedIndices = m.retryResult.AllFailedIndices()
 	m.tangentResult = analyzer.FindTangents(entries)
 	m.tangentIndices = m.tangentResult.AllTangentIndices()
+	m.driftResult = analyzer.AnalyzeScopeDrift(entries, m.stats.Compactions, "")
+	m.driftIndices = m.driftResult.DriftIndices()
 	m.recommendation = analyzer.Recommend(m.stats, m.dupResult, m.retryResult, m.tangentResult)
 	m.selected = make(map[int]bool)
 	m.impact = nil
