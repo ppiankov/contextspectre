@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ppiankov/contextspectre/internal/editor"
@@ -16,6 +17,7 @@ var (
 	quickCleanProject    string
 	quickCleanLive       bool
 	quickCleanAggressive bool
+	quickCleanCWD        bool
 )
 
 var quickCleanCmd = &cobra.Command{
@@ -27,6 +29,7 @@ Examples:
   contextspectre quick-clean                    # clean --all on most recent session
   contextspectre quick-clean --project myproj   # scoped to a specific project
   contextspectre quick-clean --live             # live cleanup (Tier 1-3) on active session
+  contextspectre quick-clean --live --cwd       # live cleanup scoped to current directory's project
   contextspectre quick-clean --live --aggressive # live cleanup (Tier 1-5)`,
 	Args: cobra.NoArgs,
 	RunE: runQuickClean,
@@ -42,6 +45,27 @@ func runQuickClean(cmd *cobra.Command, args []string) error {
 
 	if quickCleanAggressive && !quickCleanLive {
 		return fmt.Errorf("--aggressive can only be used with --live")
+	}
+
+	// CWD-based project scoping: --cwd flag or auto-detect inside Claude Code
+	if quickCleanCWD || os.Getenv("CLAUDECODE") == "1" {
+		cwd, err := os.Getwd()
+		if err == nil && cwd != "" {
+			encodedDir := session.EncodePath(cwd)
+			projectDir := filepath.Join(dir, "projects", encodedDir)
+			var filtered []session.Info
+			for _, s := range sessions {
+				if strings.HasPrefix(s.FullPath, projectDir+"/") {
+					filtered = append(filtered, s)
+				}
+			}
+			if len(filtered) > 0 {
+				sessions = filtered
+				slog.Debug("CWD filter applied", "cwd", cwd, "matched", len(filtered))
+			} else {
+				fmt.Fprintf(os.Stderr, "Warning: no sessions found for CWD %s, falling back to most recent\n", cwd)
+			}
+		}
 	}
 
 	// Filter by project if specified
@@ -146,5 +170,6 @@ func init() {
 	quickCleanCmd.Flags().StringVar(&quickCleanProject, "project", "", "Scope to a specific project name")
 	quickCleanCmd.Flags().BoolVar(&quickCleanLive, "live", false, "Live cleanup for active sessions (Tier 1-3)")
 	quickCleanCmd.Flags().BoolVar(&quickCleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
+	quickCleanCmd.Flags().BoolVar(&quickCleanCWD, "cwd", false, "Scope to current directory's project (auto-detected inside Claude Code)")
 	rootCmd.AddCommand(quickCleanCmd)
 }
