@@ -10,13 +10,17 @@ Reasoning lifecycle manager for Claude Code. Not a cleanup utility — a tool yo
 
 Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. The CLI shows a context meter (`ctx:41%`), but it's a single number with no history, no breakdown, and no way to control what stays.
 
-The deeper problem: not all context ages equally. LLM sessions have three states of reasoning: **exploratory** (temporary, unstable), **decision** (commit point), and **operational** (forward-only execution). Claude Code mixes them all permanently. Once you've decided, the scaffolding that got you there becomes noise — or worse, it pulls future reasoning off-vector. That's not token waste. That's reasoning contamination.
+The deeper problem: not all context ages equally. LLM sessions have three reasoning phases: **exploratory** (temporary, unstable), **decision** (commit point), and **operational** (forward-only execution). Claude Code mixes them all permanently. Once you've decided, the scaffolding that got you there becomes noise — or worse, it pulls future reasoning off-vector. That's not token waste. That's **reasoning contamination**.
 
-And it's not limited to one session. Long projects span dozens of sessions across branches, refactors, and debugging threads. Valuable reasoning is scattered across session files with no way to find it, extract it, or carry it forward.
+The hidden problem: a single long session can cost hundreds of dollars. Most of that is cache reads — re-processing the same context every turn. A debugging detour that gets compacted away still cost real money. Without visibility into where tokens and dollars go, optimization is impossible.
+
+And it's not limited to one session. Long projects span dozens of sessions across branches, refactors, and debugging threads. Users re-explain the same architecture, re-read the same files, re-state the same constraints in every new session. This **re-explanation tax** is invisible and cumulative. Valuable reasoning is scattered across session files with no way to find it, extract it, or carry it forward.
 
 ## What it is
 
-ContextSpectre reads Claude Code's local JSONL session files and gives you visibility and control over what fills your context window:
+ContextSpectre reads Claude Code's local JSONL session files — from both Claude Code CLI and Claude for Mac — and gives you visibility and control over what fills your context window:
+
+**Shipped (v0.3.x):**
 
 - **Context meter** — current token usage, percentage of window, color-coded distance to compaction
 - **Compaction history** — compaction count, token drops, growth rate, post-compaction visual distinction
@@ -30,14 +34,33 @@ ContextSpectre reads Claude Code's local JSONL session files and gives you visib
 - **Chain repair** — parentUuid links are automatically repaired when messages are removed
 - **Mandatory backup** — every edit creates a `.bak` first, restorable with one key
 
+**Planned:**
+
+- **Session cost attribution** — actual dollar cost per session, per compaction epoch, per branch. Uses `message.usage` data with model pricing — no estimation, no heuristics
+- **Compaction archaeology** — forensic view of what was lost at each compaction: 165K tokens compressed to ~250 characters, with files, decisions, and tool calls that didn't survive
+- **Ghost context detection** — flag when compaction summaries reference files that were modified in later epochs. Claude is reasoning from stale premises — the most dangerous failure mode in long sessions
+- **Compaction epoch timeline** — git log for reasoning. Each epoch with turn count, peak tokens, cost, topic, and compression ratio
+- **Predictive cleanup** — "Clean 24K tokens to gain ~15 turns" with specific items and one-key execution
+- **Vector health score** — signal/noise ratio breakdown: % tokens in decisions vs. progress noise vs. images vs. dead weight
+- **Reasoning phase markers** — label messages as exploratory, decision, or operational. The entire pipeline becomes phase-aware
+- **Keep markers** — mark individual messages as KEEP (never touched) or NOISE (auto-selected). Human intent via sidecar file, no ML
+- **Commit points** — mark decision boundaries with a canonical state block (goal, decisions, constraints, rationale, next steps). Everything above becomes collapsible
+- **Branch navigator** — segment sessions into conversation branches by compaction boundaries and time gaps. Drill in, clean, or wipe entire branches. Stale branches flagged automatically
+- **Separation surgery** — extract healthy branches into portable markdown context files for new sessions
+- **Amputation surgery** — emergency removal of content-filter trigger zones to unblock stuck sessions
+- **Unite** — merge multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting
+- **Vector snapshot** — export only canonical decisions and constraints across all sessions. No logs, no tool noise — just the project operating vector
+- **Cross-session continuity score** — measure re-explanation tax: how much reasoning is rebuilt from scratch across sessions
+
 ## What it is NOT
 
 - Not a conversation analyzer. It does not interpret semantics or judge your prompts.
 - Not a Claude Code plugin. It reads local files independently — no API, no integration required.
 - Not a general JSONL editor. It understands Claude Code's specific schema and nothing else.
 - Not a monitoring daemon. It is a point-in-time tool you run when you need visibility.
-- Not multi-vendor. It works with Claude Code's local session format. ChatGPT is server-side — there is nothing to edit.
+- Not multi-vendor. It works with Claude Code's local session format (CLI and Mac). ChatGPT is server-side — there is nothing to edit.
 - Not an AI summarizer. It extracts existing content. It does not generate new summaries.
+- Not a cost optimizer. It exposes the hidden economics of reasoning. You decide what to do about it.
 
 ## Philosophy
 
@@ -48,6 +71,10 @@ ContextSpectre reads Claude Code's local JSONL session files and gives you visib
 **Mirrors, not oracles.** The tool presents evidence and lets you decide. It does not auto-trim, does not guess what matters, and does not modify files without your explicit confirmation and a backup.
 
 **Context distillation over context deletion.** The goal is not to make sessions smaller. It's to increase the signal-to-noise ratio of what Claude sees. Progress messages, stale file reads, failed retries, and decorative separators are pure noise. Decisions, constraints, and working code are pure signal.
+
+**Expose the hidden economics of reasoning.** Tokens are abstract. Percentages are abstract. Dollars are visceral. "$32 for that debugging detour that got compacted away" changes behavior faster than "82% context usage" ever will.
+
+**Structural detection over semantic guessing.** Every analysis uses observable facts — token counts, file paths, compaction boundaries, parentUuid chains, usage fields. No ML, no heuristics that guess meaning, no probabilistic classification. When the tool doesn't know, it says so.
 
 ## Installation
 
@@ -138,13 +165,15 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 ## How it works
 
-**Session discovery.** Scans `~/.claude/projects/` for JSONL session files. Reads `sessions-index.json` when available, falls back to glob.
+**Session discovery.** Scans `~/.claude/projects/` for JSONL session files. Both Claude Code CLI and Claude for Mac store sessions in the same directory with the same schema. Reads `sessions-index.json` when available, falls back to glob.
 
 **Token estimation.** Text: `len / 4`. Images: `len(base64) / 750`. Tool use: `(name + input) / 4`. These are estimates — actual tokenization varies, but they track closely enough for relative comparison.
 
-**Compaction detection.** Monitors `message.usage` fields on assistant messages. A drop of >50K tokens between consecutive assistant messages indicates compaction. Growth rate is calculated from tokens accumulated since the last compaction.
+**Compaction detection.** Monitors `message.usage` fields on assistant messages. A drop of >50K tokens between consecutive assistant messages indicates compaction. The period between two compactions is a **compaction epoch** — the fundamental unit of reasoning history.
 
 **Compaction distance.** `(165,000 - current_tokens) / avg_tokens_per_turn` = estimated turns remaining.
+
+**Cost attribution.** (Planned) Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation — the data is in the JSONL.
 
 **Chain repair.** When deleting message D, all entries where `parentUuid == D.uuid` get `parentUuid = D.parentUuid`. Walks up deletion chains to find the nearest surviving ancestor.
 
@@ -190,6 +219,7 @@ Key design decisions:
 - **Bubbletea TUI.** Keyboard-driven, no mouse required. Lipgloss for styling.
 - **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.
 - **Tiered operations.** Cleanup operations are classified by safety level. Live mode only runs the safest tiers.
+- **Structural, not semantic.** All analysis uses observable facts: token counts, file paths, UUID chains, usage fields. No ML, no probabilistic guessing.
 
 ## See also: CLI status line
 
@@ -199,28 +229,32 @@ Claude Code CLI supports a custom status line hook that shows context usage in r
 Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
 ```
 
-This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it* and lets you trim.
+This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it*, *what it costs*, and lets you act on it.
 
 ## Roadmap
 
 **Phase 1: Entropy control** (complete)
 Control noise within a session. Remove progress messages, stale reads, failed retries, oversized images, decorative separators, and cross-repo tangents. Live cleanup between turns. Batch operations.
 
-**Phase 2: Reasoning navigation** (next)
-Turn the flat message list into a navigable structure. Segment sessions into conversation branches by compaction boundaries, time gaps, and file clusters. Show each branch with a summary, token cost, and files touched. Drill in, clean, or wipe entire branches.
+**Phase 2: Reasoning economics** (next)
+Expose the hidden costs of reasoning. Session cost attribution from actual usage data. Compaction epoch timeline — git log for reasoning with cost, turns, and topic per epoch. Compaction archaeology — forensic view of what 165K tokens compressed to 250 characters. Predictive cleanup with turn-gain estimates.
 
-**Phase 3: Selective continuity**
-Extract healthy conversation branches into portable markdown context files. Separation surgery: mark branches worth continuing, export them, optionally prune from the source session. Start a new Claude Code session with `"read docs/branch-export.md"` — full context, zero compactions.
+**Phase 3: Reasoning navigation**
+Turn the flat message list into a navigable structure. Segment sessions into conversation branches by compaction boundaries and time gaps. Reasoning phase markers (exploratory/decision/operational). Keep markers and commit points for human-driven intent labeling. Stale branch detection. Vector health score showing signal/noise ratio.
 
-**Phase 4: Context distillation**
-Synthesize across all sessions for a project. Unite multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting. Distill the best reasoning from a project's entire history into one document a fresh session can load.
+**Phase 4: Selective continuity**
+Extract healthy conversation branches into portable markdown context files. Separation surgery: mark branches worth continuing, export them, optionally prune from the source session. Amputation surgery for content-filter false positives. Start a new Claude Code session with `"read docs/branch-export.md"` — full context, zero compactions.
+
+**Phase 5: Context distillation**
+Synthesize across all sessions for a project. Unite multiple branch exports into a single context file with deduplication, conflict detection, and token budgeting. Vector snapshot — extract only canonical decisions and constraints as a project north star. Cross-session continuity score to measure re-explanation tax. Ghost context detection to flag stale compaction summaries.
 
 ## Known limitations
 
 - **Token estimates are approximate.** The 4 chars/token heuristic is close but not exact. Actual BPE tokenization varies by content.
+- **Cost estimates use published pricing.** Dollar figures are calculated from API pricing tables, not from actual Anthropic invoices. They are close but not authoritative.
 - **Compaction threshold is empirical.** The ~165K trigger point is observed behavior, not documented by Anthropic. It may change.
 - **No real-time updates.** ContextSpectre reads the file once on open. It does not watch for changes during a live session.
-- **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating.
+- **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating. Works with both CLI and Mac desktop sessions.
 - **Large files are slow to parse.** Sessions over 100MB take a few seconds to load. The parser is streaming but analysis is in-memory.
 - **Branch detection is structural, not semantic.** Branches are identified by compaction boundaries and time gaps, not by understanding what was discussed.
 
