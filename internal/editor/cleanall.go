@@ -21,6 +21,7 @@ type CleanAllResult struct {
 	SeparatorsStripped int
 	OutputsTruncated   int
 	TotalTokensSaved   int
+	KeepSkipped        int
 	BytesBefore        int64
 	BytesAfter         int64
 }
@@ -29,6 +30,9 @@ type CleanAllResult struct {
 // Order: entry deletions first, then content surgery.
 func CleanAll(path string) (*CleanAllResult, error) {
 	result := &CleanAllResult{}
+
+	// Load markers to respect KEEP entries
+	markers, _ := LoadMarkers(path)
 
 	// Get original size
 	origInfo, err := os.Stat(path)
@@ -48,6 +52,11 @@ func CleanAll(path string) (*CleanAllResult, error) {
 		_ = safecopy.Clean(path)
 	}
 
+	// Helper: check if entry is protected by KEEP marker
+	isKept := func(uuid string) bool {
+		return markers.IsKeep(uuid)
+	}
+
 	// Phase 1: Entry-level deletions
 	// These use editor.Delete which creates .bak
 
@@ -60,7 +69,7 @@ func CleanAll(path string) (*CleanAllResult, error) {
 
 	toDelete := make(map[int]bool)
 	for i, e := range entries {
-		if e.Type == jsonl.TypeProgress {
+		if e.Type == jsonl.TypeProgress && !isKept(e.UUID) {
 			toDelete[i] = true
 		}
 	}
@@ -78,7 +87,7 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	entries, _ = jsonl.Parse(path)
 	toDelete = make(map[int]bool)
 	for i, e := range entries {
-		if e.Type == jsonl.TypeFileHistorySnapshot {
+		if e.Type == jsonl.TypeFileHistorySnapshot && !isKept(e.UUID) {
 			toDelete[i] = true
 		}
 	}
@@ -96,7 +105,7 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	entries, _ = jsonl.Parse(path)
 	toDelete = make(map[int]bool)
 	for i, e := range entries {
-		if e.IsSidechain {
+		if e.IsSidechain && !isKept(e.UUID) {
 			toDelete[i] = true
 		}
 	}
@@ -115,6 +124,11 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	tangentResult := analyzer.FindTangents(entries)
 	if len(tangentResult.Groups) > 0 {
 		toDelete = tangentResult.AllTangentIndices()
+		for idx := range toDelete {
+			if idx < len(entries) && isKept(entries[idx].UUID) {
+				delete(toDelete, idx)
+			}
+		}
 		dr, err := Delete(path, toDelete)
 		if err != nil {
 			_ = restoreOriginal(path, origBak)
@@ -128,26 +142,61 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	entries, _ = jsonl.Parse(path)
 	retryResult := analyzer.FindFailedRetries(entries)
 	if len(retryResult.Sequences) > 0 {
-		rr, err := RemoveFailedRetries(path, retryResult)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("retries: %w", err)
+		// Filter out sequences where either entry is KEEP-marked
+		var filteredSeqs []analyzer.RetrySequence
+		for _, seq := range retryResult.Sequences {
+			if seq.FailedToolUseIdx < len(entries) && isKept(entries[seq.FailedToolUseIdx].UUID) {
+				continue
+			}
+			if seq.FailedResultIdx >= 0 && seq.FailedResultIdx < len(entries) && isKept(entries[seq.FailedResultIdx].UUID) {
+				continue
+			}
+			filteredSeqs = append(filteredSeqs, seq)
 		}
-		result.FailedRetries = rr.FailedRemoved
-		cleanIntermediate()
+		retryResult.Sequences = filteredSeqs
+		if len(retryResult.Sequences) > 0 {
+			rr, err := RemoveFailedRetries(path, retryResult)
+			if err != nil {
+				_ = restoreOriginal(path, origBak)
+				return nil, fmt.Errorf("retries: %w", err)
+			}
+			result.FailedRetries = rr.FailedRemoved
+			cleanIntermediate()
+		}
 	}
 
 	// 1f. Remove stale reads
 	entries, _ = jsonl.Parse(path)
 	dupResult := analyzer.FindDuplicateReads(entries)
 	if len(dupResult.Groups) > 0 {
-		dr, err := DeduplicateReads(path, dupResult)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("dedup: %w", err)
+		// Filter out stale reads where either entry is KEEP-marked
+		var filteredGroups []analyzer.DuplicateGroup
+		for _, g := range dupResult.Groups {
+			var filteredReads []analyzer.StaleRead
+			for _, sr := range g.StaleReads {
+				if sr.AssistantIdx < len(entries) && isKept(entries[sr.AssistantIdx].UUID) {
+					continue
+				}
+				if sr.ResultIdx >= 0 && sr.ResultIdx < len(entries) && isKept(entries[sr.ResultIdx].UUID) {
+					continue
+				}
+				filteredReads = append(filteredReads, sr)
+			}
+			if len(filteredReads) > 0 {
+				g.StaleReads = filteredReads
+				filteredGroups = append(filteredGroups, g)
+			}
 		}
-		result.StaleReadsRemoved = dr.StaleReadsRemoved
-		cleanIntermediate()
+		dupResult.Groups = filteredGroups
+		if len(dupResult.Groups) > 0 {
+			dr, err := DeduplicateReads(path, dupResult)
+			if err != nil {
+				_ = restoreOriginal(path, origBak)
+				return nil, fmt.Errorf("dedup: %w", err)
+			}
+			result.StaleReadsRemoved = dr.StaleReadsRemoved
+			cleanIntermediate()
+		}
 	}
 
 	// Phase 2: Content surgery

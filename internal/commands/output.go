@@ -546,6 +546,19 @@ func cleanLiveToJSON(path string, r *editor.CleanLiveResult) *CleanOutput {
 	return out
 }
 
+// MarkOutput is the JSON output for a single mark operation.
+type MarkOutput struct {
+	UUID   string `json:"uuid"`
+	Marker string `json:"marker"`
+	Action string `json:"action"`
+}
+
+// MarkListOutput is the JSON output for listing markers.
+type MarkListOutput struct {
+	Markers map[string]string `json:"markers"`
+	Total   int               `json:"total"`
+}
+
 // SplitOutput is the JSON output for the split command.
 type SplitOutput struct {
 	SessionID        string          `json:"session_id"`

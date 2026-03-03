@@ -26,6 +26,8 @@ type keyMap struct {
 	Confirm        key.Binding
 	DryRun         key.Binding
 	Cancel         key.Binding
+	MarkKeep       key.Binding
+	MarkNoise      key.Binding
 }
 
 var keys = keyMap{
@@ -120,5 +122,13 @@ var keys = keyMap{
 	Cancel: key.NewBinding(
 		key.WithKeys("n", "esc"),
 		key.WithHelp("n", "cancel"),
+	),
+	MarkKeep: key.NewBinding(
+		key.WithKeys("K"),
+		key.WithHelp("K", "toggle keep"),
+	),
+	MarkNoise: key.NewBinding(
+		key.WithKeys("N"),
+		key.WithHelp("N", "toggle noise"),
 	),
 }

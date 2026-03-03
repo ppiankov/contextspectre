@@ -15,6 +15,7 @@ const TransparentPNG1x1 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQ
 type DeleteResult struct {
 	EntriesRemoved int
 	ChainRepairs   int
+	KeepSkipped    int
 	BytesBefore    int64
 	BytesAfter     int64
 }
@@ -96,6 +97,35 @@ func Delete(path string, toDelete map[int]bool) (*DeleteResult, error) {
 		return nil, fmt.Errorf("write: %w", err)
 	}
 
+	return result, nil
+}
+
+// DeleteWithMarkers removes selected entries, skipping any marked as KEEP.
+func DeleteWithMarkers(path string, toDelete map[int]bool, markers *MarkerFile) (*DeleteResult, error) {
+	if markers == nil {
+		return Delete(path, toDelete)
+	}
+
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse for marker check: %w", err)
+	}
+
+	filtered := make(map[int]bool, len(toDelete))
+	keepSkipped := 0
+	for idx := range toDelete {
+		if idx < len(entries) && markers.IsKeep(entries[idx].UUID) {
+			keepSkipped++
+			continue
+		}
+		filtered[idx] = true
+	}
+
+	result, err := Delete(path, filtered)
+	if err != nil {
+		return nil, err
+	}
+	result.KeepSkipped = keepSkipped
 	return result, nil
 }
 
