@@ -41,22 +41,24 @@ type SessionsOutput struct {
 
 // StatsOutput is the JSON output for the stats command.
 type StatsOutput struct {
-	SessionID      string              `json:"session_id"`
-	Project        string              `json:"project,omitempty"`
-	ClientType     string              `json:"client_type,omitempty"`
-	Context        ContextJSON         `json:"context"`
-	Health         *HealthScoreJSON    `json:"health,omitempty"`
-	Cost           *CostJSON           `json:"cost,omitempty"`
-	EpochCosts     []EpochCostJSON     `json:"epoch_costs,omitempty"`
-	Archaeology    *ArchaeologyJSON    `json:"archaeology,omitempty"`
-	Compactions    CompactionsJSON     `json:"compactions"`
-	Messages       MessagesJSON        `json:"messages"`
-	Images         ImagesJSON          `json:"images"`
-	GrowthRate     GrowthRateJSON      `json:"growth_rate"`
-	Recommendation *RecommendationJSON `json:"recommendation,omitempty"`
-	EpochTimeline  []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
-	ScopeDrift     *ScopeDriftJSON     `json:"scope_drift,omitempty"`
-	GhostContext   *GhostReportJSON    `json:"ghost_context,omitempty"`
+	SessionID          string              `json:"session_id"`
+	Project            string              `json:"project,omitempty"`
+	ClientType         string              `json:"client_type,omitempty"`
+	Context            ContextJSON         `json:"context"`
+	Health             *HealthScoreJSON    `json:"health,omitempty"`
+	Cost               *CostJSON           `json:"cost,omitempty"`
+	CostAlertThreshold float64             `json:"cost_alert_threshold,omitempty"`
+	CostAlertTriggered bool                `json:"cost_alert_triggered,omitempty"`
+	EpochCosts         []EpochCostJSON     `json:"epoch_costs,omitempty"`
+	Archaeology        *ArchaeologyJSON    `json:"archaeology,omitempty"`
+	Compactions        CompactionsJSON     `json:"compactions"`
+	Messages           MessagesJSON        `json:"messages"`
+	Images             ImagesJSON          `json:"images"`
+	GrowthRate         GrowthRateJSON      `json:"growth_rate"`
+	Recommendation     *RecommendationJSON `json:"recommendation,omitempty"`
+	EpochTimeline      []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
+	ScopeDrift         *ScopeDriftJSON     `json:"scope_drift,omitempty"`
+	GhostContext       *GhostReportJSON    `json:"ghost_context,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -94,6 +96,7 @@ type CostJSON struct {
 	Model            string  `json:"model,omitempty"`
 	TotalCost        float64 `json:"total_cost"`
 	CostPerTurn      float64 `json:"cost_per_turn"`
+	CostPerHour      float64 `json:"cost_per_hour,omitempty"`
 	InputCost        float64 `json:"input_cost"`
 	OutputCost       float64 `json:"output_cost"`
 	CacheWriteCost   float64 `json:"cache_write_cost"`
@@ -279,8 +282,19 @@ func printJSON(v any) error {
 	return enc.Encode(v)
 }
 
+// statsOutputOpt holds optional parameters for buildStatsOutput.
+type statsOutputOpt struct {
+	duration           time.Duration
+	costAlertThreshold float64
+}
+
 // buildStatsOutput converts analyzer stats to JSON output.
-func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation, drift *analyzer.ScopeDrift) *StatsOutput {
+func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation, drift *analyzer.ScopeDrift, opts ...statsOutputOpt) *StatsOutput {
+	var opt statsOutputOpt
+	if len(opts) > 0 {
+		opt = opts[0]
+	}
+
 	out := &StatsOutput{
 		SessionID:  sessionID,
 		ClientType: stats.ClientType,
@@ -354,7 +368,7 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 
 	// Cost attribution
 	if stats.Cost != nil && stats.Cost.TurnCount > 0 {
-		out.Cost = &CostJSON{
+		costJSON := &CostJSON{
 			Model:            stats.Cost.Model,
 			TotalCost:        stats.Cost.TotalCost,
 			CostPerTurn:      stats.Cost.CostPerTurn,
@@ -368,6 +382,17 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			CacheReadTokens:  stats.Cost.CacheReadTokens,
 			TurnCount:        stats.Cost.TurnCount,
 		}
+		if opt.duration > 0 && stats.Cost.TotalCost > 0 {
+			costJSON.CostPerHour = stats.Cost.TotalCost / opt.duration.Hours()
+		}
+		out.Cost = costJSON
+
+		// Cost alert
+		if opt.costAlertThreshold > 0 {
+			out.CostAlertThreshold = opt.costAlertThreshold
+			out.CostAlertTriggered = stats.Cost.TotalCost >= opt.costAlertThreshold
+		}
+
 		for _, ec := range stats.EpochCosts {
 			out.EpochCosts = append(out.EpochCosts, EpochCostJSON{
 				EpochIndex: ec.EpochIndex,

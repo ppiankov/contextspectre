@@ -14,8 +14,9 @@ var validName = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 
 // Config holds the contextspectre configuration file.
 type Config struct {
-	Version int              `json:"version"`
-	Aliases map[string]Alias `json:"aliases"`
+	Version            int              `json:"version"`
+	Aliases            map[string]Alias `json:"aliases"`
+	CostAlertThreshold float64          `json:"cost_alert_threshold,omitempty"`
 }
 
 // Alias maps a logical project name to one or more filesystem paths.

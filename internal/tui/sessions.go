@@ -30,6 +30,7 @@ type sessionsModel struct {
 	searchQuery   string
 	filtered      []session.Info
 	aliasLookup   map[string]string // encoded path prefix → alias name
+	costThreshold float64           // cost alert threshold (0 = disabled)
 	width, height int
 	err           error
 }
@@ -38,10 +39,11 @@ type openSessionMsg struct {
 	info session.Info
 }
 
-func newSessionsModel(sessions []session.Info, aliasLookup map[string]string) sessionsModel {
+func newSessionsModel(sessions []session.Info, aliasLookup map[string]string, costThreshold float64) sessionsModel {
 	m := sessionsModel{
-		sessions:    sessions,
-		aliasLookup: aliasLookup,
+		sessions:      sessions,
+		aliasLookup:   aliasLookup,
+		costThreshold: costThreshold,
 	}
 	m.buildDisplayRows(sessions)
 	m.cursor = m.nextSelectableRow(0)
@@ -404,8 +406,12 @@ func (m sessionsModel) View() string {
 		mod := timeAgoStr(s.Modified)
 
 		costStr := "—"
+		costAlert := false
 		if s.ContextStats != nil && s.ContextStats.EstimatedCost > 0 {
 			costStr = analyzer.FormatCost(s.ContextStats.EstimatedCost)
+			if m.costThreshold > 0 && s.ContextStats.EstimatedCost >= m.costThreshold {
+				costAlert = true
+			}
 		}
 
 		// Signal health grade
@@ -421,7 +427,13 @@ func (m sessionsModel) View() string {
 			clientStr = styleMuted.Render(" DTP")
 		}
 
-		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s%s %*s %*s",
+		// Cost alert indicator
+		costAlertStr := ""
+		if costAlert {
+			costAlertStr = lipgloss.NewStyle().Foreground(colorRed).Render("!!")
+		}
+
+		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s%s %*s%s %*s",
 			prefix,
 			projW, project,
 			slugW, slug,
@@ -435,6 +447,7 @@ func (m sessionsModel) View() string {
 			sigW, sigStr,
 			clientStr,
 			costW, costStr,
+			costAlertStr,
 			modW, mod,
 		)
 

@@ -48,10 +48,11 @@ func NewApp(claudeDir, version string) AppModel {
 	}
 
 	aliasLookup := buildAliasLookup(claudeDir)
+	costThreshold := loadCostThreshold(claudeDir)
 
 	return AppModel{
 		currentView: viewSessions,
-		sessions:    newSessionsModel(sessions, aliasLookup),
+		sessions:    newSessionsModel(sessions, aliasLookup, costThreshold),
 		claudeDir:   claudeDir,
 		version:     version,
 	}
@@ -71,6 +72,15 @@ func buildAliasLookup(claudeDir string) map[string]string {
 		}
 	}
 	return lookup
+}
+
+// loadCostThreshold loads the cost alert threshold from config.
+func loadCostThreshold(claudeDir string) float64 {
+	cfg, err := project.Load(claudeDir)
+	if err != nil {
+		return 0
+	}
+	return cfg.CostAlertThreshold
 }
 
 // resolveAliasName returns the alias name for a session, or empty string.
