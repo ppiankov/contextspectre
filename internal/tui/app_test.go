@@ -71,11 +71,11 @@ func TestApp_OpenSession(t *testing.T) {
 		t.Fatal("expected AppModel")
 	}
 
-	if m.currentView != viewMessages {
-		t.Errorf("expected messages view, got %d", m.currentView)
+	if m.currentView != viewDetail {
+		t.Errorf("expected detail view, got %d", m.currentView)
 	}
-	if len(m.messages.entries) != 2 {
-		t.Errorf("expected 2 entries, got %d", len(m.messages.entries))
+	if len(m.detail.messages.entries) != 2 {
+		t.Errorf("expected 2 entries, got %d", len(m.detail.messages.entries))
 	}
 }
 

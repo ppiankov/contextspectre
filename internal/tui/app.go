@@ -18,6 +18,7 @@ type viewState int
 const (
 	viewSessions viewState = iota
 	viewBranches
+	viewDetail
 	viewMessages
 	viewConfirm
 	viewCommitPoint
@@ -29,6 +30,7 @@ type AppModel struct {
 	currentView   viewState
 	sessions      sessionsModel
 	branches      branchesModel
+	detail        detailModel
 	messages      messagesModel
 	confirm       confirmModel
 	commitPoint   commitPointModel
@@ -106,6 +108,10 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessions.height = msg.Height
 		m.branches.width = msg.Width
 		m.branches.height = msg.Height
+		m.detail.width = msg.Width
+		m.detail.height = msg.Height
+		m.detail.messages.width = msg.Width
+		m.detail.messages.height = msg.Height - 3 // tab bar overhead
 		m.messages.width = msg.Width
 		m.messages.height = msg.Height
 		m.confirm.width = msg.Width
@@ -138,25 +144,38 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.branches.height = m.height
 			m.currentView = viewBranches
 		} else {
-			m.messages = newMessagesModel(msg.info)
-			m.messages.width = m.width
-			m.messages.height = m.height
-			m.currentView = viewMessages
+			m.detail = newDetailModel(msg.info)
+			m.detail.width = m.width
+			m.detail.height = m.height
+			m.detail.messages.width = m.width
+			m.detail.messages.height = m.height - 3
+			m.currentView = viewDetail
 		}
 		return m, nil
 
 	case drillIntoBranchMsg:
-		m.messages = newMessagesModel(msg.info)
-		m.messages.cursor = msg.startIdx
-		m.messages.scrollOffset = msg.startIdx
-		m.messages.branchOrigin = true
-		m.messages.width = m.width
-		m.messages.height = m.height
-		m.currentView = viewMessages
+		m.detail = newDetailModel(msg.info)
+		m.detail.messages.cursor = msg.startIdx
+		m.detail.messages.scrollOffset = msg.startIdx
+		m.detail.branchOrigin = true
+		m.detail.activePanel = panelMessages
+		m.detail.width = m.width
+		m.detail.height = m.height
+		m.detail.messages.width = m.width
+		m.detail.messages.height = m.height - 3
+		m.currentView = viewDetail
 		return m, nil
 
 	case backFromBranchesMsg:
 		m.currentView = viewSessions
+		return m, nil
+
+	case backFromDetailMsg:
+		if msg.branchOrigin {
+			m.currentView = viewBranches
+		} else {
+			m.currentView = viewSessions
+		}
 		return m, nil
 
 	case backToSessionsMsg:
@@ -175,19 +194,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case confirmDeleteMsg:
-		result, err := editor.Delete(m.messages.session.FullPath, msg.selected)
-		if err != nil {
-			m.messages.statusMsg = fmt.Sprintf("Delete error: %v", err)
-		} else {
-			m.messages.statusMsg = fmt.Sprintf("Deleted %d entries, %d chain repairs",
-				result.EntriesRemoved, result.ChainRepairs)
-			m.messages = m.messages.reload()
+		// Route to detail.messages if we came from detail view
+		msgs := &m.messages
+		if m.detail.activePanel == panelMessages {
+			msgs = &m.detail.messages
 		}
-		m.currentView = viewMessages
+		result, err := editor.Delete(msgs.session.FullPath, msg.selected)
+		if err != nil {
+			msgs.statusMsg = fmt.Sprintf("Delete error: %v", err)
+		} else {
+			msgs.statusMsg = fmt.Sprintf("Deleted %d entries, %d chain repairs",
+				result.EntriesRemoved, result.ChainRepairs)
+			*msgs = msgs.reload()
+		}
+		if m.detail.activePanel == panelMessages {
+			m.currentView = viewDetail
+		} else {
+			m.currentView = viewMessages
+		}
 		return m, nil
 
 	case cancelDeleteMsg:
-		m.currentView = viewMessages
+		if m.detail.activePanel == panelMessages {
+			m.currentView = viewDetail
+		} else {
+			m.currentView = viewMessages
+		}
 		return m, nil
 
 	case showCommitPointMsg:
@@ -198,20 +230,32 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case confirmCommitPointMsg:
-		m.messages.markers.AddCommitPoint(msg.commitPoint)
+		msgs := &m.messages
+		if m.detail.activePanel == panelMessages {
+			msgs = &m.detail.messages
+		}
+		msgs.markers.AddCommitPoint(msg.commitPoint)
 		for i := 0; i < msg.cursorIdx; i++ {
-			uuid := m.messages.entries[i].UUID
-			if uuid != "" && !m.messages.markers.IsKeep(uuid) {
-				m.messages.markers.Set(uuid, editor.MarkerCandidate)
+			uuid := msgs.entries[i].UUID
+			if uuid != "" && !msgs.markers.IsKeep(uuid) {
+				msgs.markers.Set(uuid, editor.MarkerCandidate)
 			}
 		}
-		_ = editor.SaveMarkers(m.messages.session.FullPath, m.messages.markers)
-		m.messages.statusMsg = fmt.Sprintf("Commit point set — %d entries marked CANDIDATE", msg.cursorIdx)
-		m.currentView = viewMessages
+		_ = editor.SaveMarkers(msgs.session.FullPath, msgs.markers)
+		msgs.statusMsg = fmt.Sprintf("Commit point set — %d entries marked CANDIDATE", msg.cursorIdx)
+		if m.detail.activePanel == panelMessages {
+			m.currentView = viewDetail
+		} else {
+			m.currentView = viewMessages
+		}
 		return m, nil
 
 	case cancelCommitPointMsg:
-		m.currentView = viewMessages
+		if m.detail.activePanel == panelMessages {
+			m.currentView = viewDetail
+		} else {
+			m.currentView = viewMessages
+		}
 		return m, nil
 
 	case openEpochsMsg:
@@ -223,7 +267,11 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case backFromEpochsMsg:
-		m.currentView = viewMessages
+		if m.detail.activePanel == panelMessages {
+			m.currentView = viewDetail
+		} else {
+			m.currentView = viewMessages
+		}
 		return m, nil
 	}
 
@@ -237,6 +285,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.sessions, cmd = m.sessions.Update(msg)
 	case viewBranches:
 		m.branches, cmd = m.branches.Update(msg)
+	case viewDetail:
+		m.detail, cmd = m.detail.Update(msg)
 	case viewMessages:
 		m.messages, cmd = m.messages.Update(msg)
 	case viewConfirm:
@@ -254,6 +304,8 @@ func (m AppModel) View() string {
 	switch m.currentView {
 	case viewBranches:
 		return m.branches.View()
+	case viewDetail:
+		return m.detail.View()
 	case viewMessages:
 		return m.messages.View()
 	case viewConfirm:
