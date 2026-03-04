@@ -38,7 +38,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 
 **Cleanup**
 - 9 cleanup operations across 7 safety tiers
-- Batch cleanup (`clean --all`) and quick-clean discovery
+- Batch cleanup (`clean --all`) with active session sweep (`clean --active --all`)
 - Live session cleanup with mtime-based race detection
 - Predictive cleanup with turn-gain estimates
 - Savings attribution with lifetime tracking and projected gains
