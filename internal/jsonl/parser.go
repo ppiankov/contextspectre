@@ -108,6 +108,7 @@ type LightStats struct {
 	TotalCacheReadTokens  int
 	Model                 string
 	SignalPercent         int // 0-100, estimated signal/noise ratio
+	EpochAssistantCount   int // assistant turns since last compaction
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -134,6 +135,7 @@ func ScanLight(path string) (*LightStats, error) {
 
 	var prevContextTokens int
 	var noiseBytes int
+	var epochAssistant int
 
 	for scanner.Scan() {
 		stats.LineCount++
@@ -159,6 +161,7 @@ func ScanLight(path string) (*LightStats, error) {
 
 		if e.Type == TypeAssistant {
 			stats.AssistantCount++
+			epochAssistant++
 		}
 
 		if e.Type == TypeAssistant && e.Message != nil && e.Message.Usage != nil {
@@ -184,6 +187,7 @@ func ScanLight(path string) (*LightStats, error) {
 				stats.CompactionCount++
 				stats.LastCompactionBefore = prevContextTokens
 				stats.LastCompactionAfter = ctx
+				epochAssistant = 1 // this assistant entry starts the new epoch
 			}
 			prevContextTokens = ctx
 		}
@@ -196,6 +200,8 @@ func ScanLight(path string) (*LightStats, error) {
 			}
 		}
 	}
+	stats.EpochAssistantCount = epochAssistant
+
 	// Compute signal percent from noise bytes vs total context tokens
 	if stats.LastUsage != nil {
 		totalTokens := stats.LastUsage.TotalContextTokens()
