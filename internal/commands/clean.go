@@ -57,17 +57,17 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
-	if cleanAggressive && !cleanLive {
-		return fmt.Errorf("--aggressive can only be used with --live")
+	if cleanAggressive && !cleanLive && !cleanWatch {
+		return fmt.Errorf("--aggressive can only be used with --live or --watch")
 	}
 
-	if cleanWatch && (!cleanActiveFlag || !cleanAll) {
-		return fmt.Errorf("--watch requires --active --all")
+	if cleanWatch && !cleanActiveFlag {
+		return fmt.Errorf("--watch requires --active")
 	}
 
 	if cleanActiveFlag {
-		if !cleanAll {
-			return fmt.Errorf("--active requires --all (to prevent accidental targeted cleanup)")
+		if !cleanAll && !cleanWatch {
+			return fmt.Errorf("--active requires --all or --watch")
 		}
 		if len(args) > 0 {
 			return fmt.Errorf("--active does not accept a session argument")
@@ -425,37 +425,39 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
-	startTime := time.Now()
-	fmt.Printf("Watching active sessions (interval: %ds, Ctrl+C to quit)\n", cleanWatchInterval)
+	acc := &watchAccumulator{start: time.Now()}
+	tierLabel := watchTierLabel()
+	fmt.Printf("Watching active sessions (%s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
 
-	cumulativeTokens := 0
-	cumulativeSessions := 0
-	cycles := 0
+	var consecutiveClean int
+	lastHeartbeat := time.Now()
 
 	// Run first cycle immediately.
-	ct, cs := runCleanActiveCycleDiscover(sinceDuration)
-	cumulativeTokens += ct
+	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
 	if cs > 0 {
-		cumulativeSessions += cs
+		consecutiveClean = 0
+		acc.sessions += cs
+	} else if ct == 0 {
+		handleAllClean(0, &consecutiveClean, &lastHeartbeat)
 	}
-	cycles++
-	printCumulative(cumulativeTokens, cycles, startTime)
+	acc.cycles++
+	printCumulative(acc.tokens, acc.cycles, acc.start)
 
 	for {
 		select {
 		case <-ticker.C:
-			ct, cs := runCleanActiveCycleDiscover(sinceDuration)
-			cumulativeTokens += ct
+			ct, cs := runWatchCycleDiscover(sinceDuration, acc)
 			if cs > 0 {
-				cumulativeSessions += cs
+				consecutiveClean = 0
+				acc.sessions += cs
+			} else if ct == 0 {
+				active, _ := discoverActiveSessions(sinceDuration)
+				handleAllClean(len(active), &consecutiveClean, &lastHeartbeat)
 			}
-			cycles++
-			printCumulative(cumulativeTokens, cycles, startTime)
+			acc.cycles++
+			printCumulative(acc.tokens, acc.cycles, acc.start)
 		case <-sigCh:
-			elapsed := time.Since(startTime)
-			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions in %s.\n",
-				cycles, formatTokens(cumulativeTokens), cumulativeSessions,
-				formatDuration(elapsed))
+			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
 			return nil
 		}
@@ -473,25 +475,26 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
-	startTime := time.Now()
-	fmt.Printf("Watching active sessions (smart mode, Ctrl+C to quit)\n")
+	acc := &watchAccumulator{start: time.Now()}
+	tierLabel := watchTierLabel()
+	fmt.Printf("Watching active sessions (%s, smart mode, Ctrl+C to quit)\n", tierLabel)
 
-	lastMtime := make(map[string]time.Time) // path → last known mtime
-	lastClean := make(map[string]time.Time) // path → last cleanup time
-	cumulativeTokens := 0
-	cumulativeSessions := 0
-	cycles := 0
+	lastMtime := make(map[string]time.Time)
+	lastClean := make(map[string]time.Time)
+
+	var consecutiveClean int
+	lastHeartbeat := time.Now()
 
 	// Run first cycle immediately on all active sessions.
-	ct, cs := runCleanActiveCycleDiscover(sinceDuration)
-	cumulativeTokens += ct
+	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
 	if cs > 0 {
-		cumulativeSessions += cs
+		acc.sessions += cs
+	} else if ct == 0 {
+		handleAllClean(0, &consecutiveClean, &lastHeartbeat)
 	}
-	cycles++
-	// Seed mtime map from current active sessions.
+	acc.cycles++
 	seedMtimeMap(sinceDuration, lastMtime, lastClean)
-	printCumulative(cumulativeTokens, cycles, startTime)
+	printCumulative(acc.tokens, acc.cycles, acc.start)
 
 	for {
 		select {
@@ -503,7 +506,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 
 			ts := time.Now().Format("15:04:05")
 			fmt.Printf("[%s] Cleaning %d changed sessions...\n", ts, len(changed))
-			_, totalTokens, cleaned := cleanActiveSessions(changed)
+			totalTokens, cleaned := cleanActiveSessionsWatch(changed, acc)
 
 			// Update maps.
 			now := time.Now()
@@ -514,21 +517,18 @@ func runSmartWatch(sinceDuration time.Duration) error {
 				lastClean[s.FullPath] = now
 			}
 
-			cumulativeTokens += totalTokens
 			if cleaned > 0 {
-				cumulativeSessions += cleaned
+				consecutiveClean = 0
+				acc.sessions += cleaned
 				fmt.Printf("[%s] %s tokens saved across %d sessions\n",
 					ts, formatTokens(totalTokens), cleaned)
 			} else {
-				fmt.Printf("[%s] All clean\n", ts)
+				handleAllClean(len(changed), &consecutiveClean, &lastHeartbeat)
 			}
-			cycles++
-			printCumulative(cumulativeTokens, cycles, startTime)
+			acc.cycles++
+			printCumulative(acc.tokens, acc.cycles, acc.start)
 		case <-sigCh:
-			elapsed := time.Since(startTime)
-			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions in %s.\n",
-				cycles, formatTokens(cumulativeTokens), cumulativeSessions,
-				formatDuration(elapsed))
+			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
 			return nil
 		}
@@ -593,9 +593,8 @@ func recordWatchSnapshots(sinceDuration time.Duration) {
 	}
 }
 
-// runCleanActiveCycleDiscover discovers active sessions and cleans them.
-// Returns tokens saved and sessions cleaned.
-func runCleanActiveCycleDiscover(sinceDuration time.Duration) (int, int) {
+// runWatchCycleDiscover discovers active sessions and cleans with watch-tier gating.
+func runWatchCycleDiscover(sinceDuration time.Duration, acc *watchAccumulator) (int, int) {
 	active, err := discoverActiveSessions(sinceDuration)
 	if err != nil {
 		slog.Warn("Discovery failed", "error", err)
@@ -610,16 +609,25 @@ func runCleanActiveCycleDiscover(sinceDuration time.Duration) (int, int) {
 	}
 
 	fmt.Printf("[%s] Cleaning %d active sessions...\n", ts, len(active))
-	_, totalTokens, cleaned := cleanActiveSessions(active)
+	totalTokens, cleaned := cleanActiveSessionsWatch(active, acc)
 
-	if cleaned == 0 {
-		fmt.Printf("[%s] All clean\n", ts)
-	} else {
+	if cleaned > 0 {
 		fmt.Printf("[%s] %s tokens saved across %d sessions\n",
 			ts, formatTokens(totalTokens), cleaned)
 	}
 
 	return totalTokens, cleaned
+}
+
+// watchTierLabel returns a human label for the active watch tier config.
+func watchTierLabel() string {
+	if cleanAggressive {
+		return "tier 1-5"
+	}
+	if cleanLive {
+		return "tier 1-3"
+	}
+	return "tier 1-2"
 }
 
 // discoverActiveSessions returns sessions modified within the given duration.
@@ -734,6 +742,215 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 	}
 
 	return results, totalTokens, cleaned
+}
+
+// watchAccumulator tracks cumulative stats across watch cycles.
+type watchAccumulator struct {
+	tokens   int
+	sessions int
+	cycles   int
+	prog     int
+	snap     int
+	stale    int
+	retry    int
+	img      int
+	sep      int
+	trunc    int
+	tangents int // tangent entries detected (advisory only, not removed)
+	cost     float64
+	start    time.Time
+}
+
+// addResult accumulates a single CleanLiveResult into the watch totals.
+func (w *watchAccumulator) addResult(r *editor.CleanLiveResult, event *savings.Event) {
+	tokens := r.TotalTokensSaved
+	if tokens < 0 {
+		tokens = 0
+	}
+	w.tokens += tokens
+	w.prog += r.ProgressRemoved
+	w.snap += r.SnapshotsRemoved
+	w.stale += r.StaleReadsRemoved
+	w.retry += r.FailedRetries
+	w.img += r.ImagesReplaced
+	w.sep += r.SeparatorsStripped
+	w.trunc += r.OutputsTruncated
+	if event != nil {
+		w.cost += event.AvoidedCost
+	}
+}
+
+// printSummary prints the enhanced Ctrl+C summary.
+func (w *watchAccumulator) printSummary() {
+	elapsed := time.Since(w.start)
+	fmt.Printf("\nWatch summary (%s):\n", formatDuration(elapsed))
+	fmt.Printf("  Sessions cleaned:  %d\n", w.sessions)
+	fmt.Printf("  Cycles run:        %d\n", w.cycles)
+	fmt.Printf("  Total tokens saved: ~%s\n", formatTokens(w.tokens))
+	if w.cost > 0 {
+		fmt.Printf("  Total cost saved:  ~%s\n", analyzer.FormatCost(w.cost))
+	}
+	// Noise breakdown
+	parts := []string{}
+	if w.prog > 0 {
+		parts = append(parts, fmt.Sprintf("%d prog", w.prog))
+	}
+	if w.snap > 0 {
+		parts = append(parts, fmt.Sprintf("%d snap", w.snap))
+	}
+	if w.stale > 0 {
+		parts = append(parts, fmt.Sprintf("%d stale", w.stale))
+	}
+	if w.retry > 0 {
+		parts = append(parts, fmt.Sprintf("%d retry", w.retry))
+	}
+	if w.img > 0 {
+		parts = append(parts, fmt.Sprintf("%d img", w.img))
+	}
+	if w.sep > 0 {
+		parts = append(parts, fmt.Sprintf("%d sep", w.sep))
+	}
+	if w.trunc > 0 {
+		parts = append(parts, fmt.Sprintf("%d trunc", w.trunc))
+	}
+	if len(parts) > 0 {
+		fmt.Printf("  Noise removed:     %s\n", strings.Join(parts, ", "))
+	}
+	if w.tangents > 0 {
+		fmt.Printf("  Tangents detected: %d (advisory only)\n", w.tangents)
+	}
+}
+
+// cleanActiveSessionsWatch cleans sessions using CleanLive (tier-gated, race-safe).
+// Tangents are detected but NOT removed — advisory only.
+func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int, int) {
+	opts := editor.CleanLiveOpts{
+		Tier3:      cleanLive || cleanAggressive,
+		Aggressive: cleanAggressive,
+	}
+
+	totalTokens := 0
+	cleaned := 0
+
+	for _, s := range active {
+		result, err := editor.CleanLive(s.FullPath, opts)
+		if err != nil {
+			if errors.Is(err, editor.ErrSessionNotIdle) || errors.Is(err, editor.ErrRaceDetected) {
+				// Session busy — will catch next cycle
+				continue
+			}
+			slog.Warn("Failed to clean session", "session", s.SessionID, "error", err)
+			continue
+		}
+
+		shortID := s.SessionID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+		proj := s.ProjectName
+
+		totalOps := result.ProgressRemoved + result.SnapshotsRemoved +
+			result.StaleReadsRemoved + result.FailedRetries +
+			result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+
+		// Clamp negative savings for display
+		tokensSaved := result.TotalTokensSaved
+		if tokensSaved < 0 {
+			tokensSaved = 0
+		}
+
+		savingsEvent := recordCleanupSavings(s.FullPath, tokensSaved)
+		acc.addResult(result, savingsEvent)
+
+		if totalOps == 0 {
+			if !isJSON() {
+				fmt.Printf("  %s (%s): clean\n", proj, shortID)
+			}
+		} else {
+			cleaned++
+			totalTokens += tokensSaved
+
+			if !isJSON() {
+				parts := []string{}
+				if result.ProgressRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d prog", result.ProgressRemoved))
+				}
+				if result.SnapshotsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d snap", result.SnapshotsRemoved))
+				}
+				if result.StaleReadsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d stale", result.StaleReadsRemoved))
+				}
+				if result.FailedRetries > 0 {
+					parts = append(parts, fmt.Sprintf("%d retry", result.FailedRetries))
+				}
+				if result.ImagesReplaced > 0 {
+					parts = append(parts, fmt.Sprintf("%d img", result.ImagesReplaced))
+				}
+				if result.SeparatorsStripped > 0 {
+					parts = append(parts, fmt.Sprintf("%d sep", result.SeparatorsStripped))
+				}
+				if result.OutputsTruncated > 0 {
+					parts = append(parts, fmt.Sprintf("%d trunc", result.OutputsTruncated))
+				}
+				costStr := ""
+				if savingsEvent != nil {
+					costStr = fmt.Sprintf(" (~%s)", analyzer.FormatCost(savingsEvent.AvoidedCost))
+				}
+				fmt.Printf("  %s (%s): %s → %s tokens saved%s\n",
+					proj, shortID, strings.Join(parts, ", "),
+					formatTokens(tokensSaved), costStr)
+			}
+		}
+
+		// Tangent detection — advisory only, never auto-delete
+		detectTangentAdvisory(s.FullPath, proj, shortID, acc)
+	}
+
+	return totalTokens, cleaned
+}
+
+const heartbeatInterval = 5 * time.Minute
+
+// handleAllClean manages "All clean" suppression with periodic heartbeat.
+// Returns true if a message was printed.
+func handleAllClean(sessionCount int, consecutiveClean *int, lastHeartbeat *time.Time) bool {
+	ts := time.Now().Format("15:04:05")
+	*consecutiveClean++
+
+	if *consecutiveClean == 1 {
+		// First "all clean" after a dirty cycle — print it
+		fmt.Printf("[%s] All clean\n", ts)
+		*lastHeartbeat = time.Now()
+		return true
+	}
+
+	// Subsequent: suppress, but print heartbeat every 5 minutes
+	if time.Since(*lastHeartbeat) >= heartbeatInterval {
+		cleanDur := formatDuration(time.Duration(*consecutiveClean) * smartPollInterval)
+		fmt.Printf("[%s] Monitoring %d sessions (all clean for %s)\n", ts, sessionCount, cleanDur)
+		*lastHeartbeat = time.Now()
+		return true
+	}
+
+	return false
+}
+
+// detectTangentAdvisory detects tangents and prints an advisory (no removal).
+func detectTangentAdvisory(path, proj, shortID string, acc *watchAccumulator) {
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		return
+	}
+	tangentResult := analyzer.FindTangents(entries)
+	if tangentResult == nil || len(tangentResult.Groups) == 0 {
+		return
+	}
+	acc.tangents += tangentResult.TotalEntries
+	if !isJSON() {
+		fmt.Printf("  %s (%s): tangent detected (%d entries, ~%s tokens) — consider: contextspectre split\n",
+			proj, shortID, tangentResult.TotalEntries, formatTokens(tangentResult.TotalTokens))
+	}
 }
 
 func runCleanLive(path string) error {
@@ -934,9 +1151,9 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanLive, "live", false, "Safe cleanup for active sessions (Tier 1-3)")
 	cleanCmd.Flags().BoolVar(&cleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
 	cleanCmd.Flags().BoolVar(&cleanAuto, "auto", false, "Find and clean the most recent session (no session arg needed)")
-	cleanCmd.Flags().BoolVar(&cleanActiveFlag, "active", false, "Clean all active sessions (requires --all)")
+	cleanCmd.Flags().BoolVar(&cleanActiveFlag, "active", false, "Clean all active sessions (requires --all or --watch)")
 	cleanCmd.Flags().StringVar(&cleanActiveSince, "since", "10m", "Activity window for --active (e.g. 10m, 1h)")
-	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active --all)")
+	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active; use --live/--aggressive for tiers)")
 	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
 	rootCmd.AddCommand(cleanCmd)
 }
