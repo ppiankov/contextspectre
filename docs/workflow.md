@@ -27,3 +27,19 @@ Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
 ```
 
 This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it*, *what it costs*, and lets you act on it.
+
+## Working during cooldowns
+
+Long AI sessions can hit provider limits or cooldown periods. When this happens, the most effective workflow is to shift mechanical work away from the primary reasoning session.
+
+Tasks that can be offloaded:
+- Running tests
+- Security scanning
+- Static analysis
+- Formatting and refactoring
+- CI validation
+- Dependency updates
+
+These tasks do not require large reasoning context and can be executed by cheaper agents, local tools, or CI systems.
+
+While those run, your primary session remains focused on architectural decisions and high-signal reasoning. ContextSpectre helps keep the reasoning session clean so it remains useful when you return — clean noise before the session resumes, not after it overflows.
