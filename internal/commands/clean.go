@@ -454,9 +454,16 @@ func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
 		currentTokens = postStats.LastUsage.TotalContextTokens()
 	}
 
+	// Use epoch assistant count (turns since last compaction) for accurate growth rate.
+	// Fall back to lifetime AssistantCount for sessions that haven't compacted.
+	assistantTurns := postStats.EpochAssistantCount
+	if assistantTurns == 0 {
+		assistantTurns = postStats.AssistantCount
+	}
+
 	turnsRemaining := 0
-	if postStats.AssistantCount > 0 && currentTokens > 0 {
-		avgPerTurn := currentTokens / postStats.AssistantCount
+	if assistantTurns > 0 && currentTokens > 0 {
+		avgPerTurn := currentTokens / assistantTurns
 		if avgPerTurn > 0 {
 			remaining := analyzer.CompactionThreshold - currentTokens
 			if remaining > 0 {
