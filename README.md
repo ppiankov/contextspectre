@@ -37,6 +37,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Status line telemetry with mtime-based caching (<2ms repeat calls)
 - Watch mode with smart mtime-based polling (5s/30s cooldown), compaction alerts, and color transitions
 - Session analytics log with snapshots, filtering, and CSV/JSON export
+- Decision economics: Cost Per Decision (CPD), Turns To Convergence (TTC), Context Drift Rate (CDR)
 
 **Cleanup**
 - 9 cleanup operations across 7 safety tiers
@@ -149,7 +150,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, smart watch ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, status line telemetry ✓, expert hygiene ✓, session analytics ✓, Vector Control panel, cleanup cadence, budget protection, sidechain repair, session timeline |
+| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, smart watch ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, status line telemetry ✓, expert hygiene ✓, session analytics ✓, decision economics (CPD/TTC/CDR) ✓, Vector Control panel, cleanup cadence, budget protection, sidechain repair, session timeline |
 | 5. Reasoning memory | Planned | Project reasoning graph, decision lineage, conflict detection, project memory synthesis, CLAUDE.md sync |
 
 ## Known limitations
