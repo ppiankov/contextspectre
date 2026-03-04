@@ -53,6 +53,7 @@ type ContextStats struct {
 	Model                string
 	Archaeology          *CompactionReport
 	GhostReport          *GhostReport
+	ClientType           string // "cli", "desktop", or "unknown"
 }
 
 // CompactionEvent records a detected context compaction.
@@ -199,6 +200,15 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 	// Ghost context detection
 	if stats.Archaeology != nil && len(stats.Archaeology.Events) > 0 {
 		stats.GhostReport = DetectGhosts(entries, stats.Archaeology, stats.Compactions)
+	}
+
+	// Client type detection
+	if stats.SnapshotCount > 0 {
+		stats.ClientType = "cli"
+	} else if stats.TotalLines > 100 {
+		stats.ClientType = "desktop"
+	} else {
+		stats.ClientType = "unknown"
 	}
 
 	return stats

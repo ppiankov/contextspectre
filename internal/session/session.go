@@ -56,7 +56,27 @@ type QuickStats struct {
 	LastCompactionAfter  int
 	EstimatedCost        float64
 	Model                string
-	SignalPercent        int // 0-100, estimated signal/noise ratio
+	SignalPercent        int    // 0-100, estimated signal/noise ratio
+	ClientType           string // "cli", "desktop", or "unknown"
+}
+
+func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
+	clientType := "unknown"
+	snapshotCount := stats.TypeCounts[jsonl.TypeFileHistorySnapshot]
+	if snapshotCount > 0 {
+		clientType = "cli"
+	} else if stats.LineCount > 100 {
+		clientType = "desktop"
+	}
+	return &QuickStats{
+		ImageCount:           stats.ImageCount,
+		CompactionCount:      stats.CompactionCount,
+		LastCompactionBefore: stats.LastCompactionBefore,
+		LastCompactionAfter:  stats.LastCompactionAfter,
+		Model:                stats.Model,
+		SignalPercent:        stats.SignalPercent,
+		ClientType:           clientType,
+	}
 }
 
 // IsActive returns true if the session was modified within the last 60 seconds.
@@ -188,14 +208,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 		// Quick context stats
 		if stats, err := jsonl.ScanLight(e.FullPath); err == nil {
 			info.Slug = stats.Slug
-			info.ContextStats = &QuickStats{
-				ImageCount:           stats.ImageCount,
-				CompactionCount:      stats.CompactionCount,
-				LastCompactionBefore: stats.LastCompactionBefore,
-				LastCompactionAfter:  stats.LastCompactionAfter,
-				Model:                stats.Model,
-				SignalPercent:        stats.SignalPercent,
-			}
+			info.ContextStats = quickStatsFromLight(stats)
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100
@@ -242,14 +255,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 		if stats, err := jsonl.ScanLight(path); err == nil {
 			info.Slug = stats.Slug
 			info.MessageCount = stats.LineCount
-			info.ContextStats = &QuickStats{
-				ImageCount:           stats.ImageCount,
-				CompactionCount:      stats.CompactionCount,
-				LastCompactionBefore: stats.LastCompactionBefore,
-				LastCompactionAfter:  stats.LastCompactionAfter,
-				Model:                stats.Model,
-				SignalPercent:        stats.SignalPercent,
-			}
+			info.ContextStats = quickStatsFromLight(stats)
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100

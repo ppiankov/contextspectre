@@ -61,6 +61,9 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf("File size: %.1f MB\n", float64(fi.Size())/1024/1024)
 	}
 	fmt.Printf("Total lines: %d\n", stats.TotalLines)
+	if stats.ClientType != "" && stats.ClientType != "unknown" {
+		fmt.Printf("Client: %s\n", stats.ClientType)
+	}
 	fmt.Println()
 
 	// Message counts
