@@ -58,3 +58,36 @@ contextspectre/
 - **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.
 - **Tiered operations.** Cleanup operations are classified by safety level. Live mode only runs the safest tiers.
 - **Structural, not semantic.** All analysis uses observable facts: token counts, file paths, UUID chains, usage fields. No ML, no probabilistic guessing.
+
+## Architectural invariants
+
+ContextSpectre is a compiler, not a brain. It takes messy session logs and produces deterministic, auditable artifacts that humans and agents can use. If it stays a compiler, it scales. If it becomes a brain, it becomes a swamp.
+
+**Invariant 1: Reproducibility.** Same JSONL + same config = same outputs. No "smart guesses" unless they are clearly labeled as guesses and optional.
+
+**Invariant 2: Evidence-backed.** Every insight must point to evidence. If it says "this is a tangent," it must show the exact entry range, the paths that violated scope, and the cost. No vibes.
+
+**Invariant 3: Reversible and attributable.** Mandatory backups, patch/diff output, "what changed" reports. If someone cannot confidently undo it, it does not ship.
+
+**Invariant 4: Artifacts are the product.** Outputs are files you can commit, share, and diff: `project-vector.md`, `branch-export.md`, `epoch-timeline.json`, `continuity-report.json`. This is what makes it infrastructure.
+
+**The completeness test.** Before adding any feature, ask: does this produce a file I can diff and trust? Or does it produce a new opinion I can argue with? If it is the second one, it is probably feature bloat.
+
+### The three layers
+
+The system is split into three layers. Never mix them.
+
+| Layer | Purpose | Rule |
+|-------|---------|------|
+| **Parser** | Lossless JSONL parsing, indexing, token accounting, linkage repair | No opinions. Ever. |
+| **Analyzer** | Compaction detection, drift detection, duplicate reads, sidechain detection | Deterministic judgments from structure. No meaning. |
+| **Artifact** | Export timeline, build vector, build reports, propose actions, apply actions | UX lives here. Outputs are diffable files. |
+
+### The one exception: human annotations
+
+Meaning enters the system through human annotations only, never through model inference:
+- Keep markers, commit points
+- Labels: exploration, decision, operational
+- Tags: security, architecture, performance
+
+The source of meaning is the user. The tool compiles it. The trust model depends on this separation.

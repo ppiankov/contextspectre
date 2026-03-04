@@ -49,6 +49,10 @@
 | **Session timeline** | Chronological reasoning map combining compaction epochs, marks, scope drift events, and costs. The "git log for reasoning." Planned (Phase 4). |
 | **Reasoning entropy** | Composite 0-100 score combining all three axes of context decay: noise ratio (reasoning), compaction pressure (economic), scope drift and sidechains (structural). LOW (0-20), MEDIUM (20-50), HIGH (50-75), CRITICAL (75-100). Planned (Phase 4). |
 | **Bookmark** | A navigational anchor in a session — checkpoint ("I was here"), milestone ("something completed"), keep marker ("protect from cleanup"), commit point ("decision made here"). |
+| **Reasoning graph** | Structural graph of session relationships. Nodes are sessions. Edges are explicit structural evidence: shared files, project aliases, decision references, continuity links. No semantic inference. Planned (Phase 5). |
+| **Decision lineage** | Tracing a decision back through sessions to its origin. `git blame` for reasoning — which session decided this, what epoch, what cost. Planned (Phase 5). |
+| **Decision conflict** | A later session contradicting an earlier decision. Detected structurally: scope violations (modifying constrained files), reversal patterns (deleting decision artifacts), constraint drift. Detected, not resolved. Planned (Phase 5). |
+| **Project memory** | A compiled artifact synthesized from all sessions in a project: decisions, constraints, key files, recent work. Deterministic — same sessions = same output. Not AI-generated, not a second brain — a compiler output. Planned (Phase 5). |
 
 ## The three axes of context decay
 
