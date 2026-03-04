@@ -41,8 +41,8 @@ Unmanaged context decays along three axes simultaneously:
 
 | Axis | What decays | Symptoms | ContextSpectre instruments |
 |------|-------------|----------|---------------------------|
-| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), compaction tax (lossy compression), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, predictive cleanup, turn-gain estimates |
-| **Reasoning** | Quality | Reasoning contamination (stale scaffolding biasing responses), context spoil (summaries of summaries losing specificity), ghost context (compaction summaries referencing deleted code) | Vector health score, reasoning phase markers, commit points, ghost detection |
+| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, predictive cleanup, turn-gain estimates |
+| **Reasoning** | Quality | Reasoning contamination (stale scaffolding biasing responses), context spoil (summaries of summaries losing specificity), compaction loss (lossy compression erasing nuance), ghost context (compaction summaries referencing deleted code) | Vector health score, reasoning phase markers, commit points, ghost detection |
 | **Structural** | Organization | Namespace fragmentation (same project, split sessions), context partitioning drift (paths diverge from projects), scope drift (tool calls leaving project directory), sidechains (orphaned branches) | Scope drift detection, federated project identity (planned), session search (planned) |
 
 The informal terms — **token bleed** and **context spoil** — describe the same decay in visceral shorthand. Token bleed is the economic axis felt as waste. Context spoil is the reasoning axis felt as drift. Both are continuous, invisible, and compound over time.
