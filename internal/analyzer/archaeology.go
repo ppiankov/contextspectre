@@ -29,6 +29,7 @@ type EpochSummary struct {
 	ToolCallCounts  map[string]int
 	UserQuestions   []string
 	DecisionHints   []string
+	DecisionCount   int
 }
 
 // TotalToolCalls returns the sum of all tool call counts.
@@ -168,6 +169,8 @@ func extractEpochSummary(entries []jsonl.Entry) EpochSummary {
 	for path := range fileSet {
 		summary.FilesReferenced = append(summary.FilesReferenced, path)
 	}
+
+	summary.DecisionCount = len(summary.DecisionHints)
 
 	return summary
 }

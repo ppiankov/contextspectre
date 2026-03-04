@@ -55,9 +55,11 @@ func runStats(cmd *cobra.Command, args []string) error {
 
 	if isJSON() {
 		threshold := loadCostAlertThreshold()
+		decEconJSON := analyzer.ComputeDecisionEconomics(stats, driftResult)
 		out := buildStatsOutput(sessionID, stats, rec, driftResult, statsOutputOpt{
 			duration:           duration,
 			costAlertThreshold: threshold,
+			decisionEconomics:  decEconJSON,
 		})
 		return printJSON(out)
 	}
@@ -283,6 +285,23 @@ func runStats(cmd *cobra.Command, args []string) error {
 				stats.EpochCosts[cheapestIdx].TurnCount)
 			fmt.Println()
 		}
+	}
+
+	// Decision economics
+	decEcon := analyzer.ComputeDecisionEconomics(stats, driftResult)
+	if decEcon.HasDecisions {
+		fmt.Println("Decision economics:")
+		fmt.Printf("  Cost per decision: %s (%d decisions)\n",
+			analyzer.FormatCost(decEcon.CPD), decEcon.TotalDecisions)
+		fmt.Printf("  Turns to convergence: %d turns/decision\n", decEcon.TTC)
+		fmt.Printf("  Decision density: 1 per %d turns\n", invertDensity(decEcon.DecisionDensity))
+		if decEcon.CDR > 0 {
+			fmt.Printf("  Context drift rate: %.0f%%\n", decEcon.CDR*100)
+		}
+		if decEcon.CDR > 0.35 {
+			fmt.Println("  Warning: CDR > 35% — consider splitting session")
+		}
+		fmt.Println()
 	}
 
 	// Images
@@ -595,6 +614,14 @@ func extractFirstUserText(entries []jsonl.Entry, stats *analyzer.ContextStats) s
 		}
 	}
 	return ""
+}
+
+// invertDensity converts a density (decisions/turn) to turns/decision.
+func invertDensity(density float64) int {
+	if density <= 0 {
+		return 0
+	}
+	return int(1 / density)
 }
 
 func init() {

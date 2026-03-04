@@ -41,24 +41,45 @@ type SessionsOutput struct {
 
 // StatsOutput is the JSON output for the stats command.
 type StatsOutput struct {
-	SessionID          string              `json:"session_id"`
-	Project            string              `json:"project,omitempty"`
-	ClientType         string              `json:"client_type,omitempty"`
-	Context            ContextJSON         `json:"context"`
-	Health             *HealthScoreJSON    `json:"health,omitempty"`
-	Cost               *CostJSON           `json:"cost,omitempty"`
-	CostAlertThreshold float64             `json:"cost_alert_threshold,omitempty"`
-	CostAlertTriggered bool                `json:"cost_alert_triggered,omitempty"`
-	EpochCosts         []EpochCostJSON     `json:"epoch_costs,omitempty"`
-	Archaeology        *ArchaeologyJSON    `json:"archaeology,omitempty"`
-	Compactions        CompactionsJSON     `json:"compactions"`
-	Messages           MessagesJSON        `json:"messages"`
-	Images             ImagesJSON          `json:"images"`
-	GrowthRate         GrowthRateJSON      `json:"growth_rate"`
-	Recommendation     *RecommendationJSON `json:"recommendation,omitempty"`
-	EpochTimeline      []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
-	ScopeDrift         *ScopeDriftJSON     `json:"scope_drift,omitempty"`
-	GhostContext       *GhostReportJSON    `json:"ghost_context,omitempty"`
+	SessionID          string                 `json:"session_id"`
+	Project            string                 `json:"project,omitempty"`
+	ClientType         string                 `json:"client_type,omitempty"`
+	Context            ContextJSON            `json:"context"`
+	Health             *HealthScoreJSON       `json:"health,omitempty"`
+	Cost               *CostJSON              `json:"cost,omitempty"`
+	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
+	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
+	DecisionEconomics  *DecisionEconomicsJSON `json:"decision_economics,omitempty"`
+	EpochCosts         []EpochCostJSON        `json:"epoch_costs,omitempty"`
+	Archaeology        *ArchaeologyJSON       `json:"archaeology,omitempty"`
+	Compactions        CompactionsJSON        `json:"compactions"`
+	Messages           MessagesJSON           `json:"messages"`
+	Images             ImagesJSON             `json:"images"`
+	GrowthRate         GrowthRateJSON         `json:"growth_rate"`
+	Recommendation     *RecommendationJSON    `json:"recommendation,omitempty"`
+	EpochTimeline      []EpochTimelineJSON    `json:"epoch_timeline,omitempty"`
+	ScopeDrift         *ScopeDriftJSON        `json:"scope_drift,omitempty"`
+	GhostContext       *GhostReportJSON       `json:"ghost_context,omitempty"`
+}
+
+// DecisionEconomicsJSON holds CPD/TTC/CDR for JSON output.
+type DecisionEconomicsJSON struct {
+	CPD             float64                 `json:"cpd"`
+	TTC             int                     `json:"ttc"`
+	CDR             float64                 `json:"cdr"`
+	TotalDecisions  int                     `json:"total_decisions"`
+	DecisionDensity float64                 `json:"decision_density"`
+	PerEpoch        []EpochDecisionEconJSON `json:"per_epoch,omitempty"`
+}
+
+// EpochDecisionEconJSON holds per-epoch decision economics.
+type EpochDecisionEconJSON struct {
+	Epoch     int     `json:"epoch"`
+	CPD       float64 `json:"cpd"`
+	TTC       int     `json:"ttc"`
+	CDR       float64 `json:"cdr"`
+	Decisions int     `json:"decisions"`
+	Density   float64 `json:"density"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -342,6 +363,7 @@ func printJSON(v any) error {
 type statsOutputOpt struct {
 	duration           time.Duration
 	costAlertThreshold float64
+	decisionEconomics  *analyzer.DecisionEconomics
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
@@ -472,6 +494,29 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 				TotalCost:  ec.Cost.TotalCost,
 			})
 		}
+	}
+
+	// Decision economics
+	if opt.decisionEconomics != nil && opt.decisionEconomics.HasDecisions {
+		de := opt.decisionEconomics
+		dej := &DecisionEconomicsJSON{
+			CPD:             de.CPD,
+			TTC:             de.TTC,
+			CDR:             de.CDR,
+			TotalDecisions:  de.TotalDecisions,
+			DecisionDensity: de.DecisionDensity,
+		}
+		for _, epe := range de.PerEpoch {
+			dej.PerEpoch = append(dej.PerEpoch, EpochDecisionEconJSON{
+				Epoch:     epe.EpochIndex,
+				CPD:       epe.CPD,
+				TTC:       epe.TTC,
+				CDR:       epe.CDR,
+				Decisions: epe.Decisions,
+				Density:   epe.Density,
+			})
+		}
+		out.DecisionEconomics = dej
 	}
 
 	// Compaction archaeology

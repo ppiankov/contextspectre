@@ -258,6 +258,96 @@ func CostPercent(component, total float64) float64 {
 	return component / total * 100
 }
 
+// DecisionEconomics holds CPD, TTC, and CDR metrics for a session.
+type DecisionEconomics struct {
+	CPD             float64                  // Cost Per Decision: TotalCost / TotalDecisions
+	TTC             int                      // Turns To Convergence: TotalTurns / TotalDecisions
+	CDR             float64                  // Context Drift Rate: from ScopeDrift.OverallDrift (0-1)
+	TotalDecisions  int                      // sum of epoch decision counts
+	DecisionDensity float64                  // TotalDecisions / TotalTurns
+	HasDecisions    bool                     // false when 0 decisions detected
+	PerEpoch        []EpochDecisionEconomics // per-epoch breakdown
+}
+
+// EpochDecisionEconomics holds decision economics for a single epoch.
+type EpochDecisionEconomics struct {
+	EpochIndex int
+	CPD        float64
+	TTC        int
+	CDR        float64
+	Decisions  int
+	Density    float64
+}
+
+// ComputeDecisionEconomics computes CPD/TTC/CDR from analyzed stats and scope drift.
+func ComputeDecisionEconomics(stats *ContextStats, drift *ScopeDrift) *DecisionEconomics {
+	de := &DecisionEconomics{}
+
+	if stats == nil || stats.Archaeology == nil {
+		return de
+	}
+
+	// Sum decisions across all epochs
+	for _, ev := range stats.Archaeology.Events {
+		de.TotalDecisions += ev.Before.DecisionCount
+	}
+
+	// Also count decisions in the active (post-last-compaction) epoch
+	// Active epoch doesn't appear in Archaeology.Events, so we skip it
+	// (decisions there haven't been compacted yet)
+
+	if de.TotalDecisions == 0 {
+		return de
+	}
+	de.HasDecisions = true
+
+	// CPD: total cost / decisions
+	if stats.Cost != nil && stats.Cost.TotalCost > 0 {
+		de.CPD = stats.Cost.TotalCost / float64(de.TotalDecisions)
+	}
+
+	// TTC: total conversational turns / decisions
+	if stats.ConversationalTurns > 0 {
+		de.TTC = stats.ConversationalTurns / de.TotalDecisions
+		de.DecisionDensity = float64(de.TotalDecisions) / float64(stats.ConversationalTurns)
+	}
+
+	// CDR: from scope drift
+	if drift != nil {
+		de.CDR = drift.OverallDrift
+	}
+
+	// Per-epoch breakdown
+	for i, ev := range stats.Archaeology.Events {
+		ede := EpochDecisionEconomics{
+			EpochIndex: ev.CompactionIndex,
+			Decisions:  ev.Before.DecisionCount,
+		}
+
+		if ev.Before.DecisionCount > 0 {
+			// Per-epoch CPD
+			if i < len(stats.EpochCosts) {
+				ede.CPD = stats.EpochCosts[i].Cost.TotalCost / float64(ev.Before.DecisionCount)
+			}
+
+			// Per-epoch TTC
+			if i < len(stats.EpochCosts) && stats.EpochCosts[i].TurnCount > 0 {
+				ede.TTC = stats.EpochCosts[i].TurnCount / ev.Before.DecisionCount
+				ede.Density = float64(ev.Before.DecisionCount) / float64(stats.EpochCosts[i].TurnCount)
+			}
+		}
+
+		// Per-epoch CDR
+		if drift != nil && i < len(drift.EpochScopes) {
+			ede.CDR = drift.EpochScopes[i].DriftRatio
+		}
+
+		de.PerEpoch = append(de.PerEpoch, ede)
+	}
+
+	return de
+}
+
 // QuickCost calculates an estimated cost from accumulated token counts.
 // Used by session browser where full parsing is too slow.
 func QuickCost(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens int, model string) float64 {
