@@ -135,8 +135,8 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Selective continuity | Next | Branch export, separation surgery, session search, watch mode, post-session summary, garbage collection |
-| 5. Context distillation | Planned | Federated project identity, cross-session unification, vector snapshot, CLAUDE.md sync |
+| 4. Selective continuity | Next | Branch export, separation surgery, federated project identity, session search, watch mode, post-session summary, garbage collection |
+| 5. Context distillation | Planned | Cross-session unification, vector snapshot, CLAUDE.md sync |
 
 ## Known limitations
 

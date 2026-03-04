@@ -32,8 +32,8 @@
 | **Conversation branch** | A segment of a session between compaction boundaries or significant time gaps. The navigable unit within a long session. |
 | **Namespace fragmentation** | Same conceptual project, multiple session namespaces, no unifying abstraction. Caused by launching Claude Code from different directories in the same repo. |
 | **Context partitioning drift** | When operational partitioning (filesystem paths) diverges from conceptual partitioning (project identity). The root cause of split session contexts. |
-| **Federated project identity** | Multiple physical session roots mapped to one logical project. Decouples identity from storage location. Planned (Phase 5). |
-| **Logical project overlay** | A view abstraction over session roots — like a materialized view in database terms. Sessions stay in their original directories; the overlay groups them for commands. Planned (Phase 5). |
+| **Federated project identity** | Multiple physical session roots mapped to one logical project. Decouples identity from storage location. Planned (Phase 4). |
+| **Logical project overlay** | A view abstraction over session roots — like a materialized view in database terms. Sessions stay in their original directories; the overlay groups them for commands. Planned (Phase 4). |
 
 ## The three axes of context decay
 
