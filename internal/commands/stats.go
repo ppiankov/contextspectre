@@ -22,9 +22,10 @@ var (
 		Args:  cobra.MaximumNArgs(1),
 		RunE:  runStats,
 	}
-	showEpochs bool
-	showScope  bool
-	statsCWD   bool
+	showEpochs  bool
+	showScope   bool
+	statsCWD    bool
+	statsRecord bool
 )
 
 func runStats(cmd *cobra.Command, args []string) error {
@@ -425,6 +426,12 @@ func runStats(cmd *cobra.Command, args []string) error {
 		printCostAlert(stats.Cost.TotalCost, threshold)
 	}
 
+	// Record analytics snapshot on --record.
+	if statsRecord {
+		recordAnalyticsSnapshot(path)
+		fmt.Println("\nAnalytics snapshot recorded.")
+	}
+
 	return nil
 }
 
@@ -595,4 +602,5 @@ func init() {
 	statsCmd.Flags().BoolVar(&showEpochs, "epochs", false, "Show epoch timeline")
 	statsCmd.Flags().BoolVar(&showScope, "scope", false, "Show scope drift analysis")
 	statsCmd.Flags().BoolVar(&statsCWD, "cwd", false, "Use most recent session for current directory")
+	statsCmd.Flags().BoolVar(&statsRecord, "record", false, "Record an analytics snapshot for this session")
 }

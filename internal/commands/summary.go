@@ -55,6 +55,9 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		return printJSON(buildSummaryJSON(sessionID, stats, health, rec, topFiles, duration))
 	}
 
+	// Record analytics snapshot (best-effort).
+	recordAnalyticsSnapshot(path)
+
 	if summaryQuiet {
 		return printQuietSummary(stats, health, topFiles)
 	}
