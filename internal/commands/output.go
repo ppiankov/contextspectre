@@ -93,19 +93,29 @@ type CompSummaryJSON struct {
 
 // CostJSON holds session cost attribution.
 type CostJSON struct {
-	Model            string  `json:"model,omitempty"`
-	TotalCost        float64 `json:"total_cost"`
-	CostPerTurn      float64 `json:"cost_per_turn"`
-	CostPerHour      float64 `json:"cost_per_hour,omitempty"`
-	InputCost        float64 `json:"input_cost"`
-	OutputCost       float64 `json:"output_cost"`
-	CacheWriteCost   float64 `json:"cache_write_cost"`
-	CacheReadCost    float64 `json:"cache_read_cost"`
-	InputTokens      int     `json:"input_tokens"`
-	OutputTokens     int     `json:"output_tokens"`
-	CacheWriteTokens int     `json:"cache_write_tokens"`
-	CacheReadTokens  int     `json:"cache_read_tokens"`
-	TurnCount        int     `json:"turn_count"`
+	Model            string          `json:"model,omitempty"`
+	TotalCost        float64         `json:"total_cost"`
+	CostPerTurn      float64         `json:"cost_per_turn"`
+	CostPerHour      float64         `json:"cost_per_hour,omitempty"`
+	InputCost        float64         `json:"input_cost"`
+	OutputCost       float64         `json:"output_cost"`
+	CacheWriteCost   float64         `json:"cache_write_cost"`
+	CacheReadCost    float64         `json:"cache_read_cost"`
+	InputTokens      int             `json:"input_tokens"`
+	OutputTokens     int             `json:"output_tokens"`
+	CacheWriteTokens int             `json:"cache_write_tokens"`
+	CacheReadTokens  int             `json:"cache_read_tokens"`
+	TurnCount        int             `json:"turn_count"`
+	PerModel         []ModelCostJSON `json:"per_model,omitempty"`
+}
+
+// ModelCostJSON holds cost for a single model.
+type ModelCostJSON struct {
+	Model     string  `json:"model"`
+	Name      string  `json:"name,omitempty"`
+	TurnCount int     `json:"turn_count"`
+	TotalCost float64 `json:"total_cost"`
+	Percent   float64 `json:"percent"`
 }
 
 // EpochCostJSON holds cost for a single compaction epoch.
@@ -386,6 +396,21 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 		}
 		if opt.duration > 0 && stats.Cost.TotalCost > 0 {
 			costJSON.CostPerHour = stats.Cost.TotalCost / opt.duration.Hours()
+		}
+
+		// Per-model breakdown
+		if len(stats.Cost.PerModel) > 1 {
+			for model, pm := range stats.Cost.PerModel {
+				pct := analyzer.CostPercent(pm.TotalCost, stats.Cost.TotalCost)
+				name := analyzer.PricingForModel(model).Name
+				costJSON.PerModel = append(costJSON.PerModel, ModelCostJSON{
+					Model:     model,
+					Name:      name,
+					TurnCount: pm.TurnCount,
+					TotalCost: pm.TotalCost,
+					Percent:   pct,
+				})
+			}
 		}
 		out.Cost = costJSON
 

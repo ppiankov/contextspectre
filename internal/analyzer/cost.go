@@ -57,7 +57,8 @@ type CostBreakdown struct {
 	CacheReadTokens  int
 	TurnCount        int
 	CostPerTurn      float64
-	Model            string
+	Model            string                    // primary model (highest cost)
+	PerModel         map[string]*CostBreakdown // per-model breakdown (nil for sub-entries)
 }
 
 // EpochCost holds cost for a single compaction epoch.
@@ -89,42 +90,81 @@ func PricingForModel(model string) ModelPricing {
 }
 
 // CalculateCost computes total session cost from assistant message usage fields.
+// Groups by model and applies correct per-model pricing.
 func CalculateCost(entries []jsonl.Entry) *CostBreakdown {
-	cb := &CostBreakdown{}
-	var model string
+	cb := &CostBreakdown{
+		PerModel: make(map[string]*CostBreakdown),
+	}
 
 	for _, e := range entries {
 		if e.Type != jsonl.TypeAssistant || e.Message == nil || e.Message.Usage == nil {
 			continue
 		}
 		u := e.Message.Usage
+		model := e.Message.Model
+		if model == "" {
+			model = "unknown"
+		}
+
+		// Get or create per-model breakdown
+		pm, ok := cb.PerModel[model]
+		if !ok {
+			pm = &CostBreakdown{Model: model}
+			cb.PerModel[model] = pm
+		}
+
+		pm.InputTokens += u.InputTokens
+		pm.OutputTokens += u.OutputTokens
+		pm.CacheWriteTokens += u.CacheCreationInputTokens
+		pm.CacheReadTokens += u.CacheReadInputTokens
+		pm.TurnCount++
+
+		// Accumulate totals
 		cb.InputTokens += u.InputTokens
 		cb.OutputTokens += u.OutputTokens
 		cb.CacheWriteTokens += u.CacheCreationInputTokens
 		cb.CacheReadTokens += u.CacheReadInputTokens
 		cb.TurnCount++
-
-		if model == "" && e.Message.Model != "" {
-			model = e.Message.Model
-		}
 	}
 
 	if cb.TurnCount == 0 {
 		return cb
 	}
 
-	cb.Model = model
-	pricing := PricingForModel(model)
+	// Calculate costs per model with correct pricing
+	for model, pm := range cb.PerModel {
+		pricing := PricingForModel(model)
+		pm.InputCost = float64(pm.InputTokens) / 1_000_000 * pricing.InputPerMillion
+		pm.OutputCost = float64(pm.OutputTokens) / 1_000_000 * pricing.OutputPerMillion
+		pm.CacheWriteCost = float64(pm.CacheWriteTokens) / 1_000_000 * pricing.CacheWritePerMillion
+		pm.CacheReadCost = float64(pm.CacheReadTokens) / 1_000_000 * pricing.CacheReadPerMillion
+		pm.TotalCost = pm.InputCost + pm.OutputCost + pm.CacheWriteCost + pm.CacheReadCost
+		if pm.TurnCount > 0 {
+			pm.CostPerTurn = pm.TotalCost / float64(pm.TurnCount)
+		}
 
-	cb.InputCost = float64(cb.InputTokens) / 1_000_000 * pricing.InputPerMillion
-	cb.OutputCost = float64(cb.OutputTokens) / 1_000_000 * pricing.OutputPerMillion
-	cb.CacheWriteCost = float64(cb.CacheWriteTokens) / 1_000_000 * pricing.CacheWritePerMillion
-	cb.CacheReadCost = float64(cb.CacheReadTokens) / 1_000_000 * pricing.CacheReadPerMillion
+		// Aggregate into total
+		cb.InputCost += pm.InputCost
+		cb.OutputCost += pm.OutputCost
+		cb.CacheWriteCost += pm.CacheWriteCost
+		cb.CacheReadCost += pm.CacheReadCost
+	}
+
 	cb.TotalCost = cb.InputCost + cb.OutputCost + cb.CacheWriteCost + cb.CacheReadCost
-
 	if cb.TurnCount > 0 {
 		cb.CostPerTurn = cb.TotalCost / float64(cb.TurnCount)
 	}
+
+	// Primary model = highest cost contributor
+	var primaryModel string
+	var highestCost float64
+	for model, pm := range cb.PerModel {
+		if pm.TotalCost > highestCost {
+			highestCost = pm.TotalCost
+			primaryModel = model
+		}
+	}
+	cb.Model = primaryModel
 
 	return cb
 }
