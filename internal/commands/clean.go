@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"time"
@@ -35,6 +36,8 @@ var (
 	cleanAuto          bool
 	cleanActiveFlag    bool
 	cleanActiveSince   string
+	cleanWatch         bool
+	cleanWatchInterval int
 )
 
 var cleanCmd = &cobra.Command{
@@ -58,12 +61,19 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--aggressive can only be used with --live")
 	}
 
+	if cleanWatch && (!cleanActiveFlag || !cleanAll) {
+		return fmt.Errorf("--watch requires --active --all")
+	}
+
 	if cleanActiveFlag {
 		if !cleanAll {
 			return fmt.Errorf("--active requires --all (to prevent accidental targeted cleanup)")
 		}
 		if len(args) > 0 {
 			return fmt.Errorf("--active does not accept a session argument")
+		}
+		if cleanWatch {
+			return runCleanActiveWatch()
 		}
 		return runCleanActive()
 	}
@@ -351,18 +361,9 @@ func runCleanActive() error {
 		return fmt.Errorf("invalid --since value %q: %w", cleanActiveSince, err)
 	}
 
-	d := &session.Discoverer{ClaudeDir: resolveClaudeDir()}
-	sessions, err := d.ListAllSessions()
+	active, err := discoverActiveSessions(sinceDuration)
 	if err != nil {
-		return fmt.Errorf("discover sessions: %w", err)
-	}
-
-	cutoff := time.Now().Add(-sinceDuration)
-	var active []session.Info
-	for _, s := range sessions {
-		if s.Modified.After(cutoff) {
-			active = append(active, s)
-		}
+		return err
 	}
 
 	if len(active) == 0 {
@@ -377,6 +378,118 @@ func runCleanActive() error {
 		fmt.Printf("Cleaning %d active sessions...\n", len(active))
 	}
 
+	results, totalTokens, cleaned := cleanActiveSessions(active)
+
+	if isJSON() {
+		return printJSON(CleanActiveOutput{
+			Sessions:    results,
+			Total:       len(active),
+			Cleaned:     cleaned,
+			TotalTokens: totalTokens,
+		})
+	}
+
+	if cleaned > 0 {
+		fmt.Printf("Total: %s tokens saved across %d sessions\n",
+			formatTokens(totalTokens), cleaned)
+	}
+
+	return nil
+}
+
+func runCleanActiveWatch() error {
+	sinceDuration, err := time.ParseDuration(cleanActiveSince)
+	if err != nil {
+		return fmt.Errorf("invalid --since value %q: %w", cleanActiveSince, err)
+	}
+
+	interval := time.Duration(cleanWatchInterval) * time.Second
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+
+	fmt.Printf("Watching active sessions (interval: %ds, Ctrl+C to quit)\n", cleanWatchInterval)
+
+	cumulativeTokens := 0
+	cumulativeSessions := 0
+	cycles := 0
+
+	// Run first cycle immediately.
+	ct, cs := runCleanActiveCycle(sinceDuration)
+	cumulativeTokens += ct
+	if cs > 0 {
+		cumulativeSessions += cs
+	}
+	cycles++
+
+	for {
+		select {
+		case <-ticker.C:
+			ct, cs := runCleanActiveCycle(sinceDuration)
+			cumulativeTokens += ct
+			if cs > 0 {
+				cumulativeSessions += cs
+			}
+			cycles++
+		case <-sigCh:
+			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions.\n",
+				cycles, formatTokens(cumulativeTokens), cumulativeSessions)
+			return nil
+		}
+	}
+}
+
+// runCleanActiveCycle runs one cleanup cycle. Returns tokens saved and sessions cleaned.
+func runCleanActiveCycle(sinceDuration time.Duration) (int, int) {
+	active, err := discoverActiveSessions(sinceDuration)
+	if err != nil {
+		slog.Warn("Discovery failed", "error", err)
+		return 0, 0
+	}
+
+	ts := time.Now().Format("15:04:05")
+
+	if len(active) == 0 {
+		fmt.Printf("[%s] No active sessions\n", ts)
+		return 0, 0
+	}
+
+	fmt.Printf("[%s] Cleaning %d active sessions...\n", ts, len(active))
+	_, totalTokens, cleaned := cleanActiveSessions(active)
+
+	if cleaned == 0 {
+		fmt.Printf("[%s] All clean\n", ts)
+	} else {
+		fmt.Printf("[%s] %s tokens saved across %d sessions\n",
+			ts, formatTokens(totalTokens), cleaned)
+	}
+
+	return totalTokens, cleaned
+}
+
+// discoverActiveSessions returns sessions modified within the given duration.
+func discoverActiveSessions(sinceDuration time.Duration) ([]session.Info, error) {
+	d := &session.Discoverer{ClaudeDir: resolveClaudeDir()}
+	sessions, err := d.ListAllSessions()
+	if err != nil {
+		return nil, fmt.Errorf("discover sessions: %w", err)
+	}
+
+	cutoff := time.Now().Add(-sinceDuration)
+	var active []session.Info
+	for _, s := range sessions {
+		if s.Modified.After(cutoff) {
+			active = append(active, s)
+		}
+	}
+	return active, nil
+}
+
+// cleanActiveSessions cleans a set of sessions, printing per-session output.
+// Returns JSON results, total tokens saved, and count of sessions that had work.
+func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, int) {
 	var results []CleanActiveSessionJSON
 	totalTokens := 0
 	cleaned := 0
@@ -467,21 +580,7 @@ func runCleanActive() error {
 		results = append(results, sessionResult)
 	}
 
-	if isJSON() {
-		return printJSON(CleanActiveOutput{
-			Sessions:    results,
-			Total:       len(active),
-			Cleaned:     cleaned,
-			TotalTokens: totalTokens,
-		})
-	}
-
-	if cleaned > 0 {
-		fmt.Printf("Total: %s tokens saved across %d sessions\n",
-			formatTokens(totalTokens), cleaned)
-	}
-
-	return nil
+	return results, totalTokens, cleaned
 }
 
 func runCleanLive(path string) error {
@@ -684,5 +783,7 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanAuto, "auto", false, "Find and clean the most recent session (no session arg needed)")
 	cleanCmd.Flags().BoolVar(&cleanActiveFlag, "active", false, "Clean all active sessions (requires --all)")
 	cleanCmd.Flags().StringVar(&cleanActiveSince, "since", "10m", "Activity window for --active (e.g. 10m, 1h)")
+	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active --all)")
+	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 60, "Watch interval in seconds")
 	rootCmd.AddCommand(cleanCmd)
 }
