@@ -34,6 +34,21 @@
 | **Context partitioning drift** | When operational partitioning (filesystem paths) diverges from conceptual partitioning (project identity). The root cause of split session contexts. |
 | **Federated project identity** | Multiple physical session roots mapped to one logical project. Decouples identity from storage location. Planned (Phase 4). |
 | **Logical project overlay** | A view abstraction over session roots — like a materialized view in database terms. Sessions stay in their original directories; the overlay groups them for commands. Planned (Phase 4). |
+| **Sidechain** | An orphaned conversation branch — tool results referencing tool uses that no longer exist. Created by cleanup or amputation that removes entries mid-chain. |
+| **Vector sharpening** | Proactive cleanup that keeps reasoning on the development vector for longer. Not reactive housekeeping — deliberate noise removal at decision boundaries to extend session runway and delay compaction. The opposite of letting context decay until compaction forces lossy compression. |
+| **Savings attribution** | Quantifying the downstream economic value of cleanup. Formula: `tokens_removed × remaining_turns × cache_read_price`. A cleanup that removes 7K tokens with 18 turns remaining saves ~126K cache-read tokens. Planned (Phase 4). |
+| **Cleanup cadence** | The rhythm of proactive cleanup during a session. Optimal cadence is noise-ratio-driven (clean when noise > 15%), not event-driven (clean when context overflows). Planned (Phase 4). |
+| **Cadence score** | A 0-100 composite metric measuring cleanup urgency. Weighted from noise ratio (40%), compaction proximity (30%), token growth rate (20%), and time since last cleanup (10%). Score > 70 = clean now. 40-70 = due. < 40 = healthy. Planned (Phase 4). |
+| **Continuity index** | A 0-100 score measuring cross-session efficiency for a project. 100 = no redundant reads or re-explanation. 0 = every session starts from scratch. Based on unique vs total file reads and text block deduplication. Planned (Phase 4). |
+| **Vector Control** | TUI instrument panel for reasoning lifecycle management. Three panels: Now (current state), What-if (projected cost without cleanup), If clean now (projected gains). One-key actions: C (clean), S (split tangent), E (export). The reasoning flight instrument panel. Planned (Phase 4). |
+| **Expert hygiene mode** | Opt-in auto-clean for safe tiers (1-3: progress, snapshots, stale reads). Triggers on user actions only (stats, TUI refresh, watch poll), never in background. Everything tier 4+ remains manual. Planned (Phase 4). |
+| **Budget protection** | Combined risk assessment from compaction proximity, noise ratio, and weekly budget remaining. Produces ranked action recommendations with cost-efficiency estimates. Planned (Phase 4). |
+| **Cooldown** | Claude Code's weekly usage limit enforcement. When the limit is reached, a cooldown period prevents further usage until the billing week resets. Invisible to users until they hit the wall. |
+| **Burn rate** | Dollars per hour or per turn for the current session or billing week. Used to project time-to-limit and cost-to-compaction. |
+| **Status line telemetry** | Fast-path contextspectre output designed for Claude Code's status line hook. Sub-200ms via mtime-based caching. Injects noise/signal/cadence/savings into the live status bar. Planned (Phase 4). |
+| **Session timeline** | Chronological reasoning map combining compaction epochs, marks, scope drift events, and costs. The "git log for reasoning." Planned (Phase 4). |
+| **Reasoning entropy** | Composite 0-100 score combining all three axes of context decay: noise ratio (reasoning), compaction pressure (economic), scope drift and sidechains (structural). LOW (0-20), MEDIUM (20-50), HIGH (50-75), CRITICAL (75-100). Planned (Phase 4). |
+| **Bookmark** | A navigational anchor in a session — checkpoint ("I was here"), milestone ("something completed"), keep marker ("protect from cleanup"), commit point ("decision made here"). |
 
 ## The three axes of context decay
 
