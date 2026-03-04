@@ -412,27 +412,53 @@ func printSessionIdentity(path string) {
 
 // recordCleanupSavings computes and optionally records compounding savings from a cleanup.
 // Returns the savings event for display purposes.
+//
+// tokensSaved is the raw byte-diff/4 from the editor. This function corrects it
+// for image inflation (base64 bytes counted at /4 instead of /750) using the
+// backup file, and uses assistant turn count + compaction threshold for turns remaining.
 func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
 	if tokensSaved <= 0 {
 		return nil
 	}
 
-	stats, err := jsonl.ScanLight(path)
+	postStats, err := jsonl.ScanLight(path)
 	if err != nil {
 		return nil
 	}
 
-	// Compute turns remaining
+	// Correct tokensSaved for image inflation using backup file.
+	// The editor's (BytesBefore-BytesAfter)/4 counts base64 image data as text tokens.
+	// Images should use bytes/750 (same as Recommend() in recommend.go), not bytes/4.
+	bakPath := path + ".bak"
+	if preStats, bakErr := jsonl.ScanLight(bakPath); bakErr == nil {
+		imageBytesRemoved := preStats.ImageBytesEstimate - postStats.ImageBytesEstimate
+		if imageBytesRemoved > 0 {
+			totalBytesRemoved := preStats.FileSizeBytes - postStats.FileSizeBytes
+			nonImageBytesRemoved := totalBytesRemoved - imageBytesRemoved
+			if nonImageBytesRemoved < 0 {
+				nonImageBytesRemoved = 0
+			}
+			// Text noise: bytes/4. Images: bytes/750 (conservative, matches analyzer).
+			tokensSaved = int(nonImageBytesRemoved)/4 + int(imageBytesRemoved)/750
+		}
+	}
+
+	if tokensSaved <= 0 {
+		return nil
+	}
+
+	// Compute turns remaining using assistant turn count (not total line count)
+	// and cap at compaction threshold (not full context window).
 	currentTokens := 0
-	if stats.LastUsage != nil {
-		currentTokens = stats.LastUsage.TotalContextTokens()
+	if postStats.LastUsage != nil {
+		currentTokens = postStats.LastUsage.TotalContextTokens()
 	}
 
 	turnsRemaining := 0
-	if stats.LineCount > 0 && currentTokens > 0 {
-		avgPerTurn := currentTokens / stats.LineCount
+	if postStats.AssistantCount > 0 && currentTokens > 0 {
+		avgPerTurn := currentTokens / postStats.AssistantCount
 		if avgPerTurn > 0 {
-			remaining := analyzer.ContextWindowSize - currentTokens
+			remaining := analyzer.CompactionThreshold - currentTokens
 			if remaining > 0 {
 				turnsRemaining = remaining / avgPerTurn
 			}
@@ -444,7 +470,7 @@ func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
 	}
 
 	// Compute avoided cost
-	pricing := analyzer.PricingForModel(stats.Model)
+	pricing := analyzer.PricingForModel(postStats.Model)
 	avoidedTokens := tokensSaved * turnsRemaining
 	avoidedCost := float64(avoidedTokens) / 1_000_000 * pricing.CacheReadPerMillion
 
@@ -453,11 +479,11 @@ func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
 
 	event := &savings.Event{
 		SessionID:      sessionID,
-		Slug:           stats.Slug,
+		Slug:           postStats.Slug,
 		Timestamp:      time.Now(),
 		TokensRemoved:  tokensSaved,
 		TurnsRemaining: turnsRemaining,
-		Model:          stats.Model,
+		Model:          postStats.Model,
 		AvoidedTokens:  avoidedTokens,
 		AvoidedCost:    avoidedCost,
 	}
