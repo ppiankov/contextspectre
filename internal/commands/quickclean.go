@@ -124,6 +124,7 @@ func runQuickCleanAll(path string, target session.Info) error {
 			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved,
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
+	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 	slog.Info("Quick-clean complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
 	return nil
 }
@@ -159,6 +160,7 @@ func runQuickCleanLive(path string, target session.Info) error {
 	fmt.Println()
 	fmt.Printf("Total saved: ~%d tokens, %s\n",
 		result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 	slog.Info("Quick-clean live complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
 	return nil
 }

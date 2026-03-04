@@ -10,6 +10,7 @@ import (
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
+	"github.com/ppiankov/contextspectre/internal/savings"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -281,6 +282,29 @@ func runStats(cmd *cobra.Command, args []string) error {
 			formatTokens(rec.TotalTokens), turnsStr)
 		fmt.Printf("  Projected: %.1f%% → %.1f%%\n",
 			rec.CurrentPercent, rec.ProjectedPercent)
+
+		// Projected savings if cleaned now
+		if rec.TotalTokens > 0 && stats.EstimatedTurnsLeft > 0 {
+			pricing := analyzer.PricingForModel(stats.Model)
+			avoidedTokens := rec.TotalTokens * stats.EstimatedTurnsLeft
+			avoidedCost := float64(avoidedTokens) / 1_000_000 * pricing.CacheReadPerMillion
+			if avoidedCost > 0.001 {
+				fmt.Printf("  Projected savings if cleaned now: ~%s cache-read tokens (~%s)\n",
+					formatTokens(avoidedTokens), analyzer.FormatCost(avoidedCost))
+			}
+		}
+	}
+
+	// Past savings for this session
+	dir := resolveClaudeDir()
+	if allEvents, err := savings.Load(dir); err == nil && len(allEvents) > 0 {
+		sessionSavings := savings.ForSession(allEvents, sessionID)
+		if sessionSavings.TotalCleanups > 0 {
+			fmt.Printf("\nSaved so far: ~%s tokens (~%s) from %d cleanups\n",
+				formatTokens(sessionSavings.TotalRemoved),
+				analyzer.FormatCost(sessionSavings.TotalSavedCost),
+				sessionSavings.TotalCleanups)
+		}
 	}
 
 	// Epoch timeline
