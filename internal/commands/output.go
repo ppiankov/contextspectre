@@ -30,6 +30,7 @@ type SessionJSON struct {
 	EstimatedCost  float64   `json:"estimated_cost,omitempty"`
 	Model          string    `json:"model,omitempty"`
 	SignalPercent  *int      `json:"signal_percent,omitempty"`
+	ClientType     string    `json:"client_type,omitempty"`
 }
 
 // SessionsOutput is the JSON output for the sessions command.
@@ -42,6 +43,7 @@ type SessionsOutput struct {
 type StatsOutput struct {
 	SessionID      string              `json:"session_id"`
 	Project        string              `json:"project,omitempty"`
+	ClientType     string              `json:"client_type,omitempty"`
 	Context        ContextJSON         `json:"context"`
 	Health         *HealthScoreJSON    `json:"health,omitempty"`
 	Cost           *CostJSON           `json:"cost,omitempty"`
@@ -280,7 +282,8 @@ func printJSON(v any) error {
 // buildStatsOutput converts analyzer stats to JSON output.
 func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analyzer.CleanupRecommendation, drift *analyzer.ScopeDrift) *StatsOutput {
 	out := &StatsOutput{
-		SessionID: sessionID,
+		SessionID:  sessionID,
+		ClientType: stats.ClientType,
 		Context: ContextJSON{
 			Tokens:         stats.CurrentContextTokens,
 			Percent:        stats.UsagePercent,

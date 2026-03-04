@@ -401,7 +401,13 @@ func (m sessionsModel) View() string {
 			sigStr = gradeStyle(grade).Render(grade)
 		}
 
-		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s %*s %*s",
+		// Client type indicator
+		clientStr := ""
+		if s.ContextStats != nil && s.ContextStats.ClientType == "desktop" {
+			clientStr = styleMuted.Render(" DTP")
+		}
+
+		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s%s %*s %*s",
 			prefix,
 			projW, project,
 			slugW, slug,
@@ -413,6 +419,7 @@ func (m sessionsModel) View() string {
 			pctW, pct,
 			compactLabel,
 			sigW, sigStr,
+			clientStr,
 			costW, costStr,
 			modW, mod,
 		)
