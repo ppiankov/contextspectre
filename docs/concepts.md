@@ -46,7 +46,8 @@
 | **Expert hygiene mode** | Opt-in auto-clean for safe tiers (1-3: progress, snapshots, stale reads). Triggers on user actions only (stats, TUI refresh, watch poll), never in background. Everything tier 4+ remains manual. Planned (Phase 4). |
 | **Budget protection** | Combined risk assessment from compaction proximity, noise ratio, and weekly budget remaining. Produces ranked action recommendations with cost-efficiency estimates. Planned (Phase 4). |
 | **Cooldown** | Claude Code's weekly usage limit enforcement. When the limit is reached, a cooldown period prevents further usage until the billing week resets. Invisible to users until they hit the wall. |
-| **Burn rate** | Dollars per hour or per turn for the current session or billing week. Used to project time-to-limit and cost-to-compaction. |
+| **Burn rate** | Dollars per hour (cost velocity) for the current session. Displayed in stats and summary output. Used to project time-to-limit and cost-to-compaction. |
+| **Cost alert threshold** | A configurable dollar amount per session. When session cost exceeds the threshold, stats/summary show a warning and the TUI marks the session with a red `!!` indicator. Set via `contextspectre config set cost-alert <amount>`. |
 | **Status line telemetry** | Fast-path contextspectre output designed for Claude Code's status line hook. Sub-200ms via mtime-based caching. Injects noise/signal/cadence/savings into the live status bar. Planned (Phase 4). |
 | **Session timeline** | Chronological reasoning map combining compaction epochs, marks, scope drift events, and costs. The "git log for reasoning." Planned (Phase 4). |
 | **Reasoning entropy** | Composite 0-100 score combining all three axes of context decay: noise ratio (reasoning), compaction pressure (economic), scope drift and sidechains (structural). LOW (0-20), MEDIUM (20-50), HIGH (50-75), CRITICAL (75-100). Planned (Phase 4). |
