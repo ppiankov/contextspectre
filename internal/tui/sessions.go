@@ -21,6 +21,34 @@ type displayRow struct {
 	sessionIdx   int // index into activeSessions(), -1 for headers
 }
 
+// sortField identifies which column to sort sessions by.
+type sortField int
+
+const (
+	sortModified sortField = iota
+	sortCost
+	sortContext
+	sortSignal
+	sortSize
+	sortFieldCount // sentinel for cycling
+)
+
+func (f sortField) label() string {
+	switch f {
+	case sortModified:
+		return "Modified"
+	case sortCost:
+		return "Cost"
+	case sortContext:
+		return "Context"
+	case sortSignal:
+		return "Sig"
+	case sortSize:
+		return "Size"
+	}
+	return ""
+}
+
 type sessionsModel struct {
 	sessions      []session.Info
 	displayRows   []displayRow
@@ -31,6 +59,9 @@ type sessionsModel struct {
 	filtered      []session.Info
 	aliasLookup   map[string]string // encoded path prefix → alias name
 	costThreshold float64           // cost alert threshold (0 = disabled)
+	nav           navState
+	sortBy        sortField
+	help          helpModel
 	width, height int
 	err           error
 }
@@ -66,6 +97,29 @@ func (m sessionsModel) Update(msg tea.Msg) (sessionsModel, tea.Cmd) {
 }
 
 func (m sessionsModel) handleKey(msg tea.KeyMsg) (sessionsModel, tea.Cmd) {
+	// Help overlay intercepts all keys.
+	if m.help.visible {
+		if key.Matches(msg, keys.Help) || key.Matches(msg, keys.Escape) {
+			m.help.dismiss()
+		}
+		return m, nil
+	}
+
+	// Vim navigation.
+	if action := m.nav.handleVimNav(msg, true); action != navNone {
+		m.cursor, m.scrollOffset = applyNavAction(action, m.cursor, m.scrollOffset, len(m.displayRows), m.visibleRows())
+		// Snap to nearest selectable row.
+		m.cursor = m.nearestSelectableRow(m.cursor)
+		return m, nil
+	}
+
+	// Space = page down (not bound in sessions otherwise).
+	if key.Matches(msg, keys.Space) {
+		m.cursor, m.scrollOffset = applyNavAction(navPageDown, m.cursor, m.scrollOffset, len(m.displayRows), m.visibleRows())
+		m.cursor = m.nearestSelectableRow(m.cursor)
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, keys.Up):
 		prev := m.prevSelectableRow(m.cursor)
@@ -102,6 +156,12 @@ func (m sessionsModel) handleKey(msg tea.KeyMsg) (sessionsModel, tea.Cmd) {
 		m.searching = true
 		m.searchQuery = ""
 		m.filterSessions()
+	case key.Matches(msg, keys.Help):
+		m.help.width = m.width
+		m.help.height = m.height
+		m.help.toggle("Session Browser", sessionsHelp())
+	case msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 's':
+		m.cycleSortField()
 	}
 	return m, nil
 }
@@ -281,6 +341,87 @@ func (m sessionsModel) prevSelectableRow(pos int) int {
 	return -1
 }
 
+// nearestSelectableRow finds the closest selectable row to pos (forward first, then backward).
+func (m sessionsModel) nearestSelectableRow(pos int) int {
+	if pos < 0 {
+		pos = 0
+	}
+	if pos >= len(m.displayRows) {
+		pos = len(m.displayRows) - 1
+	}
+	if pos >= 0 && !m.displayRows[pos].isHeader {
+		return pos
+	}
+	fwd := m.nextSelectableRow(pos)
+	bwd := m.prevSelectableRow(pos)
+	if fwd >= 0 {
+		return fwd
+	}
+	if bwd >= 0 {
+		return bwd
+	}
+	return 0
+}
+
+// cycleSortField advances to the next sort field and re-sorts.
+func (m *sessionsModel) cycleSortField() {
+	m.sortBy = sortField((int(m.sortBy) + 1) % int(sortFieldCount))
+	m.sortSessions()
+}
+
+// sortSessions sorts the active sessions by the current sort field and rebuilds display rows.
+func (m *sessionsModel) sortSessions() {
+	src := m.activeSessions()
+	sorted := make([]session.Info, len(src))
+	copy(sorted, src)
+
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		switch m.sortBy {
+		case sortCost:
+			ac, bc := 0.0, 0.0
+			if a.ContextStats != nil {
+				ac = a.ContextStats.EstimatedCost
+			}
+			if b.ContextStats != nil {
+				bc = b.ContextStats.EstimatedCost
+			}
+			return ac > bc // descending
+		case sortContext:
+			ap, bp := 0.0, 0.0
+			if a.ContextStats != nil {
+				ap = a.ContextStats.ContextPct
+			}
+			if b.ContextStats != nil {
+				bp = b.ContextStats.ContextPct
+			}
+			return ap > bp
+		case sortSignal:
+			as, bs := 0, 0
+			if a.ContextStats != nil {
+				as = a.ContextStats.SignalPercent
+			}
+			if b.ContextStats != nil {
+				bs = b.ContextStats.SignalPercent
+			}
+			return as > bs
+		case sortSize:
+			return a.FileSizeMB > b.FileSizeMB
+		default: // sortModified
+			return a.Modified.After(b.Modified)
+		}
+	})
+
+	if m.searching {
+		m.filtered = sorted
+	} else {
+		m.sessions = sorted
+	}
+	m.buildDisplayRows(sorted)
+	m.cursor = m.nextSelectableRow(0)
+	m.scrollOffset = 0
+}
+
 func (m sessionsModel) View() string {
 	if m.err != nil {
 		return fmt.Sprintf("Error: %v\n", m.err)
@@ -324,7 +465,8 @@ func (m sessionsModel) View() string {
 	// Layout: compute column widths based on terminal width
 	cols := computeColumns(m.width, hasBranch)
 
-	// Column header
+	// Column header with sort indicator
+	sortInd := " \u25bc" // ▼ descending indicator
 	var hdr strings.Builder
 	hdr.WriteString("    ") // prefix: active char + selector + space
 	fmt.Fprintf(&hdr, "%-*s ", cols.projW, "Project")
@@ -335,15 +477,35 @@ func (m sessionsModel) View() string {
 	}
 	fmt.Fprintf(&hdr, "%*s ", cols.msgsW, "Msgs")
 	if cols.showSize {
-		fmt.Fprintf(&hdr, "%*s ", cols.sizeW, "Size")
+		sizeLabel := "Size"
+		if m.sortBy == sortSize {
+			sizeLabel += sortInd
+		}
+		fmt.Fprintf(&hdr, "%*s ", cols.sizeW, sizeLabel)
 	}
-	fmt.Fprintf(&hdr, "%-*s ", cols.barW, "Context")
+	ctxLabel := "Context"
+	if m.sortBy == sortContext {
+		ctxLabel += sortInd
+	}
+	fmt.Fprintf(&hdr, "%-*s ", cols.barW, ctxLabel)
 	fmt.Fprintf(&hdr, "%*s ", cols.pctW, "")
 	if !cols.mergeSignal {
-		fmt.Fprintf(&hdr, "%*s ", cols.sigW, "Sig")
+		sigLabel := "Sig"
+		if m.sortBy == sortSignal {
+			sigLabel += sortInd
+		}
+		fmt.Fprintf(&hdr, "%*s ", cols.sigW, sigLabel)
 	}
-	fmt.Fprintf(&hdr, "%*s ", cols.costW, "Cost")
-	fmt.Fprintf(&hdr, "%*s", cols.modW, "Modified")
+	costLabel := "Cost"
+	if m.sortBy == sortCost {
+		costLabel += sortInd
+	}
+	fmt.Fprintf(&hdr, "%*s ", cols.costW, costLabel)
+	modLabel := "Modified"
+	if m.sortBy == sortModified {
+		modLabel += sortInd
+	}
+	fmt.Fprintf(&hdr, "%*s", cols.modW, modLabel)
 	b.WriteString(styleHeader.Render(hdr.String()))
 	b.WriteString("\n")
 	b.WriteString(styleMuted.Render(" " + strings.Repeat("─", m.width-2)))
@@ -466,12 +628,19 @@ func (m sessionsModel) View() string {
 	// Footer
 	b.WriteString("\n")
 	if m.searching {
-		b.WriteString(styleFooter.Render(fmt.Sprintf(" / %s  (Esc clear)  \u2191\u2193 navigate  Enter open", m.searchQuery)))
+		matchInfo := fmt.Sprintf("%d matches", len(src))
+		b.WriteString(styleFooter.Render(fmt.Sprintf(" / %s  (%s)  Esc clear  \u2191\u2193 navigate  Enter open", m.searchQuery, matchInfo)))
 	} else {
-		b.WriteString(styleFooter.Render(" \u2191\u2193 navigate  / search  Enter open  q quit"))
+		sortLabel := m.sortBy.label()
+		b.WriteString(styleFooter.Render(fmt.Sprintf(" \u2191\u2193/G/gg navigate  / search  s sort (%s)  ? help  Enter open  q quit", sortLabel)))
 	}
 
-	return b.String()
+	// Help overlay on top if visible.
+	view := b.String()
+	if m.help.visible {
+		return m.help.View()
+	}
+	return view
 }
 
 func (m sessionsModel) visibleRows() int {

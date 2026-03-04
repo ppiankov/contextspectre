@@ -30,6 +30,8 @@ type branchesModel struct {
 	scrollOffset int
 	selected     map[int]bool
 	statusMsg    string
+	nav          navState
+	help         helpModel
 	width        int
 	height       int
 }
@@ -55,7 +57,26 @@ func (m branchesModel) Update(msg tea.Msg) (branchesModel, tea.Cmd) {
 }
 
 func (m branchesModel) handleKey(msg tea.KeyMsg) (branchesModel, tea.Cmd) {
+	// Help overlay.
+	if m.help.visible {
+		if key.Matches(msg, keys.Help) || key.Matches(msg, keys.Escape) {
+			m.help.dismiss()
+		}
+		return m, nil
+	}
+
+	// Vim navigation (gg enabled — no g conflict in branches).
+	if action := m.nav.handleVimNav(msg, true); action != navNone {
+		m.cursor, m.scrollOffset = applyNavAction(action, m.cursor, m.scrollOffset, len(m.branches), m.visibleRows())
+		return m, nil
+	}
+
 	switch {
+	case key.Matches(msg, keys.Help):
+		m.help.width = m.width
+		m.help.height = m.height
+		m.help.toggle("Branches", branchesHelp())
+		return m, nil
 	case key.Matches(msg, keys.Up):
 		if m.cursor > 0 {
 			m.cursor--
@@ -267,14 +288,18 @@ func (m branchesModel) View() string {
 
 	// Footer
 	b.WriteString("\n")
-	b.WriteString(styleFooter.Render(" Space select  e export  W export+wipe  Enter drill  q back"))
+	b.WriteString(styleFooter.Render(" Space select  G/gg jump  e export  W export+wipe  Enter drill  ? help  q back"))
 
 	if m.statusMsg != "" {
 		b.WriteString("\n")
 		b.WriteString(styleMuted.Render(" " + m.statusMsg))
 	}
 
-	return b.String()
+	view := b.String()
+	if m.help.visible {
+		return m.help.View()
+	}
+	return view
 }
 
 func (m branchesModel) visibleRows() int {

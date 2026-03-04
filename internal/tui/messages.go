@@ -40,6 +40,9 @@ type messagesModel struct {
 	statusMsg      string
 	amputateMode   bool
 	amputateFrom   int
+	nav            navState
+	search         searchModel
+	help           helpModel
 	width, height  int
 }
 
@@ -104,6 +107,51 @@ func (m messagesModel) Update(msg tea.Msg) (messagesModel, tea.Cmd) {
 }
 
 func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
+	// Help overlay intercepts all keys.
+	if m.help.visible {
+		if key.Matches(msg, keys.Help) || key.Matches(msg, keys.Escape) {
+			m.help.dismiss()
+		}
+		return m, nil
+	}
+
+	// Search input mode: route keys to search model.
+	if m.search.active {
+		handled, action := m.search.handleSearchKey(msg)
+		if handled {
+			switch action {
+			case searchCancel:
+				m.cursor = m.search.prevCursor
+				m.adjustScroll()
+			case searchConfirm:
+				if idx := m.search.currentMatch(); idx >= 0 {
+					m.cursor = idx
+					m.adjustScroll()
+				}
+			case searchNone:
+				// Re-filter on query change.
+				m.updateSearchMatches()
+				if idx := m.search.currentMatch(); idx >= 0 {
+					m.cursor = idx
+					m.adjustScroll()
+				}
+			}
+			return m, nil
+		}
+		return m, nil
+	}
+
+	// n/N for match navigation (when search has results but input is closed).
+	if m.search.hasQuery() {
+		if action := m.search.handleMatchNav(msg); action != searchNone {
+			if idx := m.search.currentMatch(); idx >= 0 {
+				m.cursor = idx
+				m.adjustScroll()
+			}
+			return m, nil
+		}
+	}
+
 	// Cancel amputate mode on Esc (before other handlers)
 	if m.amputateMode && key.Matches(msg, keys.Escape) {
 		m.amputateMode = false
@@ -111,7 +159,21 @@ func (m messagesModel) handleKey(msg tea.KeyMsg) (messagesModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Vim navigation (gg disabled — g = tangents).
+	if action := m.nav.handleVimNav(msg, false); action != navNone {
+		m.cursor, m.scrollOffset = applyNavAction(action, m.cursor, m.scrollOffset, len(m.entries), m.visibleRows())
+		return m, nil
+	}
+
 	switch {
+	case key.Matches(msg, keys.Search):
+		m.search.activate(m.cursor)
+		return m, nil
+	case key.Matches(msg, keys.Help):
+		m.help.width = m.width
+		m.help.height = m.height
+		m.help.toggle("Messages", messagesHelp())
+		return m, nil
 	case key.Matches(msg, keys.Up):
 		if m.cursor > 0 {
 			m.cursor--
@@ -440,6 +502,8 @@ func (m messagesModel) View() string {
 			inAmputateRange = i >= aFrom && i <= aTo
 		}
 
+		isSearchMatch := m.search.hasQuery() && m.search.isMatch(i)
+
 		if inAmputateRange && isSelected {
 			b.WriteString(lipgloss.NewStyle().Background(lipgloss.Color("#5B0000")).Foreground(colorWhite).Render(line))
 		} else if inAmputateRange {
@@ -450,6 +514,8 @@ func (m messagesModel) View() string {
 			b.WriteString(styleSelected.Render(line))
 		} else if isMarked {
 			b.WriteString(styleMarked.Render(line))
+		} else if isSearchMatch {
+			b.WriteString(lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color(colorAccent)).Render(line))
 		} else if e.UUID != "" && m.markers != nil && m.markers.GetPhase(e.UUID) == editor.PhaseExploratory {
 			b.WriteString(stylePhaseExplore.Render(line))
 		} else if e.Type == jsonl.TypeProgress || e.IsSidechain || m.tangentIndices[i] || m.driftIndices[i] {
@@ -465,11 +531,17 @@ func (m messagesModel) View() string {
 	b.WriteString(m.renderImpactBar())
 	b.WriteString("\n")
 
+	// Search bar
+	if m.search.active || m.search.hasQuery() {
+		b.WriteString(m.search.renderBar(m.width))
+		b.WriteString("\n")
+	}
+
 	// Footer
 	if m.isActive {
 		b.WriteString(styleActive.Render(" [ACTIVE SESSION — READ ONLY]"))
 	} else {
-		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  ! amputate  d del  u undo  q back"))
+		b.WriteString(styleFooter.Render(" Space sel  x prog  h snap  r stale  c chain  g tang  a all  i img  s sep  t trunc  e epochs  K keep  N noise  p commit  ! amputate  / search  ? help  d del  u undo  q back"))
 	}
 
 	if m.statusMsg != "" {
@@ -477,7 +549,11 @@ func (m messagesModel) View() string {
 		b.WriteString(styleMuted.Render(" " + m.statusMsg))
 	}
 
-	return b.String()
+	view := b.String()
+	if m.help.visible {
+		return m.help.View()
+	}
+	return view
 }
 
 func (m messagesModel) renderContextMeter() string {
@@ -934,10 +1010,45 @@ func (m messagesModel) visibleRows() int {
 		reserved += len(m.markers.CommitPoints)
 	}
 	avail := m.height - reserved
+	// Reserve extra line for search bar when active.
+	if m.search.active || m.search.hasQuery() {
+		avail--
+	}
 	if avail < 3 {
 		return 3
 	}
 	return avail
+}
+
+// adjustScroll ensures the cursor is within the visible window.
+func (m *messagesModel) adjustScroll() {
+	visible := m.visibleRows()
+	if m.cursor < m.scrollOffset {
+		m.scrollOffset = m.cursor
+	}
+	if m.cursor >= m.scrollOffset+visible {
+		m.scrollOffset = m.cursor - visible + 1
+	}
+	if m.scrollOffset < 0 {
+		m.scrollOffset = 0
+	}
+}
+
+// updateSearchMatches re-runs search against all entries.
+func (m *messagesModel) updateSearchMatches() {
+	q := strings.ToLower(m.search.query)
+	m.search.findMatches(len(m.entries), func(i int) bool {
+		return strings.Contains(strings.ToLower(m.entrySearchText(i)), q)
+	})
+}
+
+// entrySearchText returns searchable text for entry i.
+func (m messagesModel) entrySearchText(i int) string {
+	if i < 0 || i >= len(m.entries) {
+		return ""
+	}
+	e := m.entries[i]
+	return string(e.Type) + " " + e.ContentPreview(500)
 }
 
 func typeIcon(t jsonl.MessageType) string {

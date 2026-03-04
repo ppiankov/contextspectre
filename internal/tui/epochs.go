@@ -25,6 +25,8 @@ type epochsModel struct {
 	cursor       int
 	scrollOffset int
 	detailOpen   bool
+	nav          navState
+	help         helpModel
 	width        int
 	height       int
 }
@@ -49,7 +51,27 @@ func (m epochsModel) Update(msg tea.Msg) (epochsModel, tea.Cmd) {
 }
 
 func (m epochsModel) handleKey(msg tea.KeyMsg) (epochsModel, tea.Cmd) {
+	// Help overlay.
+	if m.help.visible {
+		if key.Matches(msg, keys.Help) || key.Matches(msg, keys.Escape) {
+			m.help.dismiss()
+		}
+		return m, nil
+	}
+
+	// Vim navigation (gg enabled — no g conflict in epochs).
+	if action := m.nav.handleVimNav(msg, true); action != navNone {
+		m.cursor, m.scrollOffset = applyNavAction(action, m.cursor, m.scrollOffset, len(m.epochs), m.visibleRows())
+		m.detailOpen = false
+		return m, nil
+	}
+
 	switch {
+	case key.Matches(msg, keys.Help):
+		m.help.width = m.width
+		m.help.height = m.height
+		m.help.toggle("Epochs", epochsHelp())
+		return m, nil
 	case key.Matches(msg, keys.Up):
 		if m.cursor > 0 {
 			m.cursor--
@@ -174,9 +196,13 @@ func (m epochsModel) View() string {
 
 	// Footer
 	b.WriteString("\n")
-	b.WriteString(styleFooter.Render(" ↑↓ navigate  Enter detail  q back"))
+	b.WriteString(styleFooter.Render(" ↑↓/G/gg navigate  Enter detail  ? help  q back"))
 
-	return b.String()
+	view := b.String()
+	if m.help.visible {
+		return m.help.View()
+	}
+	return view
 }
 
 func (m epochsModel) renderDetail(ep analyzer.Epoch) string {
