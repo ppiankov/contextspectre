@@ -312,34 +312,39 @@ func (m sessionsModel) View() string {
 		b.WriteString("\n")
 	}
 
-	// Column widths
-	projW := 20
-	slugW := 22
-	idW := 8
-	branchW := 12
-	msgsW := 6
-	sizeW := 8
-	barW := 10
-	pctW := 7
-	sigW := 4
-	costW := 9
-	modW := 10
+	// Detect if any session has a branch
+	hasBranch := false
+	for _, s := range src {
+		if s.GitBranch != "" {
+			hasBranch = true
+			break
+		}
+	}
+
+	// Layout: compute column widths based on terminal width
+	cols := computeColumns(m.width, hasBranch)
 
 	// Column header
-	header := fmt.Sprintf("   %-*s %-*s %-*s %-*s %*s %*s %-*s %*s %*s %*s %*s",
-		projW, "Project",
-		slugW, "Slug",
-		idW, "ID",
-		branchW, "Branch",
-		msgsW, "Msgs",
-		sizeW, "Size",
-		barW, "Context",
-		pctW, "",
-		sigW, "Sig",
-		costW, "Cost",
-		modW, "Modified",
-	)
-	b.WriteString(styleHeader.Render(header))
+	var hdr strings.Builder
+	hdr.WriteString("    ") // prefix: active char + selector + space
+	hdr.WriteString(fmt.Sprintf("%-*s ", cols.projW, "Project"))
+	hdr.WriteString(fmt.Sprintf("%-*s ", cols.slugW, "Slug"))
+	hdr.WriteString(fmt.Sprintf("%-*s ", cols.idW, "ID"))
+	if cols.showBranch {
+		hdr.WriteString(fmt.Sprintf("%-*s ", cols.branchW, "Branch"))
+	}
+	hdr.WriteString(fmt.Sprintf("%*s ", cols.msgsW, "Msgs"))
+	if cols.showSize {
+		hdr.WriteString(fmt.Sprintf("%*s ", cols.sizeW, "Size"))
+	}
+	hdr.WriteString(fmt.Sprintf("%-*s ", cols.barW, "Context"))
+	hdr.WriteString(fmt.Sprintf("%*s ", cols.pctW, ""))
+	if !cols.mergeSignal {
+		hdr.WriteString(fmt.Sprintf("%*s ", cols.sigW, "Sig"))
+	}
+	hdr.WriteString(fmt.Sprintf("%*s ", cols.costW, "Cost"))
+	hdr.WriteString(fmt.Sprintf("%*s", cols.modW, "Modified"))
+	b.WriteString(styleHeader.Render(hdr.String()))
 	b.WriteString("\n")
 	b.WriteString(styleMuted.Render(" " + strings.Repeat("─", m.width-2)))
 	b.WriteString("\n")
@@ -363,31 +368,25 @@ func (m sessionsModel) View() string {
 		s := src[row.sessionIdx]
 		isSelected := i == m.cursor
 
-		prefix := "   "
-		if isSelected {
-			prefix = " \u25b8 "
-		}
-
-		active := ""
+		// Active indicator: single char prefix
+		activeChar := " "
 		if s.IsActive() {
-			active = "[ACTIVE] "
+			activeChar = lipgloss.NewStyle().Foreground(colorYellow).Render("\u25cf")
 		}
+		selector := "  "
+		if isSelected {
+			selector = "\u25b8 "
+		}
+		prefix := " " + activeChar + selector
 
-		project := truncateStr(active+s.ProjectName, projW)
+		project := truncateStr(s.ProjectName, cols.projW)
 
-		slug := truncateStr(s.Slug, slugW)
+		slug := middleTruncate(s.Slug, cols.slugW)
 		if slug == "" {
 			slug = "\u2014"
 		}
 
 		shortID := s.ShortID()
-
-		branch := truncateStr(s.GitBranch, branchW)
-		if branch == "" {
-			branch = "\u2014"
-		}
-
-		size := fmt.Sprintf("%.1f MB", s.FileSizeMB)
 
 		bar := "\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591"
 		pct := "\u2014"
@@ -395,17 +394,17 @@ func (m sessionsModel) View() string {
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			pctVal := s.ContextStats.ContextPct
 			if s.ContextStats.CompactionCount > 0 {
-				bar = contextBarStrCompacted(pctVal, barW)
+				bar = contextBarStrCompacted(pctVal, cols.barW)
 				compactLabel = styleCompacted.Render(fmt.Sprintf(" %dx", s.ContextStats.CompactionCount))
 			} else {
-				bar = contextBarStr(pctVal, barW)
+				bar = contextBarStr(pctVal, cols.barW)
 			}
 			pct = fmt.Sprintf("%.1f%%", pctVal)
 		}
 
 		mod := timeAgoStr(s.Modified)
 
-		costStr := "—"
+		costStr := "\u2014"
 		costAlert := false
 		if s.ContextStats != nil && s.ContextStats.EstimatedCost > 0 {
 			costStr = analyzer.FormatCost(s.ContextStats.EstimatedCost)
@@ -415,16 +414,10 @@ func (m sessionsModel) View() string {
 		}
 
 		// Signal health grade
-		sigStr := "—"
+		sigStr := "\u2014"
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			grade := analyzer.GradeFromSignalPercent(s.ContextStats.SignalPercent)
 			sigStr = gradeStyle(grade).Render(grade)
-		}
-
-		// Client type indicator
-		clientStr := ""
-		if s.ContextStats != nil && s.ContextStats.ClientType == "desktop" {
-			clientStr = styleMuted.Render(" DTP")
 		}
 
 		// Cost alert indicator
@@ -433,30 +426,39 @@ func (m sessionsModel) View() string {
 			costAlertStr = lipgloss.NewStyle().Foreground(colorRed).Render("!!")
 		}
 
-		line := fmt.Sprintf("%s%-*s %-*s %-*s %-*s %*d %*s %s %*s%s %*s%s %*s%s %*s",
-			prefix,
-			projW, project,
-			slugW, slug,
-			idW, shortID,
-			branchW, branch,
-			msgsW, s.MessageCount,
-			sizeW, size,
-			bar,
-			pctW, pct,
-			compactLabel,
-			sigW, sigStr,
-			clientStr,
-			costW, costStr,
-			costAlertStr,
-			modW, mod,
-		)
+		var line strings.Builder
+		line.WriteString(prefix)
+		line.WriteString(fmt.Sprintf("%-*s ", cols.projW, project))
+		line.WriteString(fmt.Sprintf("%-*s ", cols.slugW, slug))
+		line.WriteString(fmt.Sprintf("%-*s ", cols.idW, shortID))
+		if cols.showBranch {
+			branch := truncateStr(s.GitBranch, cols.branchW)
+			if branch == "" {
+				branch = "\u2014"
+			}
+			line.WriteString(fmt.Sprintf("%-*s ", cols.branchW, branch))
+		}
+		line.WriteString(fmt.Sprintf("%*d ", cols.msgsW, s.MessageCount))
+		if cols.showSize {
+			size := fmt.Sprintf("%.1f MB", s.FileSizeMB)
+			line.WriteString(fmt.Sprintf("%*s ", cols.sizeW, size))
+		}
+		line.WriteString(bar)
+		line.WriteString(fmt.Sprintf(" %*s", cols.pctW, pct))
+		line.WriteString(compactLabel)
+		if !cols.mergeSignal {
+			line.WriteString(fmt.Sprintf(" %*s", cols.sigW, sigStr))
+		}
+		line.WriteString(fmt.Sprintf(" %*s%s", cols.costW, costStr, costAlertStr))
+		line.WriteString(fmt.Sprintf(" %*s", cols.modW, mod))
 
+		lineStr := line.String()
 		if isSelected {
-			b.WriteString(styleSelected.Render(line))
+			b.WriteString(styleSelected.Render(lineStr))
 		} else if s.IsActive() {
-			b.WriteString(styleActive.Render(line))
+			b.WriteString(styleActive.Render(lineStr))
 		} else {
-			b.WriteString(line)
+			b.WriteString(lineStr)
 		}
 		b.WriteString("\n")
 	}
@@ -507,6 +509,115 @@ func contextBarStrCompacted(pct float64, width int) string {
 	filledStr := lipgloss.NewStyle().Foreground(color).Render(strings.Repeat("\u2588", filled))
 	emptyStr := styleMuted.Render(strings.Repeat("\u2591", width-filled))
 	return filledStr + emptyStr
+}
+
+// columnLayout holds computed column widths for the session browser.
+type columnLayout struct {
+	projW       int
+	slugW       int
+	idW         int
+	branchW     int
+	showBranch  bool
+	msgsW       int
+	sizeW       int
+	showSize    bool
+	barW        int
+	pctW        int
+	sigW        int
+	mergeSignal bool // true when signal is shown as context bar color only
+	costW       int
+	modW        int
+}
+
+// computeColumns calculates responsive column widths based on terminal width.
+func computeColumns(width int, hasBranch bool) columnLayout {
+	c := columnLayout{
+		idW:   8,
+		msgsW: 6,
+		barW:  10,
+		pctW:  6,
+		sigW:  3,
+		costW: 8,
+	}
+
+	// Fixed overhead: prefix (4) + spaces between columns
+	const prefixW = 4
+
+	switch {
+	case width > 160: // Wide
+		c.showBranch = hasBranch
+		c.showSize = true
+		c.mergeSignal = false
+		c.sizeW = 8
+		c.modW = 8
+		if hasBranch {
+			c.branchW = 12
+		}
+		// Distribute remaining to project + slug
+		fixed := prefixW + c.idW + c.msgsW + c.sizeW + c.barW + c.pctW + c.sigW + c.costW + c.modW + 10 // spaces
+		if c.showBranch {
+			fixed += c.branchW + 1
+		}
+		remaining := width - fixed
+		if remaining < 20 {
+			remaining = 20
+		}
+		c.projW = remaining * 45 / 100
+		c.slugW = remaining - c.projW
+
+	case width >= 120: // Medium
+		c.showBranch = false
+		c.showSize = false
+		c.mergeSignal = false
+		c.modW = 6
+		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + c.sigW + c.costW + c.modW + 8
+		remaining := width - fixed
+		if remaining < 20 {
+			remaining = 20
+		}
+		c.projW = remaining * 45 / 100
+		c.slugW = remaining - c.projW
+
+	default: // Narrow (<120)
+		c.showBranch = false
+		c.showSize = false
+		c.mergeSignal = true
+		c.modW = 5
+		c.costW = 7
+		c.pctW = 5
+		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + c.costW + c.modW + 7
+		remaining := width - fixed
+		if remaining < 16 {
+			remaining = 16
+		}
+		c.projW = remaining * 45 / 100
+		c.slugW = remaining - c.projW
+	}
+
+	// Clamp minimums
+	if c.projW < 8 {
+		c.projW = 8
+	}
+	if c.slugW < 8 {
+		c.slugW = 8
+	}
+
+	return c
+}
+
+// middleTruncate truncates a string from the middle with an ellipsis.
+// "shimmying-twirling-charm" → "shimmying…charm"
+func middleTruncate(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	if maxLen <= 3 {
+		return s[:maxLen]
+	}
+	// Split: keep more from start than end for readability
+	half := (maxLen - 1) / 2 // -1 for the "…"
+	endLen := maxLen - 1 - half
+	return s[:half] + "\u2026" + s[len(s)-endLen:]
 }
 
 func truncateStr(s string, maxLen int) string {
