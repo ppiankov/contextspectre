@@ -31,6 +31,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Compaction archaeology and epoch timeline
 - Scope drift detection with dollar-cost quantification
 - Ghost context detection (stale compaction summaries referencing modified files)
+- Per-model cost breakdown (Opus/Sonnet/Haiku) with correct per-model pricing
 - Cost velocity ($/hour) and configurable cost alert thresholds
 - Watch mode with live context polling, compaction alerts, and color transitions
 

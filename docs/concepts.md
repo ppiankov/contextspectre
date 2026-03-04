@@ -46,6 +46,7 @@
 | **Expert hygiene mode** | Opt-in auto-clean for safe tiers (1-3: progress, snapshots, stale reads). Triggers on user actions only (stats, TUI refresh, watch poll), never in background. Everything tier 4+ remains manual. Planned (Phase 4). |
 | **Budget protection** | Combined risk assessment from compaction proximity, noise ratio, and weekly budget remaining. Produces ranked action recommendations with cost-efficiency estimates. Planned (Phase 4). |
 | **Cooldown** | Claude Code's weekly usage limit enforcement. When the limit is reached, a cooldown period prevents further usage until the billing week resets. Invisible to users until they hit the wall. |
+| **Per-model cost breakdown** | Cost attribution split by model (Opus, Sonnet, Haiku). Claude Code switches models mid-session; each model has different pricing. Primary model = highest cost contributor, not first-seen. |
 | **Burn rate** | Dollars per hour (cost velocity) for the current session. Displayed in stats and summary output. Used to project time-to-limit and cost-to-compaction. |
 | **Cost alert threshold** | A configurable dollar amount per session. When session cost exceeds the threshold, stats/summary show a warning and the TUI marks the session with a red `!!` indicator. Set via `contextspectre config set cost-alert <amount>`. |
 | **Status line telemetry** | Fast-path contextspectre output designed for Claude Code's status line hook. Sub-200ms via mtime-based caching. Injects noise/signal/cadence/savings into the live status bar. Planned (Phase 4). |
@@ -63,9 +64,9 @@ Unmanaged context decays along three axes simultaneously:
 
 | Axis | What decays | Symptoms | ContextSpectre instruments |
 |------|-------------|----------|---------------------------|
-| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, predictive cleanup, turn-gain estimates, savings attribution (planned), weekly telemetry (planned), budget protection (planned), continuity cost (planned) |
+| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, per-model cost breakdown, predictive cleanup, turn-gain estimates, savings attribution, weekly telemetry (planned), budget protection (planned), continuity cost (planned) |
 | **Reasoning** | Quality | Reasoning contamination (stale scaffolding biasing responses), context spoil (summaries of summaries losing specificity), compaction loss (lossy compression erasing nuance), ghost context (compaction summaries referencing deleted code) | Vector health score, reasoning phase markers, commit points, ghost detection, reasoning entropy (planned), session timeline (planned), decision lineage (planned) |
-| **Structural** | Organization | Namespace fragmentation (same project, split sessions), context partitioning drift (paths diverge from projects), scope drift (tool calls leaving project directory), sidechains (orphaned branches) | Scope drift detection, sidechain repair (planned), federated project identity (planned), reasoning graph (planned), conflict detection (planned) |
+| **Structural** | Organization | Namespace fragmentation (same project, split sessions), context partitioning drift (paths diverge from projects), scope drift (tool calls leaving project directory), sidechains (orphaned branches) | Scope drift detection, federated project identity, sidechain repair (planned), reasoning graph (planned), conflict detection (planned) |
 
 The informal terms — **token bleed** and **context spoil** — describe the same decay in visceral shorthand. Token bleed is the economic axis felt as waste. Context spoil is the reasoning axis felt as drift. Both are continuous, invisible, and compound over time.
 
