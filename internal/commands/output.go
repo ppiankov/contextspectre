@@ -282,6 +282,29 @@ type CleanSummaryJSON struct {
 	BytesSaved      int64 `json:"bytes_saved"`
 }
 
+// ActiveSessionJSON is the JSON output for a single active session.
+type ActiveSessionJSON struct {
+	ID              string  `json:"id"`
+	Slug            string  `json:"slug,omitempty"`
+	Project         string  `json:"project"`
+	ContextPercent  float64 `json:"context_percent"`
+	SignalGrade     string  `json:"signal_grade"`
+	SignalPercent   int     `json:"signal_percent"`
+	EstimatedCost   float64 `json:"estimated_cost"`
+	CleanableTokens int     `json:"cleanable_tokens"`
+	Model           string  `json:"model,omitempty"`
+	LastModified    string  `json:"last_modified"`
+	SecondsAgo      int     `json:"seconds_ago"`
+}
+
+// ActiveOutput is the JSON output for the active command.
+type ActiveOutput struct {
+	Active        []ActiveSessionJSON `json:"active"`
+	Total         int                 `json:"total"`
+	Healthy       int                 `json:"healthy"`
+	NeedsCleaning int                 `json:"needs_cleaning"`
+}
+
 // isJSON returns true if the output format is JSON.
 func isJSON() bool {
 	return outputFormat == "json"
