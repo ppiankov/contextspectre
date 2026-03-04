@@ -453,10 +453,11 @@ func (m sessionsModel) View() string {
 		b.WriteString("\n")
 	}
 
-	// Detect if any session has a branch
+	// Detect if any session has a non-trivial branch.
+	// Check ALL sessions (not just filtered) so column doesn't jump during search.
 	hasBranch := false
-	for _, s := range src {
-		if s.GitBranch != "" {
+	for _, s := range m.sessions {
+		if s.GitBranch != "" && strings.TrimSpace(s.GitBranch) != "" {
 			hasBranch = true
 			break
 		}
@@ -489,6 +490,7 @@ func (m sessionsModel) View() string {
 	}
 	fmt.Fprintf(&hdr, "%-*s ", cols.barW, ctxLabel)
 	fmt.Fprintf(&hdr, "%*s ", cols.pctW, "")
+	hdr.WriteString("     ") // compaction count column (4 chars + space)
 	if !cols.mergeSignal {
 		sigLabel := "Sig"
 		if m.sortBy == sortSignal {
@@ -552,16 +554,16 @@ func (m sessionsModel) View() string {
 
 		bar := "\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591\u2591"
 		pct := "\u2014"
-		compactLabel := ""
+		compactLabel := "    " // fixed 4-char field for alignment
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			pctVal := s.ContextStats.ContextPct
 			if s.ContextStats.CompactionCount > 0 {
 				bar = contextBarStrCompacted(pctVal, cols.barW)
-				compactLabel = styleCompacted.Render(fmt.Sprintf(" %dx", s.ContextStats.CompactionCount))
+				compactLabel = styleCompacted.Render(fmt.Sprintf("%3dx", s.ContextStats.CompactionCount))
 			} else {
 				bar = contextBarStr(pctVal, cols.barW)
 			}
-			pct = fmt.Sprintf("%.1f%%", pctVal)
+			pct = fmt.Sprintf("%5.1f%%", pctVal)
 		}
 
 		mod := timeAgoStr(s.Modified)
@@ -607,7 +609,7 @@ func (m sessionsModel) View() string {
 		}
 		line.WriteString(bar)
 		fmt.Fprintf(&line, " %*s", cols.pctW, pct)
-		line.WriteString(compactLabel)
+		fmt.Fprintf(&line, " %s", compactLabel)
 		if !cols.mergeSignal {
 			fmt.Fprintf(&line, " %*s", cols.sigW, sigStr)
 		}
@@ -712,6 +714,8 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 	// Fixed overhead: prefix (4) + spaces between columns
 	const prefixW = 4
 
+	const compactW = 5 // fixed compaction count column (4 chars + space)
+
 	switch {
 	case width > 160: // Wide
 		c.showBranch = hasBranch
@@ -723,7 +727,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 			c.branchW = 12
 		}
 		// Distribute remaining to project + slug
-		fixed := prefixW + c.idW + c.msgsW + c.sizeW + c.barW + c.pctW + c.sigW + c.costW + c.modW + 10 // spaces
+		fixed := prefixW + c.idW + c.msgsW + c.sizeW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 10 // spaces
 		if c.showBranch {
 			fixed += c.branchW + 1
 		}
@@ -739,7 +743,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		c.showSize = false
 		c.mergeSignal = false
 		c.modW = 6
-		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + c.sigW + c.costW + c.modW + 8
+		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 8
 		remaining := width - fixed
 		if remaining < 20 {
 			remaining = 20
@@ -754,7 +758,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		c.modW = 5
 		c.costW = 7
 		c.pctW = 5
-		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + c.costW + c.modW + 7
+		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.costW + c.modW + 7
 		remaining := width - fixed
 		if remaining < 16 {
 			remaining = 16
