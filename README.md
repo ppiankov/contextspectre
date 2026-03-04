@@ -44,8 +44,11 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Mandatory backup with one-key undo
 
 **Navigation**
-- Session browser with responsive columns and 3 width breakpoints
+- Session browser with responsive columns, sort cycling, and 3 width breakpoints
 - Tabbed detail view (Overview, Messages, Cleanup, Ghost panels)
+- Vim-style navigation (G, gg, Ctrl+d/u/f/b, Space, H/M/L) across all panels
+- In-panel search (`/`) with match cycling (n/N) and highlight
+- Help overlay (`?`) with per-panel keybinding reference
 - Message browser with type/cost/preview per entry
 - Session content search across user text, tool use, and tool results
 - Conversation branches by compaction boundaries
