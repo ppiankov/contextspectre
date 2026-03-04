@@ -31,6 +31,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Compaction archaeology and epoch timeline
 - Scope drift detection with dollar-cost quantification
 - Ghost context detection (stale compaction summaries referencing modified files)
+- Cost velocity ($/hour) and configurable cost alert thresholds
 - Watch mode with live context polling, compaction alerts, and color transitions
 
 **Cleanup**
@@ -138,7 +139,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline |
+| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, cost alerts ✓, Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline |
 | 5. Reasoning memory | Planned | Project reasoning graph, decision lineage, conflict detection, project memory synthesis, CLAUDE.md sync |
 
 ## Known limitations
@@ -156,7 +157,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | Document | Contents |
 |----------|----------|
 | [CLI & TUI Reference](docs/commands.md) | All commands, flags, keybindings, cleanup tiers |
-| [Concepts & Glossary](docs/concepts.md) | Full 30-term glossary, reasoning phases |
+| [Concepts & Glossary](docs/concepts.md) | Full glossary, reasoning phases |
 | [Architecture](docs/architecture.md) | How it works, safety model, design decisions |
 | [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
 | [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
