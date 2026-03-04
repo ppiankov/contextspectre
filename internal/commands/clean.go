@@ -394,6 +394,11 @@ func runCleanActive() error {
 			formatTokens(totalTokens), cleaned)
 	}
 
+	// Record analytics snapshots for cleaned sessions.
+	for _, s := range active {
+		recordAnalyticsSnapshot(s.FullPath)
+	}
+
 	return nil
 }
 
@@ -403,6 +408,16 @@ func runCleanActiveWatch() error {
 		return fmt.Errorf("invalid --since value %q: %w", cleanActiveSince, err)
 	}
 
+	// If --interval is explicitly set, use fixed-interval mode.
+	// Otherwise, use smart mtime-based polling.
+	if cleanWatchInterval > 0 {
+		return runFixedIntervalWatch(sinceDuration)
+	}
+	return runSmartWatch(sinceDuration)
+}
+
+// runFixedIntervalWatch uses a fixed ticker interval (legacy behavior).
+func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	interval := time.Duration(cleanWatchInterval) * time.Second
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -410,6 +425,7 @@ func runCleanActiveWatch() error {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, os.Interrupt)
 
+	startTime := time.Now()
 	fmt.Printf("Watching active sessions (interval: %ds, Ctrl+C to quit)\n", cleanWatchInterval)
 
 	cumulativeTokens := 0
@@ -417,32 +433,169 @@ func runCleanActiveWatch() error {
 	cycles := 0
 
 	// Run first cycle immediately.
-	ct, cs := runCleanActiveCycle(sinceDuration)
+	ct, cs := runCleanActiveCycleDiscover(sinceDuration)
 	cumulativeTokens += ct
 	if cs > 0 {
 		cumulativeSessions += cs
 	}
 	cycles++
+	printCumulative(cumulativeTokens, cycles, startTime)
 
 	for {
 		select {
 		case <-ticker.C:
-			ct, cs := runCleanActiveCycle(sinceDuration)
+			ct, cs := runCleanActiveCycleDiscover(sinceDuration)
 			cumulativeTokens += ct
 			if cs > 0 {
 				cumulativeSessions += cs
 			}
 			cycles++
+			printCumulative(cumulativeTokens, cycles, startTime)
 		case <-sigCh:
-			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions.\n",
-				cycles, formatTokens(cumulativeTokens), cumulativeSessions)
+			elapsed := time.Since(startTime)
+			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions in %s.\n",
+				cycles, formatTokens(cumulativeTokens), cumulativeSessions,
+				formatDuration(elapsed))
+			recordWatchSnapshots(sinceDuration)
 			return nil
 		}
 	}
 }
 
-// runCleanActiveCycle runs one cleanup cycle. Returns tokens saved and sessions cleaned.
-func runCleanActiveCycle(sinceDuration time.Duration) (int, int) {
+const smartPollInterval = 5 * time.Second
+const sessionCooldown = 30 * time.Second
+
+// runSmartWatch polls session mtimes every 5s and only cleans changed sessions.
+func runSmartWatch(sinceDuration time.Duration) error {
+	ticker := time.NewTicker(smartPollInterval)
+	defer ticker.Stop()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt)
+
+	startTime := time.Now()
+	fmt.Printf("Watching active sessions (smart mode, Ctrl+C to quit)\n")
+
+	lastMtime := make(map[string]time.Time) // path → last known mtime
+	lastClean := make(map[string]time.Time) // path → last cleanup time
+	cumulativeTokens := 0
+	cumulativeSessions := 0
+	cycles := 0
+
+	// Run first cycle immediately on all active sessions.
+	ct, cs := runCleanActiveCycleDiscover(sinceDuration)
+	cumulativeTokens += ct
+	if cs > 0 {
+		cumulativeSessions += cs
+	}
+	cycles++
+	// Seed mtime map from current active sessions.
+	seedMtimeMap(sinceDuration, lastMtime, lastClean)
+	printCumulative(cumulativeTokens, cycles, startTime)
+
+	for {
+		select {
+		case <-ticker.C:
+			changed := findChangedSessions(sinceDuration, lastMtime, lastClean)
+			if len(changed) == 0 {
+				continue
+			}
+
+			ts := time.Now().Format("15:04:05")
+			fmt.Printf("[%s] Cleaning %d changed sessions...\n", ts, len(changed))
+			_, totalTokens, cleaned := cleanActiveSessions(changed)
+
+			// Update maps.
+			now := time.Now()
+			for _, s := range changed {
+				if fi, err := os.Stat(s.FullPath); err == nil {
+					lastMtime[s.FullPath] = fi.ModTime()
+				}
+				lastClean[s.FullPath] = now
+			}
+
+			cumulativeTokens += totalTokens
+			if cleaned > 0 {
+				cumulativeSessions += cleaned
+				fmt.Printf("[%s] %s tokens saved across %d sessions\n",
+					ts, formatTokens(totalTokens), cleaned)
+			} else {
+				fmt.Printf("[%s] All clean\n", ts)
+			}
+			cycles++
+			printCumulative(cumulativeTokens, cycles, startTime)
+		case <-sigCh:
+			elapsed := time.Since(startTime)
+			fmt.Printf("\nStopped. %d cycles, %s tokens saved across %d sessions in %s.\n",
+				cycles, formatTokens(cumulativeTokens), cumulativeSessions,
+				formatDuration(elapsed))
+			recordWatchSnapshots(sinceDuration)
+			return nil
+		}
+	}
+}
+
+// seedMtimeMap populates the mtime tracking map from current active sessions.
+func seedMtimeMap(sinceDuration time.Duration, lastMtime, lastClean map[string]time.Time) {
+	active, err := discoverActiveSessions(sinceDuration)
+	if err != nil {
+		return
+	}
+	now := time.Now()
+	for _, s := range active {
+		lastMtime[s.FullPath] = s.Modified
+		lastClean[s.FullPath] = now
+	}
+}
+
+// findChangedSessions returns active sessions whose mtime changed since last check
+// and whose cooldown period has expired.
+func findChangedSessions(sinceDuration time.Duration, lastMtime, lastClean map[string]time.Time) []session.Info {
+	active, err := discoverActiveSessions(sinceDuration)
+	if err != nil {
+		slog.Warn("Discovery failed", "error", err)
+		return nil
+	}
+
+	now := time.Now()
+	var changed []session.Info
+	for _, s := range active {
+		prevMtime, seen := lastMtime[s.FullPath]
+		if !seen || s.Modified.After(prevMtime) {
+			// Check cooldown.
+			if lc, ok := lastClean[s.FullPath]; ok && now.Sub(lc) < sessionCooldown {
+				continue
+			}
+			changed = append(changed, s)
+		}
+	}
+	return changed
+}
+
+// printCumulative prints the inline cumulative stats if there are any savings.
+func printCumulative(totalTokens, cycles int, startTime time.Time) {
+	if totalTokens <= 0 {
+		return
+	}
+	elapsed := time.Since(startTime)
+	fmt.Printf("           Cumulative: %s tokens saved (%d cycles, %s)\n",
+		formatTokens(totalTokens), cycles, formatDuration(elapsed))
+}
+
+// recordWatchSnapshots records analytics snapshots for all active sessions on watch exit.
+func recordWatchSnapshots(sinceDuration time.Duration) {
+	active, err := discoverActiveSessions(sinceDuration)
+	if err != nil {
+		return
+	}
+	for _, s := range active {
+		recordAnalyticsSnapshot(s.FullPath)
+	}
+}
+
+// runCleanActiveCycleDiscover discovers active sessions and cleans them.
+// Returns tokens saved and sessions cleaned.
+func runCleanActiveCycleDiscover(sinceDuration time.Duration) (int, int) {
 	active, err := discoverActiveSessions(sinceDuration)
 	if err != nil {
 		slog.Warn("Discovery failed", "error", err)
@@ -784,6 +937,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanActiveFlag, "active", false, "Clean all active sessions (requires --all)")
 	cleanCmd.Flags().StringVar(&cleanActiveSince, "since", "10m", "Activity window for --active (e.g. 10m, 1h)")
 	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active --all)")
-	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 60, "Watch interval in seconds")
+	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
 	rootCmd.AddCommand(cleanCmd)
 }
