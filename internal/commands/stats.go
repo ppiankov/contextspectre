@@ -233,6 +233,35 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Println()
 
+		// Per-model breakdown (only if multiple models used)
+		if len(stats.Cost.PerModel) > 1 {
+			fmt.Println("Model breakdown:")
+			// Sort by cost descending
+			type modelLine struct {
+				model string
+				name  string
+				turns int
+				cost  float64
+			}
+			var mlines []modelLine
+			for model, pm := range stats.Cost.PerModel {
+				name := analyzer.PricingForModel(model).Name
+				if name == "" {
+					name = model
+				}
+				mlines = append(mlines, modelLine{model, name, pm.TurnCount, pm.TotalCost})
+			}
+			sort.Slice(mlines, func(i, j int) bool {
+				return mlines[i].cost > mlines[j].cost
+			})
+			for _, ml := range mlines {
+				pct := analyzer.CostPercent(ml.cost, stats.Cost.TotalCost)
+				fmt.Printf("  %-18s %3d turns   %s  (%.0f%%)\n",
+					ml.name, ml.turns, analyzer.FormatCost(ml.cost), pct)
+			}
+			fmt.Println()
+		}
+
 		// Epoch costs summary
 		if len(stats.EpochCosts) > 1 {
 			var mostExpIdx, cheapestIdx int
