@@ -42,6 +42,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 **Navigation**
 - Session browser with search, context bars, active detection
 - Message browser with type/cost/preview per entry
+- Session content search across user text, tool use, and tool results
 - Conversation branches by compaction boundaries
 - Reasoning phase markers (exploratory/decision/operational)
 - Keep markers and commit points for intent labeling
@@ -54,7 +55,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - CWD-based session targeting
 - Federated project identity (project aliases across directories)
 
-**Planned:** Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, session search, watch mode, sidechain repair, session timeline, reasoning entropy score, project reasoning graph, decision lineage, conflict detection, project memory synthesis. See [Roadmap](#roadmap).
+**Planned:** Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, watch mode, sidechain repair, session timeline, reasoning entropy score, project reasoning graph, decision lineage, conflict detection, project memory synthesis. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -136,7 +137,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Operational control | In progress | Federated project identity ✓, Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline, session search, watch mode |
+| 4. Operational control | In progress | Federated project identity ✓, session search ✓, Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline, watch mode |
 | 5. Reasoning memory | Planned | Project reasoning graph, decision lineage, conflict detection, project memory synthesis, CLAUDE.md sync |
 
 ## Known limitations
