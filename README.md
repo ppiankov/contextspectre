@@ -30,6 +30,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Vector health score (A-F signal-to-noise grade)
 - Compaction archaeology and epoch timeline
 - Scope drift detection with dollar-cost quantification
+- Ghost context detection (stale compaction summaries referencing modified files)
 
 **Cleanup**
 - 9 cleanup operations across 7 safety tiers
@@ -52,7 +53,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Chain repair for parentUuid integrity
 - CWD-based session targeting
 
-**Planned:** Branch export (separation surgery), ghost context detection, cross-session context distillation, context unification, vector snapshot. See [Roadmap](#roadmap).
+**Planned:** Branch export (separation surgery), cross-session context distillation, context unification, vector snapshot. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -133,9 +134,9 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 |-------|--------|---------|
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
-| 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health |
+| 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
 | 4. Selective continuity | Next | Branch export, separation surgery, session distillation |
-| 5. Context distillation | Planned | Cross-session unification, vector snapshot, ghost context |
+| 5. Context distillation | Planned | Cross-session unification, vector snapshot |
 
 ## Known limitations
 

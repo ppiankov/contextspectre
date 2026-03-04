@@ -26,7 +26,7 @@
 | **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. Planned (Phase 5). |
 | **Context distillation** | Increasing the signal-to-noise ratio — not making sessions smaller, but making what remains more useful. |
 | **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. Planned (Phase 5). |
-| **Ghost context** | Stale compaction summaries that describe code or decisions that no longer exist. Planned detection (Phase 5). |
+| **Ghost context** | Stale compaction summaries that describe code or decisions that no longer exist. Detected by comparing files referenced in compaction summaries against current state. |
 | **Live cleanup** | Cleaning an active session between Claude's turns. Uses mtime-based race detection to avoid corrupting a session Claude is writing to. |
 | **Tier (1-7)** | Safety classification for cleanup operations. Tier 1 (progress removal) is always safe. Tier 7 (tangent removal) requires the session to be inactive. See [Commands](commands.md#cleanup-operations). |
 | **Conversation branch** | A segment of a session between compaction boundaries or significant time gaps. The navigable unit within a long session. |
