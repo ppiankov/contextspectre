@@ -174,17 +174,15 @@ func runDistill(cmd *cobra.Command, args []string) error {
 }
 
 // filterDistillSessions filters sessions by project name or CWD.
-func filterDistillSessions(sessions []session.Info, project string, useCWD bool) []session.Info {
-	var result []session.Info
-
+func filterDistillSessions(sessions []session.Info, projectFilter string, useCWD bool) []session.Info {
 	if useCWD {
 		cwd, err := os.Getwd()
 		if err != nil {
 			return nil
 		}
 		encodedDir := session.EncodePath(cwd)
+		var result []session.Info
 		for _, s := range sessions {
-			// Match by encoded project dir in the full path
 			if strings.Contains(s.FullPath, encodedDir) {
 				result = append(result, s)
 			}
@@ -192,15 +190,7 @@ func filterDistillSessions(sessions []session.Info, project string, useCWD bool)
 		return result
 	}
 
-	// Match by project name substring
-	project = strings.ToLower(project)
-	for _, s := range sessions {
-		if strings.Contains(strings.ToLower(s.ProjectName), project) ||
-			strings.Contains(strings.ToLower(s.ProjectPath), project) {
-			result = append(result, s)
-		}
-	}
-	return result
+	return resolveProjectSessions(sessions, projectFilter, resolveClaudeDir())
 }
 
 // printDistillTopicList prints a numbered topic list to stdout.

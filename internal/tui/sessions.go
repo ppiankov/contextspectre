@@ -29,6 +29,7 @@ type sessionsModel struct {
 	searching     bool
 	searchQuery   string
 	filtered      []session.Info
+	aliasLookup   map[string]string // encoded path prefix → alias name
 	width, height int
 	err           error
 }
@@ -37,9 +38,10 @@ type openSessionMsg struct {
 	info session.Info
 }
 
-func newSessionsModel(sessions []session.Info) sessionsModel {
+func newSessionsModel(sessions []session.Info, aliasLookup map[string]string) sessionsModel {
 	m := sessionsModel{
-		sessions: sessions,
+		sessions:    sessions,
+		aliasLookup: aliasLookup,
 	}
 	m.buildDisplayRows(sessions)
 	m.cursor = m.nextSelectableRow(0)
@@ -171,10 +173,12 @@ func (m *sessionsModel) filterSessions() {
 	} else {
 		m.filtered = nil
 		for _, s := range m.sessions {
+			aliasName := resolveAliasName(s.FullPath, m.aliasLookup)
 			if strings.Contains(strings.ToLower(s.ProjectName), q) ||
 				strings.Contains(strings.ToLower(s.GitBranch), q) ||
 				strings.Contains(strings.ToLower(s.SessionID), q) ||
-				strings.Contains(strings.ToLower(s.Slug), q) {
+				strings.Contains(strings.ToLower(s.Slug), q) ||
+				(aliasName != "" && strings.Contains(strings.ToLower(aliasName), q)) {
 				m.filtered = append(m.filtered, s)
 			}
 		}
@@ -182,6 +186,15 @@ func (m *sessionsModel) filterSessions() {
 	m.buildDisplayRows(m.filtered)
 	m.cursor = m.nextSelectableRow(0)
 	m.scrollOffset = 0
+}
+
+// projectGroupName returns the display group name for a session.
+// If the session matches an alias, returns the alias name; otherwise the project name.
+func (m sessionsModel) projectGroupName(s session.Info) string {
+	if name := resolveAliasName(s.FullPath, m.aliasLookup); name != "" {
+		return name
+	}
+	return s.ProjectName
 }
 
 // buildDisplayRows builds grouped display rows from the given sessions.
@@ -200,11 +213,12 @@ func (m *sessionsModel) buildDisplayRows(sessions []session.Info) {
 	groupMap := make(map[string]*group)
 	var groupNames []string
 	for i, s := range sessions {
-		g, ok := groupMap[s.ProjectName]
+		gname := m.projectGroupName(s)
+		g, ok := groupMap[gname]
 		if !ok {
-			g = &group{name: s.ProjectName}
-			groupMap[s.ProjectName] = g
-			groupNames = append(groupNames, s.ProjectName)
+			g = &group{name: gname}
+			groupMap[gname] = g
+			groupNames = append(groupNames, gname)
 		}
 		g.indices = append(g.indices, i)
 		if g.newest.IsZero() || s.Modified.After(g.newest) {
