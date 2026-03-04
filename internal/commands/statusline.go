@@ -76,6 +76,8 @@ func runStatusLine(_ *cobra.Command, _ []string) error {
 		writeStatusLineCache(sessionID, info.ModTime().UnixNano(), data)
 	}
 
+	tryExpertClean(path)
+
 	return formatStatusLine(data)
 }
 

@@ -53,8 +53,17 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("cost-alert must be >= 0 (0 disables)")
 		}
 		cfg.CostAlertThreshold = v
+	case "expert-mode":
+		switch value {
+		case "true", "1", "on":
+			cfg.ExpertMode = true
+		case "false", "0", "off":
+			cfg.ExpertMode = false
+		default:
+			return fmt.Errorf("invalid expert-mode value: %s (use true/false)", value)
+		}
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode)", key)
 	}
 
 	if err := project.Save(dir, cfg); err != nil {
@@ -84,8 +93,14 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Printf("cost-alert: %s\n", analyzer.FormatCost(cfg.CostAlertThreshold))
 		}
+	case "expert-mode":
+		if cfg.ExpertMode {
+			fmt.Println("expert-mode: enabled")
+		} else {
+			fmt.Println("expert-mode: disabled")
+		}
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode)", key)
 	}
 	return nil
 }
@@ -107,17 +122,24 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Println("  cost-alert: disabled")
 	}
+	if cfg.ExpertMode {
+		fmt.Println("  expert-mode: enabled")
+	} else {
+		fmt.Println("  expert-mode: disabled")
+	}
 	return nil
 }
 
 // ConfigJSON is the JSON output for the config list command.
 type ConfigJSON struct {
 	CostAlertThreshold float64 `json:"cost_alert_threshold"`
+	ExpertMode         bool    `json:"expert_mode"`
 }
 
 func buildConfigJSON(cfg *project.Config) *ConfigJSON {
 	return &ConfigJSON{
 		CostAlertThreshold: cfg.CostAlertThreshold,
+		ExpertMode:         cfg.ExpertMode,
 	}
 }
 

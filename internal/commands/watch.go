@@ -50,6 +50,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		select {
 		case <-ticker.C:
 			prevTokens = displayWatchLine(path, prevTokens, &alerted)
+			tryExpertClean(path)
 		case <-sigCh:
 			fmt.Println()
 			return nil
