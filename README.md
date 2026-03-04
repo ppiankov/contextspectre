@@ -53,7 +53,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Chain repair for parentUuid integrity
 - CWD-based session targeting
 
-**Planned:** Branch export (separation surgery), cross-session context distillation, context unification, vector snapshot. See [Roadmap](#roadmap).
+**Planned:** Branch export (separation surgery), session content search, watch mode, post-session summary, garbage collection, federated project identity, cross-session distillation, vector snapshot, CLAUDE.md sync. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -135,8 +135,8 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Selective continuity | Next | Branch export, separation surgery, session distillation |
-| 5. Context distillation | Planned | Cross-session unification, vector snapshot |
+| 4. Selective continuity | Next | Branch export, separation surgery, session search, watch mode, post-session summary, garbage collection |
+| 5. Context distillation | Planned | Federated project identity, cross-session unification, vector snapshot, CLAUDE.md sync |
 
 ## Known limitations
 
@@ -153,7 +153,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | Document | Contents |
 |----------|----------|
 | [CLI & TUI Reference](docs/commands.md) | All commands, flags, keybindings, cleanup tiers |
-| [Concepts & Glossary](docs/concepts.md) | Full 26-term glossary, reasoning phases |
+| [Concepts & Glossary](docs/concepts.md) | Full 30-term glossary, reasoning phases |
 | [Architecture](docs/architecture.md) | How it works, safety model, design decisions |
 | [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
 | [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
