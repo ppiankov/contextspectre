@@ -124,7 +124,7 @@ func TestSessionsModel_Navigation(t *testing.T) {
 		{SessionID: "s2", ProjectName: "proj2", Modified: time.Now().Add(-2 * time.Hour)},
 		{SessionID: "s3", ProjectName: "proj3", Modified: time.Now().Add(-3 * time.Hour)},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -167,7 +167,7 @@ func TestSessionsModel_NavigationSameProject(t *testing.T) {
 		{SessionID: "s1", ProjectName: "proj1", Modified: time.Now().Add(-1 * time.Hour)},
 		{SessionID: "s2", ProjectName: "proj1", Modified: time.Now().Add(-2 * time.Hour)},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -192,7 +192,7 @@ func TestSessionsModel_View(t *testing.T) {
 	sessions := []session.Info{
 		{SessionID: "s1", ProjectName: "proj1", MessageCount: 10, FileSizeMB: 1.5},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -210,7 +210,7 @@ func TestSessionsModel_ViewTitle(t *testing.T) {
 		{SessionID: "s1", ProjectName: "proj1"},
 		{SessionID: "s2", ProjectName: "proj2"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -229,7 +229,7 @@ func TestSessionsModel_ViewGroupHeaders(t *testing.T) {
 		{SessionID: "s2", ProjectName: "myproject", Modified: time.Now().Add(-1 * time.Hour)},
 		{SessionID: "s3", ProjectName: "other", Modified: time.Now().Add(-2 * time.Hour)},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -243,7 +243,7 @@ func TestSessionsModel_ViewGroupHeaders(t *testing.T) {
 }
 
 func TestSessionsModel_EmptyView(t *testing.T) {
-	m := newSessionsModel(nil)
+	m := newSessionsModel(nil, nil)
 	m.width = 120
 	m.height = 40
 
@@ -257,7 +257,7 @@ func TestSessionsModel_ZeroWidth_NoPanic(t *testing.T) {
 	sessions := []session.Info{
 		{SessionID: "s1", ProjectName: "proj1", MessageCount: 10, FileSizeMB: 1.5},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 
 	view := m.View()
 	if view != "" {
@@ -270,7 +270,7 @@ func TestSessionsModel_SearchEnterExit(t *testing.T) {
 		{SessionID: "s1", ProjectName: "proj1"},
 		{SessionID: "s2", ProjectName: "proj2"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -293,7 +293,7 @@ func TestSessionsModel_SearchFilter(t *testing.T) {
 		{SessionID: "s2", ProjectName: "contextspectre", Modified: time.Now().Add(-1 * time.Hour)},
 		{SessionID: "s3", ProjectName: "logtap", Modified: time.Now().Add(-2 * time.Hour)},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -323,7 +323,7 @@ func TestSessionsModel_SearchNoResults(t *testing.T) {
 	sessions := []session.Info{
 		{SessionID: "s1", ProjectName: "proj1"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -344,7 +344,7 @@ func TestSessionsModel_SearchBackspace(t *testing.T) {
 		{SessionID: "s1", ProjectName: "logtap"},
 		{SessionID: "s2", ProjectName: "contextspectre"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -369,7 +369,7 @@ func TestSessionsModel_SearchByBranch(t *testing.T) {
 		{SessionID: "s1", ProjectName: "proj1", GitBranch: "feat/auth"},
 		{SessionID: "s2", ProjectName: "proj2", GitBranch: "main"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -385,7 +385,7 @@ func TestSessionsModel_QuitBlockedDuringSearch(t *testing.T) {
 	sessions := []session.Info{
 		{SessionID: "s1", ProjectName: "proj1"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 
@@ -410,7 +410,7 @@ func TestSessionsModel_DisplayRowsGrouping(t *testing.T) {
 		{SessionID: "s2", ProjectName: "alpha", Modified: time.Now().Add(-1 * time.Hour)},
 		{SessionID: "s3", ProjectName: "beta", Modified: time.Now().Add(-2 * time.Hour)},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 
 	// Expect: header(alpha) + s1 + s2 + header(beta) + s3 = 5 rows
 	if len(m.displayRows) != 5 {
@@ -441,7 +441,7 @@ func TestSessionsModel_FooterHelp(t *testing.T) {
 	sessions := []session.Info{
 		{SessionID: "s1", ProjectName: "proj1"},
 	}
-	m := newSessionsModel(sessions)
+	m := newSessionsModel(sessions, nil)
 	m.width = 120
 	m.height = 40
 

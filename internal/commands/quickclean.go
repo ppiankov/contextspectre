@@ -68,16 +68,9 @@ func runQuickClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Filter by project if specified
+	// Filter by project if specified (alias-aware)
 	if quickCleanProject != "" {
-		var filtered []session.Info
-		for _, s := range sessions {
-			if strings.EqualFold(s.ProjectName, quickCleanProject) ||
-				strings.Contains(strings.ToLower(s.ProjectPath), strings.ToLower(quickCleanProject)) {
-				filtered = append(filtered, s)
-			}
-		}
-		sessions = filtered
+		sessions = resolveProjectSessions(sessions, quickCleanProject, resolveClaudeDir())
 	}
 
 	if len(sessions) == 0 {

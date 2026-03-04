@@ -3,11 +3,13 @@ package tui
 import (
 	"fmt"
 	"log/slog"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
+	"github.com/ppiankov/contextspectre/internal/project"
 	"github.com/ppiankov/contextspectre/internal/session"
 )
 
@@ -45,12 +47,40 @@ func NewApp(claudeDir, version string) AppModel {
 		slog.Warn("Failed to list sessions", "error", err)
 	}
 
+	aliasLookup := buildAliasLookup(claudeDir)
+
 	return AppModel{
 		currentView: viewSessions,
-		sessions:    newSessionsModel(sessions),
+		sessions:    newSessionsModel(sessions, aliasLookup),
 		claudeDir:   claudeDir,
 		version:     version,
 	}
+}
+
+// buildAliasLookup builds a reverse lookup from encoded path prefix to alias name.
+func buildAliasLookup(claudeDir string) map[string]string {
+	cfg, err := project.Load(claudeDir)
+	if err != nil || len(cfg.Aliases) == 0 {
+		return nil
+	}
+	lookup := make(map[string]string)
+	for name, alias := range cfg.Aliases {
+		for _, p := range alias.Paths {
+			encoded := session.EncodePath(p)
+			lookup[encoded] = name
+		}
+	}
+	return lookup
+}
+
+// resolveAliasName returns the alias name for a session, or empty string.
+func resolveAliasName(fullPath string, lookup map[string]string) string {
+	for encoded, name := range lookup {
+		if strings.Contains(fullPath, encoded) {
+			return name
+		}
+	}
+	return ""
 }
 
 func (m AppModel) Init() tea.Cmd {

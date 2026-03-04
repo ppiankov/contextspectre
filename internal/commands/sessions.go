@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/ppiankov/contextspectre/internal/project"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -121,19 +122,61 @@ func filterSessions(sessions []session.Info) []session.Info {
 	if !sessionsActive && sessionsProject == "" {
 		return sessions
 	}
-	var filtered []session.Info
-	for _, s := range sessions {
-		if sessionsActive && time.Since(s.Modified) > 5*time.Minute {
-			continue
-		}
-		if sessionsProject != "" &&
-			!strings.Contains(strings.ToLower(s.ProjectName), strings.ToLower(sessionsProject)) &&
-			!strings.Contains(strings.ToLower(s.ProjectPath), strings.ToLower(sessionsProject)) {
-			continue
-		}
-		filtered = append(filtered, s)
+
+	// Apply project filter (alias-aware)
+	if sessionsProject != "" {
+		sessions = resolveProjectSessions(sessions, sessionsProject, resolveClaudeDir())
 	}
-	return filtered
+
+	// Apply active filter
+	if sessionsActive {
+		var filtered []session.Info
+		for _, s := range sessions {
+			if time.Since(s.Modified) <= 5*time.Minute {
+				filtered = append(filtered, s)
+			}
+		}
+		return filtered
+	}
+
+	return sessions
+}
+
+// resolveProjectSessions filters sessions by project flag.
+// If projectFlag matches an alias exactly, filters by encoded paths.
+// Otherwise falls back to substring match on ProjectName/ProjectPath.
+func resolveProjectSessions(sessions []session.Info, projectFlag, claudeDir string) []session.Info {
+	if projectFlag == "" {
+		return sessions
+	}
+
+	// Try exact alias match
+	cfg, err := project.Load(claudeDir)
+	if err == nil {
+		if paths := cfg.Resolve(projectFlag); paths != nil {
+			var result []session.Info
+			for _, s := range sessions {
+				for _, p := range paths {
+					if strings.Contains(s.FullPath, session.EncodePath(p)) {
+						result = append(result, s)
+						break
+					}
+				}
+			}
+			return result
+		}
+	}
+
+	// Fallback: substring match
+	proj := strings.ToLower(projectFlag)
+	var result []session.Info
+	for _, s := range sessions {
+		if strings.Contains(strings.ToLower(s.ProjectName), proj) ||
+			strings.Contains(strings.ToLower(s.ProjectPath), proj) {
+			result = append(result, s)
+		}
+	}
+	return result
 }
 
 func resolveClaudeDir() string {

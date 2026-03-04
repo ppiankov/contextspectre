@@ -752,6 +752,18 @@ type RepeatedTextJSON struct {
 	EstimatedTokens int      `json:"estimated_tokens"`
 }
 
+// ProjectAliasJSON is a single project alias for JSON output.
+type ProjectAliasJSON struct {
+	Name     string   `json:"name"`
+	Paths    []string `json:"paths"`
+	Sessions int      `json:"sessions"`
+}
+
+// ProjectListOutput is the JSON output for the project list command.
+type ProjectListOutput struct {
+	Aliases []ProjectAliasJSON `json:"aliases"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
