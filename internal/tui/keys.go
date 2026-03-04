@@ -36,6 +36,9 @@ type keyMap struct {
 	Export           key.Binding
 	ExportWipe       key.Binding
 	Amputate         key.Binding
+	Help             key.Binding
+	NextMatch        key.Binding
+	PrevMatch        key.Binding
 }
 
 var keys = keyMap{
@@ -170,5 +173,17 @@ var keys = keyMap{
 	Amputate: key.NewBinding(
 		key.WithKeys("!"),
 		key.WithHelp("!", "amputate range"),
+	),
+	Help: key.NewBinding(
+		key.WithKeys("?"),
+		key.WithHelp("?", "help"),
+	),
+	NextMatch: key.NewBinding(
+		key.WithKeys("n"),
+		key.WithHelp("n", "next match"),
+	),
+	PrevMatch: key.NewBinding(
+		key.WithKeys("N"),
+		key.WithHelp("N", "prev match"),
 	),
 }

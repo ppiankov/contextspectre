@@ -32,6 +32,9 @@ type detailModel struct {
 	health         *analyzer.HealthScore
 	branchOrigin   bool
 	overviewScroll int
+	overviewLines  int // total lines in last rendered overview (for nav)
+	nav            navState
+	help           helpModel
 	width, height  int
 }
 
@@ -41,7 +44,7 @@ type backFromDetailMsg struct {
 
 func newDetailModel(info session.Info) detailModel {
 	msgs := newMessagesModel(info)
-	return detailModel{
+	m := detailModel{
 		session:     info,
 		activePanel: panelOverview,
 		messages:    msgs,
@@ -49,6 +52,30 @@ func newDetailModel(info session.Info) detailModel {
 		rec:         msgs.recommendation,
 		health:      msgs.health,
 	}
+	m.overviewLines = m.countOverviewLines()
+	return m
+}
+
+// countOverviewLines computes total lines in overview for navigation.
+func (m detailModel) countOverviewLines() int {
+	count := 3 // context meter + health + blank
+	if m.stats != nil && m.stats.Cost != nil {
+		count += 2 // cost + blank
+		if len(m.stats.Cost.PerModel) > 1 {
+			count += len(m.stats.Cost.PerModel)
+		}
+	}
+	if m.stats != nil && m.stats.CompactionCount > 0 {
+		count += len(m.stats.EpochCosts) + 2 // header + epochs + blank
+	}
+	if m.rec != nil && len(m.rec.Items) > 0 {
+		count += len(m.rec.Items) + 3 // header + items + total + blank
+	}
+	if m.stats != nil && m.stats.GhostReport != nil && len(m.stats.GhostReport.Files) > 0 {
+		count += 3
+	}
+	count += 2 // footer hint
+	return count
 }
 
 func (m detailModel) Init() tea.Cmd {
@@ -116,7 +143,11 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 			m.messages, cmd = m.messages.Update(msg)
 			return m, cmd
 		case panelCleanup, panelGhost:
-			// Stub panels — only Esc is handled above
+			if key.Matches(msg, keys.Help) {
+				m.help.width = m.width
+				m.help.height = m.height
+				m.help.toggle("Detail", overviewHelp())
+			}
 			return m, nil
 		}
 	}
@@ -132,6 +163,42 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 }
 
 func (m detailModel) updateOverview(msg tea.KeyMsg) (detailModel, tea.Cmd) {
+	// Help overlay.
+	if m.help.visible {
+		if key.Matches(msg, keys.Help) || key.Matches(msg, keys.Escape) {
+			m.help.dismiss()
+		}
+		return m, nil
+	}
+
+	panelHeight := m.height - 4
+	if panelHeight < 3 {
+		panelHeight = 3
+	}
+
+	// Vim navigation for scroll-based panels (gg enabled — no g conflict in overview).
+	if action := m.nav.handleVimNav(msg, true); action != navNone {
+		total := m.overviewLines
+		if total < 1 {
+			total = 1
+		}
+		m.overviewScroll, _ = applyNavAction(action, m.overviewScroll, 0, total, panelHeight)
+		if m.overviewScroll < 0 {
+			m.overviewScroll = 0
+		}
+		return m, nil
+	}
+
+	// Space = page down for overview.
+	if key.Matches(msg, keys.Space) {
+		total := m.overviewLines
+		if total < 1 {
+			total = 1
+		}
+		m.overviewScroll, _ = applyNavAction(navPageDown, m.overviewScroll, 0, total, panelHeight)
+		return m, nil
+	}
+
 	switch {
 	case key.Matches(msg, keys.Down):
 		m.overviewScroll++
@@ -142,6 +209,10 @@ func (m detailModel) updateOverview(msg tea.KeyMsg) (detailModel, tea.Cmd) {
 	case key.Matches(msg, keys.Enter):
 		// Enter on overview → switch to messages
 		m.activePanel = panelMessages
+	case key.Matches(msg, keys.Help):
+		m.help.width = m.width
+		m.help.height = m.height
+		m.help.toggle("Overview", overviewHelp())
 	}
 	return m, nil
 }
@@ -185,7 +256,11 @@ func (m detailModel) View() string {
 		b.WriteString(m.renderGhost(panelHeight))
 	}
 
-	return b.String()
+	view := b.String()
+	if m.help.visible {
+		return m.help.View()
+	}
+	return view
 }
 
 func (m detailModel) renderTabBar() string {
