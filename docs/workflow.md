@@ -10,6 +10,8 @@ For large projects, separating exploratory reasoning from structured execution r
 
 ContextSpectre does not require this workflow — it works with any Claude Code session. But it complements structured development particularly well.
 
+**When to clean: the plan-to-code boundary.** The highest-value cleanup moment is after plan approval, before implementation starts. Planning generates exploratory reasoning — file reads, architecture comparisons, rejected approaches, design iterations. Once the plan is committed, that scaffolding becomes noise that fills context during the execution phase where you need room for code, tests, and tool output. A `clean --all` at this boundary recovers the exploration tokens and gives implementation maximum runway.
+
 ## Philosophy in practice
 
 **Context distillation over context deletion.** The goal is not to make sessions smaller. It's to increase the signal-to-noise ratio of what Claude sees. Progress messages, stale file reads, failed retries, and decorative separators are pure noise. Decisions, constraints, and working code are pure signal.
