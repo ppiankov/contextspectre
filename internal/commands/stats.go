@@ -162,6 +162,16 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Ghost context warnings
+	if stats.GhostReport != nil && stats.GhostReport.TotalGhosts > 0 {
+		fmt.Printf("Ghost context: %d files modified after compaction summary\n", stats.GhostReport.TotalGhosts)
+		for _, g := range stats.GhostReport.Files {
+			fmt.Printf("  #%d → %s (modified in epoch %d)\n",
+				g.CompactionIndex+1, g.Path, g.EpochModified)
+		}
+		fmt.Println()
+	}
+
 	// Growth and distance
 	fmt.Printf("Token growth rate: ~%.0f tokens/turn\n", stats.TokenGrowthRate)
 	if stats.EstimatedTurnsLeft >= 0 {

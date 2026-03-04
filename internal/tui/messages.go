@@ -637,6 +637,19 @@ func (m messagesModel) renderContextMeter() string {
 		}
 	}
 
+	// Ghost context warning
+	if m.stats.GhostReport != nil && m.stats.GhostReport.TotalGhosts > 0 {
+		b.WriteString("\n")
+		ghostLine := fmt.Sprintf(" !! Ghost context: %d files modified after compaction — summary may be stale",
+			m.stats.GhostReport.TotalGhosts)
+		b.WriteString(styleWarning.Render(ghostLine))
+		for _, g := range m.stats.GhostReport.Files {
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("    #%d → %s",
+				g.CompactionIndex+1, g.Path)))
+		}
+	}
+
 	// Image weight warning when images are >10% of context
 	if m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
 		imgTokens := m.estimateTotalImageTokens()
@@ -893,6 +906,11 @@ func (m messagesModel) visibleRows() int {
 	// Extra lines for compaction archaeology
 	if m.stats != nil && m.stats.Archaeology != nil {
 		reserved += len(m.stats.Archaeology.Events)
+	}
+	// Extra lines for ghost context warning
+	if m.stats != nil && m.stats.GhostReport != nil && m.stats.GhostReport.TotalGhosts > 0 {
+		reserved++                                  // header line
+		reserved += m.stats.GhostReport.TotalGhosts // one per ghost file
 	}
 	// Extra line for image weight warning
 	if m.stats != nil && m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
