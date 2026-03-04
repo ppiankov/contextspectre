@@ -33,6 +33,8 @@ var (
 	cleanLive          bool
 	cleanAggressive    bool
 	cleanAuto          bool
+	cleanActiveFlag    bool
+	cleanActiveSince   string
 )
 
 var cleanCmd = &cobra.Command{
@@ -48,7 +50,7 @@ Use --auto to automatically find and clean the most recent session:
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive && !cleanAuto {
+	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive && !cleanAuto && !cleanActiveFlag {
 		return fmt.Errorf("specify at least one clean operation flag")
 	}
 
@@ -56,10 +58,20 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("--aggressive can only be used with --live")
 	}
 
+	if cleanActiveFlag {
+		if !cleanAll {
+			return fmt.Errorf("--active requires --all (to prevent accidental targeted cleanup)")
+		}
+		if len(args) > 0 {
+			return fmt.Errorf("--active does not accept a session argument")
+		}
+		return runCleanActive()
+	}
+
 	if cleanAuto && len(args) > 0 {
 		return fmt.Errorf("--auto does not accept a session argument (it finds the most recent session)")
 	}
-	if !cleanAuto && len(args) == 0 {
+	if !cleanAuto && !cleanActiveFlag && len(args) == 0 {
 		return fmt.Errorf("session argument required (or use --auto to find the most recent session)")
 	}
 
@@ -333,6 +345,145 @@ func runCleanAuto() error {
 	return nil
 }
 
+func runCleanActive() error {
+	sinceDuration, err := time.ParseDuration(cleanActiveSince)
+	if err != nil {
+		return fmt.Errorf("invalid --since value %q: %w", cleanActiveSince, err)
+	}
+
+	d := &session.Discoverer{ClaudeDir: resolveClaudeDir()}
+	sessions, err := d.ListAllSessions()
+	if err != nil {
+		return fmt.Errorf("discover sessions: %w", err)
+	}
+
+	cutoff := time.Now().Add(-sinceDuration)
+	var active []session.Info
+	for _, s := range sessions {
+		if s.Modified.After(cutoff) {
+			active = append(active, s)
+		}
+	}
+
+	if len(active) == 0 {
+		if isJSON() {
+			return printJSON(CleanActiveOutput{Sessions: []CleanActiveSessionJSON{}})
+		}
+		fmt.Println("No active sessions to clean")
+		return nil
+	}
+
+	if !isJSON() {
+		fmt.Printf("Cleaning %d active sessions...\n", len(active))
+	}
+
+	var results []CleanActiveSessionJSON
+	totalTokens := 0
+	cleaned := 0
+
+	for _, s := range active {
+		path := s.FullPath
+		result, err := editor.CleanAll(path)
+		if err != nil {
+			slog.Warn("Failed to clean session", "session", s.SessionID, "error", err)
+			continue
+		}
+
+		totalOps := result.ProgressRemoved + result.SnapshotsRemoved + result.SidechainsRemoved +
+			result.TangentsRemoved + result.FailedRetries + result.StaleReadsRemoved +
+			result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+
+		shortID := s.SessionID
+		if len(shortID) > 8 {
+			shortID = shortID[:8]
+		}
+
+		proj := s.ProjectName
+		savingsEvent := recordCleanupSavings(path, result.TotalTokensSaved)
+
+		sessionResult := CleanActiveSessionJSON{
+			ID:      s.SessionID,
+			Slug:    s.Slug,
+			Project: proj,
+		}
+
+		if totalOps == 0 {
+			if !isJSON() {
+				fmt.Printf("  %s (%s): clean\n", proj, shortID)
+			}
+		} else {
+			cleaned++
+			totalTokens += result.TotalTokensSaved
+
+			sessionResult.ProgressRemoved = result.ProgressRemoved
+			sessionResult.SnapshotsRemoved = result.SnapshotsRemoved
+			sessionResult.StaleReadsRemoved = result.StaleReadsRemoved
+			sessionResult.TokensSaved = result.TotalTokensSaved
+			sessionResult.BytesSaved = result.BytesBefore - result.BytesAfter
+
+			if savingsEvent != nil {
+				sessionResult.AvoidedCost = savingsEvent.AvoidedCost
+			}
+
+			if !isJSON() {
+				parts := []string{}
+				if result.ProgressRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d prog", result.ProgressRemoved))
+				}
+				if result.SnapshotsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d snap", result.SnapshotsRemoved))
+				}
+				if result.SidechainsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d chain", result.SidechainsRemoved))
+				}
+				if result.TangentsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d tangent", result.TangentsRemoved))
+				}
+				if result.FailedRetries > 0 {
+					parts = append(parts, fmt.Sprintf("%d retry", result.FailedRetries))
+				}
+				if result.StaleReadsRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d stale", result.StaleReadsRemoved))
+				}
+				if result.ImagesReplaced > 0 {
+					parts = append(parts, fmt.Sprintf("%d img", result.ImagesReplaced))
+				}
+				if result.SeparatorsStripped > 0 {
+					parts = append(parts, fmt.Sprintf("%d sep", result.SeparatorsStripped))
+				}
+				if result.OutputsTruncated > 0 {
+					parts = append(parts, fmt.Sprintf("%d trunc", result.OutputsTruncated))
+				}
+				costStr := ""
+				if savingsEvent != nil {
+					costStr = fmt.Sprintf(" (~%s)", analyzer.FormatCost(savingsEvent.AvoidedCost))
+				}
+				fmt.Printf("  %s (%s): %s → %s tokens saved%s\n",
+					proj, shortID, strings.Join(parts, ", "),
+					formatTokens(result.TotalTokensSaved), costStr)
+			}
+		}
+
+		results = append(results, sessionResult)
+	}
+
+	if isJSON() {
+		return printJSON(CleanActiveOutput{
+			Sessions:    results,
+			Total:       len(active),
+			Cleaned:     cleaned,
+			TotalTokens: totalTokens,
+		})
+	}
+
+	if cleaned > 0 {
+		fmt.Printf("Total: %s tokens saved across %d sessions\n",
+			formatTokens(totalTokens), cleaned)
+	}
+
+	return nil
+}
+
 func runCleanLive(path string) error {
 	opts := editor.CleanLiveOpts{
 		Aggressive: cleanAggressive,
@@ -531,5 +682,7 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanLive, "live", false, "Safe cleanup for active sessions (Tier 1-3)")
 	cleanCmd.Flags().BoolVar(&cleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
 	cleanCmd.Flags().BoolVar(&cleanAuto, "auto", false, "Find and clean the most recent session (no session arg needed)")
+	cleanCmd.Flags().BoolVar(&cleanActiveFlag, "active", false, "Clean all active sessions (requires --all)")
+	cleanCmd.Flags().StringVar(&cleanActiveSince, "since", "10m", "Activity window for --active (e.g. 10m, 1h)")
 	rootCmd.AddCommand(cleanCmd)
 }
