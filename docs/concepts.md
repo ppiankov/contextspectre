@@ -32,8 +32,8 @@
 | **Conversation branch** | A segment of a session between compaction boundaries or significant time gaps. The navigable unit within a long session. |
 | **Namespace fragmentation** | Same conceptual project, multiple session namespaces, no unifying abstraction. Caused by launching Claude Code from different directories in the same repo. |
 | **Context partitioning drift** | When operational partitioning (filesystem paths) diverges from conceptual partitioning (project identity). The root cause of split session contexts. |
-| **Federated project identity** | Multiple physical session roots mapped to one logical project. Decouples identity from storage location. Planned (Phase 4). |
-| **Logical project overlay** | A view abstraction over session roots — like a materialized view in database terms. Sessions stay in their original directories; the overlay groups them for commands. Planned (Phase 4). |
+| **Federated project identity** | Multiple physical session roots mapped to one logical project. Decouples identity from storage location. |
+| **Logical project overlay** | A view abstraction over session roots — like a materialized view in database terms. Sessions stay in their original directories; the overlay groups them for commands. |
 | **Sidechain** | An orphaned conversation branch — tool results referencing tool uses that no longer exist. Created by cleanup or amputation that removes entries mid-chain. |
 | **Vector sharpening** | Proactive cleanup that keeps reasoning on the development vector for longer. Not reactive housekeeping — deliberate noise removal at decision boundaries to extend session runway and delay compaction. The opposite of letting context decay until compaction forces lossy compression. |
 | **Savings attribution** | Quantifying the downstream economic value of cleanup. Formula: `tokens_removed × remaining_turns × cache_read_price`. A cleanup that removes 7K tokens with 18 turns remaining saves ~126K cache-read tokens. Planned (Phase 4). |
