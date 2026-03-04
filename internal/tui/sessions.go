@@ -428,29 +428,29 @@ func (m sessionsModel) View() string {
 
 		var line strings.Builder
 		line.WriteString(prefix)
-		line.WriteString(fmt.Sprintf("%-*s ", cols.projW, project))
-		line.WriteString(fmt.Sprintf("%-*s ", cols.slugW, slug))
-		line.WriteString(fmt.Sprintf("%-*s ", cols.idW, shortID))
+		fmt.Fprintf(&line, "%-*s ", cols.projW, project)
+		fmt.Fprintf(&line, "%-*s ", cols.slugW, slug)
+		fmt.Fprintf(&line, "%-*s ", cols.idW, shortID)
 		if cols.showBranch {
 			branch := truncateStr(s.GitBranch, cols.branchW)
 			if branch == "" {
 				branch = "\u2014"
 			}
-			line.WriteString(fmt.Sprintf("%-*s ", cols.branchW, branch))
+			fmt.Fprintf(&line, "%-*s ", cols.branchW, branch)
 		}
-		line.WriteString(fmt.Sprintf("%*d ", cols.msgsW, s.MessageCount))
+		fmt.Fprintf(&line, "%*d ", cols.msgsW, s.MessageCount)
 		if cols.showSize {
 			size := fmt.Sprintf("%.1f MB", s.FileSizeMB)
-			line.WriteString(fmt.Sprintf("%*s ", cols.sizeW, size))
+			fmt.Fprintf(&line, "%*s ", cols.sizeW, size)
 		}
 		line.WriteString(bar)
-		line.WriteString(fmt.Sprintf(" %*s", cols.pctW, pct))
+		fmt.Fprintf(&line, " %*s", cols.pctW, pct)
 		line.WriteString(compactLabel)
 		if !cols.mergeSignal {
-			line.WriteString(fmt.Sprintf(" %*s", cols.sigW, sigStr))
+			fmt.Fprintf(&line, " %*s", cols.sigW, sigStr)
 		}
-		line.WriteString(fmt.Sprintf(" %*s%s", cols.costW, costStr, costAlertStr))
-		line.WriteString(fmt.Sprintf(" %*s", cols.modW, mod))
+		fmt.Fprintf(&line, " %*s%s", cols.costW, costStr, costAlertStr)
+		fmt.Fprintf(&line, " %*s", cols.modW, mod)
 
 		lineStr := line.String()
 		if isSelected {
