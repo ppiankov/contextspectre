@@ -53,7 +53,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Chain repair for parentUuid integrity
 - CWD-based session targeting
 
-**Planned:** Branch export (separation surgery), session content search, watch mode, post-session summary, garbage collection, federated project identity, cross-session distillation, vector snapshot, CLAUDE.md sync. See [Roadmap](#roadmap).
+**Planned:** Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, federated project identity, session search, watch mode, sidechain repair, session timeline, reasoning entropy score, project reasoning graph, decision lineage, conflict detection, project memory synthesis. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -135,7 +135,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Selective continuity | Next | Branch export, federated project identity, session search, watch mode, Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection |
+| 4. Operational control | Next | Vector Control panel, savings attribution, status line telemetry, cleanup cadence, budget protection, federated project identity, sidechain repair, session timeline, session search, watch mode |
 | 5. Reasoning memory | Planned | Project reasoning graph, decision lineage, conflict detection, project memory synthesis, CLAUDE.md sync |
 
 ## Known limitations

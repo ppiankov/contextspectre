@@ -23,9 +23,9 @@
 | **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. |
 | **Split surgery** | Extracting a range of entries to portable markdown. Non-destructive by default; optionally prunes from the source. |
 | **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Planned (Phase 4). |
-| **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. Planned (Phase 5). |
+| **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. |
 | **Context distillation** | Increasing the signal-to-noise ratio — not making sessions smaller, but making what remains more useful. |
-| **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. Planned (Phase 5). |
+| **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. |
 | **Ghost context** | Stale compaction summaries that describe code or decisions that no longer exist. Detected by comparing files referenced in compaction summaries against current state. |
 | **Live cleanup** | Cleaning an active session between Claude's turns. Uses mtime-based race detection to avoid corrupting a session Claude is writing to. |
 | **Tier (1-7)** | Safety classification for cleanup operations. Tier 1 (progress removal) is always safe. Tier 7 (tangent removal) requires the session to be inactive. See [Commands](commands.md#cleanup-operations). |
@@ -60,9 +60,9 @@ Unmanaged context decays along three axes simultaneously:
 
 | Axis | What decays | Symptoms | ContextSpectre instruments |
 |------|-------------|----------|---------------------------|
-| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, predictive cleanup, turn-gain estimates |
-| **Reasoning** | Quality | Reasoning contamination (stale scaffolding biasing responses), context spoil (summaries of summaries losing specificity), compaction loss (lossy compression erasing nuance), ghost context (compaction summaries referencing deleted code) | Vector health score, reasoning phase markers, commit points, ghost detection |
-| **Structural** | Organization | Namespace fragmentation (same project, split sessions), context partitioning drift (paths diverge from projects), scope drift (tool calls leaving project directory), sidechains (orphaned branches) | Scope drift detection, federated project identity (planned), session search (planned) |
+| **Economic** | Money | Re-read tax (cache reads re-process noise every turn), re-explanation tax (re-stating context across sessions), token bleed (gradual waste accumulation) | Cost attribution, predictive cleanup, turn-gain estimates, savings attribution (planned), weekly telemetry (planned), budget protection (planned), continuity cost (planned) |
+| **Reasoning** | Quality | Reasoning contamination (stale scaffolding biasing responses), context spoil (summaries of summaries losing specificity), compaction loss (lossy compression erasing nuance), ghost context (compaction summaries referencing deleted code) | Vector health score, reasoning phase markers, commit points, ghost detection, reasoning entropy (planned), session timeline (planned), decision lineage (planned) |
+| **Structural** | Organization | Namespace fragmentation (same project, split sessions), context partitioning drift (paths diverge from projects), scope drift (tool calls leaving project directory), sidechains (orphaned branches) | Scope drift detection, sidechain repair (planned), federated project identity (planned), reasoning graph (planned), conflict detection (planned) |
 
 The informal terms — **token bleed** and **context spoil** — describe the same decay in visceral shorthand. Token bleed is the economic axis felt as waste. Context spoil is the reasoning axis felt as drift. Both are continuous, invisible, and compound over time.
 
