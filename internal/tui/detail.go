@@ -30,6 +30,7 @@ type detailModel struct {
 	stats          *analyzer.ContextStats
 	rec            *analyzer.CleanupRecommendation
 	health         *analyzer.HealthScore
+	decEcon        *analyzer.DecisionEconomics
 	branchOrigin   bool
 	overviewScroll int
 	overviewLines  int // total lines in last rendered overview (for nav)
@@ -51,6 +52,7 @@ func newDetailModel(info session.Info) detailModel {
 		stats:       msgs.stats,
 		rec:         msgs.recommendation,
 		health:      msgs.health,
+		decEcon:     analyzer.ComputeDecisionEconomics(msgs.stats, msgs.driftResult),
 	}
 	m.overviewLines = m.countOverviewLines()
 	return m
@@ -63,6 +65,15 @@ func (m detailModel) countOverviewLines() int {
 		count += 2 // cost + blank
 		if len(m.stats.Cost.PerModel) > 1 {
 			count += len(m.stats.Cost.PerModel)
+		}
+	}
+	if m.decEcon != nil && m.decEcon.HasDecisions {
+		count += 4 // header + CPD + TTC + blank (CDR adds 1-2 more)
+		if m.decEcon.CDR > 0 {
+			count++
+		}
+		if m.decEcon.CDR > 0.35 {
+			count++
 		}
 	}
 	if m.stats != nil && m.stats.CompactionCount > 0 {
@@ -333,7 +344,20 @@ func (m detailModel) renderOverview(height int) string {
 		}
 	}
 
-	lines = append(lines, "")
+	// Decision economics
+	if m.decEcon != nil && m.decEcon.HasDecisions {
+		lines = append(lines, styleHeader.Render(" Decision Economics"))
+		lines = append(lines, fmt.Sprintf("   CPD: %s/decision (%d decisions)",
+			analyzer.FormatCost(m.decEcon.CPD), m.decEcon.TotalDecisions))
+		lines = append(lines, fmt.Sprintf("   TTC: %d turns/decision", m.decEcon.TTC))
+		if m.decEcon.CDR > 0 {
+			lines = append(lines, fmt.Sprintf("   CDR: %.0f%%", m.decEcon.CDR*100))
+		}
+		if m.decEcon.CDR > 0.35 {
+			lines = append(lines, styleMuted.Render("   CDR > 35% — consider splitting session"))
+		}
+		lines = append(lines, "")
+	}
 
 	// Compaction epochs
 	if stats.CompactionCount > 0 && len(stats.EpochCosts) > 0 {

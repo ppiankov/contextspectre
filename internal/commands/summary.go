@@ -52,7 +52,7 @@ func runSummary(cmd *cobra.Command, args []string) error {
 	duration := sessionDuration(entries)
 
 	if isJSON() {
-		return printJSON(buildSummaryJSON(sessionID, stats, health, rec, topFiles, duration))
+		return printJSON(buildSummaryJSON(sessionID, stats, health, rec, topFiles, duration, entries))
 	}
 
 	// Record analytics snapshot (best-effort).
@@ -62,7 +62,7 @@ func runSummary(cmd *cobra.Command, args []string) error {
 		return printQuietSummary(stats, health, topFiles)
 	}
 
-	return printFullSummary(sessionID, stats, health, rec, topFiles, duration)
+	return printFullSummary(sessionID, stats, health, rec, topFiles, duration, entries)
 }
 
 func printQuietSummary(stats *analyzer.ContextStats, health *analyzer.HealthScore, topFiles []fileCount) error {
@@ -93,7 +93,7 @@ func printQuietSummary(stats *analyzer.ContextStats, health *analyzer.HealthScor
 	return nil
 }
 
-func printFullSummary(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration) error {
+func printFullSummary(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration, entries []jsonl.Entry) error {
 	fmt.Printf("Session summary: %s\n", sessionID[:min(8, len(sessionID))])
 	fmt.Println(strings.Repeat("─", 50))
 
@@ -119,6 +119,14 @@ func printFullSummary(sessionID string, stats *analyzer.ContextStats, health *an
 	if health != nil && health.TotalTokens > 0 {
 		fmt.Printf("Signal:      %s (%.0f%% signal, %.0f%% noise)\n",
 			health.Grade, health.SignalPercent, health.NoisePercent)
+	}
+
+	// Decision economics
+	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
+	decEcon := analyzer.ComputeDecisionEconomics(stats, driftResult)
+	if decEcon.HasDecisions {
+		fmt.Printf("Decision:    %s/decision (%d decisions, %d turns/decision)\n",
+			analyzer.FormatCost(decEcon.CPD), decEcon.TotalDecisions, decEcon.TTC)
 	}
 
 	// Compactions
@@ -247,11 +255,14 @@ type SummaryJSON struct {
 	Compactions int      `json:"compactions"`
 	Grade       string   `json:"signal_grade,omitempty"`
 	NoisePct    float64  `json:"noise_percent,omitempty"`
+	CPD         float64  `json:"cpd,omitempty"`
+	TTC         int      `json:"ttc,omitempty"`
+	Decisions   int      `json:"decisions,omitempty"`
 	TopFiles    []string `json:"top_files,omitempty"`
 	Cleanable   int      `json:"cleanable_tokens,omitempty"`
 }
 
-func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration) *SummaryJSON {
+func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration, entries []jsonl.Entry) *SummaryJSON {
 	out := &SummaryJSON{
 		SessionID:   sessionID,
 		Model:       stats.Model,
@@ -272,6 +283,13 @@ func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *an
 	}
 	if rec != nil {
 		out.Cleanable = rec.TotalTokens
+	}
+	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
+	decEcon := analyzer.ComputeDecisionEconomics(stats, driftResult)
+	if decEcon.HasDecisions {
+		out.CPD = decEcon.CPD
+		out.TTC = decEcon.TTC
+		out.Decisions = decEcon.TotalDecisions
 	}
 	return out
 }
