@@ -26,6 +26,7 @@ var (
 	showScope   bool
 	statsCWD    bool
 	statsRecord bool
+	statsHealth bool
 )
 
 func runStats(cmd *cobra.Command, args []string) error {
@@ -56,10 +57,13 @@ func runStats(cmd *cobra.Command, args []string) error {
 	if isJSON() {
 		threshold := loadCostAlertThreshold()
 		decEconJSON := analyzer.ComputeDecisionEconomics(stats, driftResult)
+		thresholds := loadGaugeThresholds()
+		gauge := analyzer.ComputeGauge(stats, decEconJSON, thresholds)
 		out := buildStatsOutput(sessionID, stats, rec, driftResult, statsOutputOpt{
 			duration:           duration,
 			costAlertThreshold: threshold,
 			decisionEconomics:  decEconJSON,
+			vectorGauge:        gauge,
 		})
 		return printJSON(out)
 	}
@@ -300,6 +304,19 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 		if decEcon.CDR > 0.35 {
 			fmt.Println("  Warning: CDR > 35% — consider splitting session")
+		}
+		fmt.Println()
+	}
+
+	// Session health vector
+	if statsHealth {
+		thresholds := loadGaugeThresholds()
+		gauge := analyzer.ComputeGauge(stats, decEcon, thresholds)
+		fmt.Println("Session health vector:")
+		fmt.Printf("  State:  %s (score: %d)\n", gauge.State, gauge.Score)
+		fmt.Printf("  Action: %s\n", gauge.Action)
+		if gauge.PostCompaction {
+			fmt.Println("  Note: post-compaction checkpoint pending")
 		}
 		fmt.Println()
 	}
@@ -630,4 +647,5 @@ func init() {
 	statsCmd.Flags().BoolVar(&showScope, "scope", false, "Show scope drift analysis")
 	statsCmd.Flags().BoolVar(&statsCWD, "cwd", false, "Use most recent session for current directory")
 	statsCmd.Flags().BoolVar(&statsRecord, "record", false, "Record an analytics snapshot for this session")
+	statsCmd.Flags().BoolVar(&statsHealth, "health", false, "Show session health vector gauge")
 }

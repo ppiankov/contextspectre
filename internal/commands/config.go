@@ -62,8 +62,44 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		default:
 			return fmt.Errorf("invalid expert-mode value: %s (use true/false)", value)
 		}
+	case "health-context-warn":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid health-context-warn value: %s (must be a number)", value)
+		}
+		if v < 0 || v > 100 {
+			return fmt.Errorf("health-context-warn must be 0-100 (0 resets to default)")
+		}
+		cfg.HealthContextWarn = v
+	case "health-cpd-warn":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid health-cpd-warn value: %s (must be a number)", value)
+		}
+		if v < 0 {
+			return fmt.Errorf("health-cpd-warn must be >= 0 (0 resets to default)")
+		}
+		cfg.HealthCPDWarn = v
+	case "health-ttc-warn":
+		v, err := strconv.Atoi(value)
+		if err != nil {
+			return fmt.Errorf("invalid health-ttc-warn value: %s (must be an integer)", value)
+		}
+		if v < 0 {
+			return fmt.Errorf("health-ttc-warn must be >= 0 (0 resets to default)")
+		}
+		cfg.HealthTTCWarn = v
+	case "health-cdr-warn":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid health-cdr-warn value: %s (must be a number)", value)
+		}
+		if v < 0 || v > 1 {
+			return fmt.Errorf("health-cdr-warn must be 0-1 (0 resets to default)")
+		}
+		cfg.HealthCDRWarn = v
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 
 	if err := project.Save(dir, cfg); err != nil {
@@ -99,8 +135,32 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 		} else {
 			fmt.Println("expert-mode: disabled")
 		}
+	case "health-context-warn":
+		if cfg.HealthContextWarn > 0 {
+			fmt.Printf("health-context-warn: %.1f%%\n", cfg.HealthContextWarn)
+		} else {
+			fmt.Printf("health-context-warn: default (%.1f%%)\n", analyzer.DefaultGaugeThresholds.ContextWarn)
+		}
+	case "health-cpd-warn":
+		if cfg.HealthCPDWarn > 0 {
+			fmt.Printf("health-cpd-warn: %s\n", analyzer.FormatCost(cfg.HealthCPDWarn))
+		} else {
+			fmt.Printf("health-cpd-warn: default (%s)\n", analyzer.FormatCost(analyzer.DefaultGaugeThresholds.CPDWarn))
+		}
+	case "health-ttc-warn":
+		if cfg.HealthTTCWarn > 0 {
+			fmt.Printf("health-ttc-warn: %d turns\n", cfg.HealthTTCWarn)
+		} else {
+			fmt.Printf("health-ttc-warn: default (%d turns)\n", analyzer.DefaultGaugeThresholds.TTCWarn)
+		}
+	case "health-cdr-warn":
+		if cfg.HealthCDRWarn > 0 {
+			fmt.Printf("health-cdr-warn: %.2f\n", cfg.HealthCDRWarn)
+		} else {
+			fmt.Printf("health-cdr-warn: default (%.2f)\n", analyzer.DefaultGaugeThresholds.CDRWarn)
+		}
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 	return nil
 }
@@ -127,6 +187,21 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Println("  expert-mode: disabled")
 	}
+	printThreshold := func(key string, val, defVal float64, suffix string) {
+		if val > 0 {
+			fmt.Printf("  %s: %.4g%s\n", key, val, suffix)
+		} else {
+			fmt.Printf("  %s: default (%.4g%s)\n", key, defVal, suffix)
+		}
+	}
+	printThreshold("health-context-warn", cfg.HealthContextWarn, analyzer.DefaultGaugeThresholds.ContextWarn, "%")
+	printThreshold("health-cpd-warn", cfg.HealthCPDWarn, analyzer.DefaultGaugeThresholds.CPDWarn, "")
+	if cfg.HealthTTCWarn > 0 {
+		fmt.Printf("  health-ttc-warn: %d turns\n", cfg.HealthTTCWarn)
+	} else {
+		fmt.Printf("  health-ttc-warn: default (%d turns)\n", analyzer.DefaultGaugeThresholds.TTCWarn)
+	}
+	printThreshold("health-cdr-warn", cfg.HealthCDRWarn, analyzer.DefaultGaugeThresholds.CDRWarn, "")
 	return nil
 }
 
@@ -134,12 +209,21 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 type ConfigJSON struct {
 	CostAlertThreshold float64 `json:"cost_alert_threshold"`
 	ExpertMode         bool    `json:"expert_mode"`
+	HealthContextWarn  float64 `json:"health_context_warn"`
+	HealthCPDWarn      float64 `json:"health_cpd_warn"`
+	HealthTTCWarn      int     `json:"health_ttc_warn"`
+	HealthCDRWarn      float64 `json:"health_cdr_warn"`
 }
 
 func buildConfigJSON(cfg *project.Config) *ConfigJSON {
+	t := loadGaugeThresholds()
 	return &ConfigJSON{
 		CostAlertThreshold: cfg.CostAlertThreshold,
 		ExpertMode:         cfg.ExpertMode,
+		HealthContextWarn:  t.ContextWarn,
+		HealthCPDWarn:      t.CPDWarn,
+		HealthTTCWarn:      t.TTCWarn,
+		HealthCDRWarn:      t.CDRWarn,
 	}
 }
 
@@ -159,6 +243,29 @@ func printCostAlert(cost, threshold float64) {
 		fmt.Fprintf(os.Stderr, "!! Session cost: %s (threshold: %s)\n",
 			analyzer.FormatCost(cost), analyzer.FormatCost(threshold))
 	}
+}
+
+// loadGaugeThresholds returns gauge thresholds from config, falling back to defaults.
+func loadGaugeThresholds() analyzer.GaugeThresholds {
+	dir := resolveClaudeDir()
+	cfg, err := project.Load(dir)
+	if err != nil {
+		return analyzer.DefaultGaugeThresholds
+	}
+	t := analyzer.DefaultGaugeThresholds
+	if cfg.HealthContextWarn > 0 {
+		t.ContextWarn = cfg.HealthContextWarn
+	}
+	if cfg.HealthCPDWarn > 0 {
+		t.CPDWarn = cfg.HealthCPDWarn
+	}
+	if cfg.HealthTTCWarn > 0 {
+		t.TTCWarn = cfg.HealthTTCWarn
+	}
+	if cfg.HealthCDRWarn > 0 {
+		t.CDRWarn = cfg.HealthCDRWarn
+	}
+	return t
 }
 
 func init() {

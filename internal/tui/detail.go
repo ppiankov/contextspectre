@@ -31,6 +31,7 @@ type detailModel struct {
 	rec            *analyzer.CleanupRecommendation
 	health         *analyzer.HealthScore
 	decEcon        *analyzer.DecisionEconomics
+	gauge          *analyzer.VectorGauge
 	branchOrigin   bool
 	overviewScroll int
 	overviewLines  int // total lines in last rendered overview (for nav)
@@ -54,6 +55,7 @@ func newDetailModel(info session.Info) detailModel {
 		health:      msgs.health,
 		decEcon:     analyzer.ComputeDecisionEconomics(msgs.stats, msgs.driftResult),
 	}
+	m.gauge = analyzer.ComputeGauge(msgs.stats, m.decEcon, analyzer.DefaultGaugeThresholds)
 	m.overviewLines = m.countOverviewLines()
 	return m
 }
@@ -61,6 +63,9 @@ func newDetailModel(info session.Info) detailModel {
 // countOverviewLines computes total lines in overview for navigation.
 func (m detailModel) countOverviewLines() int {
 	count := 3 // context meter + health + blank
+	if m.gauge != nil && m.gauge.State != analyzer.VectorHealthy {
+		count += 2 // gauge line + blank
+	}
 	if m.stats != nil && m.stats.Cost != nil {
 		count += 2 // cost + blank
 		if len(m.stats.Cost.PerModel) > 1 {
@@ -126,10 +131,15 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 			}
 		case key.Matches(msg, keys.Escape):
 			if m.activePanel == panelMessages {
-				// In messages panel, Esc goes back to overview first
 				if m.messages.amputateMode {
 					// Let messages handle amputate cancel
 					break
+				}
+				if m.branchOrigin {
+					// From branch drill-in, go back to branches
+					return m, func() tea.Msg {
+						return backFromDetailMsg{branchOrigin: true}
+					}
 				}
 				m.activePanel = panelOverview
 				return m, nil
@@ -145,8 +155,13 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 		case panelOverview:
 			return m.updateOverview(msg)
 		case panelMessages:
-			// Intercept 'q' to go back to overview instead of exiting
+			// Intercept 'q' — branch origin goes back to branches, else overview
 			if msg.String() == "q" {
+				if m.branchOrigin {
+					return m, func() tea.Msg {
+						return backFromDetailMsg{branchOrigin: true}
+					}
+				}
 				m.activePanel = panelOverview
 				return m, nil
 			}
@@ -296,6 +311,16 @@ func (m detailModel) renderOverview(height int) string {
 	if stats == nil {
 		lines = append(lines, " No analysis data available.")
 		return m.scrolledContent(lines, height)
+	}
+
+	// Vector gauge (when not healthy)
+	if m.gauge != nil && m.gauge.State != analyzer.VectorHealthy {
+		stateColor := gaugeStateColor(m.gauge.State)
+		stateStyle := lipgloss.NewStyle().Foreground(stateColor).Bold(true)
+		lines = append(lines, fmt.Sprintf(" Vector: %s — %s",
+			stateStyle.Render(string(m.gauge.State)),
+			styleMuted.Render(string(m.gauge.Action))))
+		lines = append(lines, "")
 	}
 
 	// Context meter

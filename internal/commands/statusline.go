@@ -45,6 +45,8 @@ type statusLineData struct {
 	Cost           float64 `json:"cost"`
 	SavedCost      float64 `json:"saved_cost"`
 	Model          string  `json:"model"`
+	VectorState    string  `json:"vector_state,omitempty"`
+	VectorAction   string  `json:"vector_action,omitempty"`
 }
 
 // statusLineCache is the on-disk cache structure.
@@ -161,6 +163,17 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		modelShort = analyzer.PricingForModel(stats.Model).Name
 	}
 
+	// Fast-path vector gauge (context-only — no full parse)
+	vectorState := ""
+	vectorAction := ""
+	if contextPct > 92 {
+		vectorState = "emergency"
+		vectorAction = "amputate"
+	} else if contextPct > 75 {
+		vectorState = "degrading"
+		vectorAction = "clean"
+	}
+
 	return &statusLineData{
 		ContextPercent: contextPct,
 		TurnsRemaining: turnsRemaining,
@@ -169,6 +182,8 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		Cost:           cost,
 		SavedCost:      savedCost,
 		Model:          modelShort,
+		VectorState:    vectorState,
+		VectorAction:   vectorAction,
 	}, nil
 }
 
@@ -177,9 +192,9 @@ func formatStatusLine(d *statusLineData) error {
 	case "json":
 		return printJSON(d)
 	case "shell":
-		fmt.Printf("CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s\n",
+		fmt.Printf("CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s\n",
 			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model)
+			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction)
 	case "human":
 		parts := []string{
 			fmt.Sprintf("ctx:%.0f%%", d.ContextPercent),
@@ -191,11 +206,14 @@ func formatStatusLine(d *statusLineData) error {
 		if d.SavedCost > 0 {
 			parts = append(parts, fmt.Sprintf("saved:%s", analyzer.FormatCost(d.SavedCost)))
 		}
+		if d.VectorState != "" {
+			parts = append(parts, fmt.Sprintf("%s:%s", d.VectorState, d.VectorAction))
+		}
 		fmt.Println(strings.Join(parts, " | "))
 	default: // tab
-		fmt.Printf("ctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\n",
+		fmt.Printf("ctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\n",
 			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model)
+			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction)
 	}
 	return nil
 }
