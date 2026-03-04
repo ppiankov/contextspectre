@@ -186,11 +186,13 @@ type HealthScoreJSON struct {
 
 // RecommendationJSON holds cleanup recommendations for JSON output.
 type RecommendationJSON struct {
-	Items            []CleanupItemJSON `json:"items"`
-	TotalTokens      int               `json:"total_tokens"`
-	TotalTurnsGained int               `json:"total_turns_gained"`
-	CurrentPercent   float64           `json:"current_percent"`
-	ProjectedPercent float64           `json:"projected_percent"`
+	Items               []CleanupItemJSON `json:"items"`
+	TotalTokens         int               `json:"total_tokens"`
+	TotalTurnsGained    int               `json:"total_turns_gained"`
+	CurrentPercent      float64           `json:"current_percent"`
+	ProjectedPercent    float64           `json:"projected_percent"`
+	ProjectedSavedCost  float64           `json:"projected_saved_cost,omitempty"`
+	ProjectedSavedToken int               `json:"projected_saved_tokens,omitempty"`
 }
 
 // CleanupItemJSON is a single cleanup recommendation item.
@@ -453,6 +455,14 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 				TokensSaved: item.TokensSaved,
 				TurnsGained: item.TurnsGained,
 			})
+		}
+		// Projected savings if cleaned now
+		if rec.TotalTokens > 0 && stats.EstimatedTurnsLeft > 0 {
+			pricing := analyzer.PricingForModel(stats.Model)
+			avoidedTokens := rec.TotalTokens * stats.EstimatedTurnsLeft
+			avoidedCost := float64(avoidedTokens) / 1_000_000 * pricing.CacheReadPerMillion
+			rj.ProjectedSavedToken = avoidedTokens
+			rj.ProjectedSavedCost = avoidedCost
 		}
 		out.Recommendation = rj
 	}

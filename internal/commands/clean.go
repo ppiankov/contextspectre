@@ -7,10 +7,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
+	"github.com/ppiankov/contextspectre/internal/savings"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -100,6 +102,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 			result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+		printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 		slog.Info("Clean all complete", "tokens", result.TotalTokensSaved)
 		return nil
 	}
@@ -325,6 +328,7 @@ func runCleanAuto() error {
 			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved,
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
+	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 	slog.Info("Clean auto complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
 	return nil
 }
@@ -357,6 +361,7 @@ func runCleanLive(path string) error {
 	fmt.Println()
 	fmt.Printf("Total saved: ~%d tokens, %s\n",
 		result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 	slog.Info("Clean live complete", "tokens", result.TotalTokensSaved, "aggressive", opts.Aggressive)
 	return nil
 }
@@ -403,6 +408,78 @@ func printSessionIdentity(path string) {
 
 	fmt.Printf("Cleaning: %s (%s) | %s | %d msgs | %.1f MB | modified %s\n",
 		slug, shortID, project, msgs, size, mod)
+}
+
+// recordCleanupSavings computes and optionally records compounding savings from a cleanup.
+// Returns the savings event for display purposes.
+func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
+	if tokensSaved <= 0 {
+		return nil
+	}
+
+	stats, err := jsonl.ScanLight(path)
+	if err != nil {
+		return nil
+	}
+
+	// Compute turns remaining
+	currentTokens := 0
+	if stats.LastUsage != nil {
+		currentTokens = stats.LastUsage.TotalContextTokens()
+	}
+
+	turnsRemaining := 0
+	if stats.LineCount > 0 && currentTokens > 0 {
+		avgPerTurn := currentTokens / stats.LineCount
+		if avgPerTurn > 0 {
+			remaining := analyzer.ContextWindowSize - currentTokens
+			if remaining > 0 {
+				turnsRemaining = remaining / avgPerTurn
+			}
+		}
+	}
+
+	if turnsRemaining <= 0 {
+		return nil
+	}
+
+	// Compute avoided cost
+	pricing := analyzer.PricingForModel(stats.Model)
+	avoidedTokens := tokensSaved * turnsRemaining
+	avoidedCost := float64(avoidedTokens) / 1_000_000 * pricing.CacheReadPerMillion
+
+	// Extract session identity
+	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+
+	event := &savings.Event{
+		SessionID:      sessionID,
+		Slug:           stats.Slug,
+		Timestamp:      time.Now(),
+		TokensRemoved:  tokensSaved,
+		TurnsRemaining: turnsRemaining,
+		Model:          stats.Model,
+		AvoidedTokens:  avoidedTokens,
+		AvoidedCost:    avoidedCost,
+	}
+
+	// Record to savings log
+	dir := resolveClaudeDir()
+	if err := savings.Append(dir, *event); err != nil {
+		slog.Warn("Failed to record savings event", "error", err)
+	}
+
+	return event
+}
+
+// printSavingsLine prints the savings line after a cleanup operation.
+func printSavingsLine(event *savings.Event) {
+	if event == nil {
+		return
+	}
+	fmt.Printf("This cleanup avoids ~%s cache-read tokens (~%s) assuming ~%d turns remaining.\n",
+		formatTokens(event.AvoidedTokens),
+		analyzer.FormatCost(event.AvoidedCost),
+		event.TurnsRemaining)
 }
 
 func init() {
