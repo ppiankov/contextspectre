@@ -1,6 +1,9 @@
 package tui
 
-import "github.com/charmbracelet/lipgloss"
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/ppiankov/contextspectre/internal/analyzer"
+)
 
 var (
 	colorGreen  = lipgloss.Color("#00CC66")
@@ -99,5 +102,19 @@ func gradeStyle(grade string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(colorYellow)
 	default: // D, F
 		return lipgloss.NewStyle().Foreground(colorRed)
+	}
+}
+
+// gaugeStateColor returns a color for the vector gauge state.
+func gaugeStateColor(state analyzer.VectorState) lipgloss.Color {
+	switch state {
+	case analyzer.VectorEmergency:
+		return colorRed
+	case analyzer.VectorUnstable:
+		return colorAmber
+	case analyzer.VectorDegrading:
+		return colorYellow
+	default:
+		return colorGreen
 	}
 }

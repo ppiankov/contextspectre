@@ -50,6 +50,7 @@ type StatsOutput struct {
 	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
 	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
 	DecisionEconomics  *DecisionEconomicsJSON `json:"decision_economics,omitempty"`
+	VectorGauge        *VectorGaugeJSON       `json:"vector_gauge,omitempty"`
 	EpochCosts         []EpochCostJSON        `json:"epoch_costs,omitempty"`
 	Archaeology        *ArchaeologyJSON       `json:"archaeology,omitempty"`
 	Compactions        CompactionsJSON        `json:"compactions"`
@@ -80,6 +81,18 @@ type EpochDecisionEconJSON struct {
 	CDR       float64 `json:"cdr"`
 	Decisions int     `json:"decisions"`
 	Density   float64 `json:"density"`
+}
+
+// VectorGaugeJSON holds session health vector for JSON output.
+type VectorGaugeJSON struct {
+	State          string  `json:"state"`
+	Action         string  `json:"action"`
+	Score          int     `json:"score"`
+	ContextPct     float64 `json:"context_percent"`
+	CPD            float64 `json:"cpd,omitempty"`
+	TTC            int     `json:"ttc,omitempty"`
+	CDR            float64 `json:"cdr,omitempty"`
+	PostCompaction bool    `json:"post_compaction,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -364,6 +377,7 @@ type statsOutputOpt struct {
 	duration           time.Duration
 	costAlertThreshold float64
 	decisionEconomics  *analyzer.DecisionEconomics
+	vectorGauge        *analyzer.VectorGauge
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
@@ -517,6 +531,21 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			})
 		}
 		out.DecisionEconomics = dej
+	}
+
+	// Vector gauge
+	if opt.vectorGauge != nil {
+		g := opt.vectorGauge
+		out.VectorGauge = &VectorGaugeJSON{
+			State:          string(g.State),
+			Action:         string(g.Action),
+			Score:          g.Score,
+			ContextPct:     g.ContextPct,
+			CPD:            g.CPD,
+			TTC:            g.TTC,
+			CDR:            g.CDR,
+			PostCompaction: g.PostCompaction,
+		}
 	}
 
 	// Compaction archaeology

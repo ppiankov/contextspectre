@@ -18,6 +18,10 @@ type Config struct {
 	Aliases            map[string]Alias `json:"aliases"`
 	CostAlertThreshold float64          `json:"cost_alert_threshold,omitempty"`
 	ExpertMode         bool             `json:"expert_mode,omitempty"`
+	HealthContextWarn  float64          `json:"health_context_warn,omitempty"`
+	HealthCPDWarn      float64          `json:"health_cpd_warn,omitempty"`
+	HealthTTCWarn      int              `json:"health_ttc_warn,omitempty"`
+	HealthCDRWarn      float64          `json:"health_cdr_warn,omitempty"`
 }
 
 // Alias maps a logical project name to one or more filesystem paths.

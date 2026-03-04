@@ -121,12 +121,16 @@ func printFullSummary(sessionID string, stats *analyzer.ContextStats, health *an
 			health.Grade, health.SignalPercent, health.NoisePercent)
 	}
 
-	// Decision economics
+	// Decision economics + vector gauge
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 	decEcon := analyzer.ComputeDecisionEconomics(stats, driftResult)
 	if decEcon.HasDecisions {
 		fmt.Printf("Decision:    %s/decision (%d decisions, %d turns/decision)\n",
 			analyzer.FormatCost(decEcon.CPD), decEcon.TotalDecisions, decEcon.TTC)
+	}
+	gauge := analyzer.ComputeGauge(stats, decEcon, loadGaugeThresholds())
+	if gauge.State != analyzer.VectorHealthy {
+		fmt.Printf("Health:      %s -- %s\n", gauge.State, gauge.Action)
 	}
 
 	// Compactions
@@ -246,20 +250,22 @@ func formatDuration(d time.Duration) string {
 
 // SummaryJSON is the JSON output for the summary command.
 type SummaryJSON struct {
-	SessionID   string   `json:"session_id"`
-	Model       string   `json:"model,omitempty"`
-	TotalCost   float64  `json:"total_cost"`
-	Turns       int      `json:"turns"`
-	DurationSec int      `json:"duration_seconds"`
-	ContextPct  float64  `json:"context_percent"`
-	Compactions int      `json:"compactions"`
-	Grade       string   `json:"signal_grade,omitempty"`
-	NoisePct    float64  `json:"noise_percent,omitempty"`
-	CPD         float64  `json:"cpd,omitempty"`
-	TTC         int      `json:"ttc,omitempty"`
-	Decisions   int      `json:"decisions,omitempty"`
-	TopFiles    []string `json:"top_files,omitempty"`
-	Cleanable   int      `json:"cleanable_tokens,omitempty"`
+	SessionID    string   `json:"session_id"`
+	Model        string   `json:"model,omitempty"`
+	TotalCost    float64  `json:"total_cost"`
+	Turns        int      `json:"turns"`
+	DurationSec  int      `json:"duration_seconds"`
+	ContextPct   float64  `json:"context_percent"`
+	Compactions  int      `json:"compactions"`
+	Grade        string   `json:"signal_grade,omitempty"`
+	NoisePct     float64  `json:"noise_percent,omitempty"`
+	CPD          float64  `json:"cpd,omitempty"`
+	TTC          int      `json:"ttc,omitempty"`
+	Decisions    int      `json:"decisions,omitempty"`
+	VectorState  string   `json:"vector_state,omitempty"`
+	VectorAction string   `json:"vector_action,omitempty"`
+	TopFiles     []string `json:"top_files,omitempty"`
+	Cleanable    int      `json:"cleanable_tokens,omitempty"`
 }
 
 func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration, entries []jsonl.Entry) *SummaryJSON {
@@ -291,6 +297,9 @@ func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *an
 		out.TTC = decEcon.TTC
 		out.Decisions = decEcon.TotalDecisions
 	}
+	gauge := analyzer.ComputeGauge(stats, decEcon, loadGaugeThresholds())
+	out.VectorState = string(gauge.State)
+	out.VectorAction = string(gauge.Action)
 	return out
 }
 
