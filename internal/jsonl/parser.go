@@ -91,12 +91,14 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 // LightStats holds minimal stats extracted without full parsing.
 type LightStats struct {
 	LineCount             int
+	AssistantCount        int
 	FileSizeBytes         int64
 	TypeCounts            map[MessageType]int
 	LastUsage             *Usage
 	MaxContext            int
 	Slug                  string
 	ImageCount            int
+	ImageBytesEstimate    int64 // total raw bytes of JSONL entries containing images
 	CompactionCount       int
 	LastCompactionBefore  int
 	LastCompactionAfter   int
@@ -155,6 +157,10 @@ func ScanLight(path string) (*LightStats, error) {
 			noiseBytes += len(raw)
 		}
 
+		if e.Type == TypeAssistant {
+			stats.AssistantCount++
+		}
+
 		if e.Type == TypeAssistant && e.Message != nil && e.Message.Usage != nil {
 			stats.LastUsage = e.Message.Usage
 			ctx := e.Message.Usage.TotalContextTokens()
@@ -186,6 +192,7 @@ func ScanLight(path string) (*LightStats, error) {
 		if e.Type == TypeUser && e.Message != nil {
 			if containsImage(raw) {
 				stats.ImageCount++
+				stats.ImageBytesEstimate += int64(len(raw))
 			}
 		}
 	}
