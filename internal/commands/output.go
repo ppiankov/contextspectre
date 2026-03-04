@@ -54,6 +54,7 @@ type StatsOutput struct {
 	Recommendation *RecommendationJSON `json:"recommendation,omitempty"`
 	EpochTimeline  []EpochTimelineJSON `json:"epoch_timeline,omitempty"`
 	ScopeDrift     *ScopeDriftJSON     `json:"scope_drift,omitempty"`
+	GhostContext   *GhostReportJSON    `json:"ghost_context,omitempty"`
 }
 
 // ArchaeologyJSON holds compaction archaeology for JSON output.
@@ -224,6 +225,19 @@ type TangentSeqJSON struct {
 	TokenCost          int      `json:"token_cost"`
 	DollarCost         float64  `json:"dollar_cost"`
 	ReExplanationFiles []string `json:"re_explanation_files,omitempty"`
+}
+
+// GhostFileJSON is a single ghost context file for JSON output.
+type GhostFileJSON struct {
+	Path            string `json:"path"`
+	CompactionIndex int    `json:"compaction_index"`
+	EpochModified   int    `json:"epoch_modified"`
+}
+
+// GhostReportJSON holds ghost context detection results for JSON output.
+type GhostReportJSON struct {
+	Files       []GhostFileJSON `json:"files"`
+	TotalGhosts int             `json:"total_ghosts"`
 }
 
 // CleanOutput is the JSON output for the clean command.
@@ -464,6 +478,21 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			})
 		}
 		out.ScopeDrift = dj
+	}
+
+	// Ghost context
+	if stats.GhostReport != nil && stats.GhostReport.TotalGhosts > 0 {
+		gj := &GhostReportJSON{
+			TotalGhosts: stats.GhostReport.TotalGhosts,
+		}
+		for _, g := range stats.GhostReport.Files {
+			gj.Files = append(gj.Files, GhostFileJSON{
+				Path:            g.Path,
+				CompactionIndex: g.CompactionIndex,
+				EpochModified:   g.EpochModified,
+			})
+		}
+		out.GhostContext = gj
 	}
 
 	return out

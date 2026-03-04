@@ -52,6 +52,7 @@ type ContextStats struct {
 	EpochCosts           []EpochCost
 	Model                string
 	Archaeology          *CompactionReport
+	GhostReport          *GhostReport
 }
 
 // CompactionEvent records a detected context compaction.
@@ -193,6 +194,11 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 	// Compaction archaeology
 	if len(stats.Compactions) > 0 {
 		stats.Archaeology = AnalyzeCompactions(entries, stats.Compactions)
+	}
+
+	// Ghost context detection
+	if stats.Archaeology != nil && len(stats.Archaeology.Events) > 0 {
+		stats.GhostReport = DetectGhosts(entries, stats.Archaeology, stats.Compactions)
 	}
 
 	return stats
