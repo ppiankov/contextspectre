@@ -34,6 +34,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - Per-model cost breakdown (Opus/Sonnet/Haiku) with correct per-model pricing
 - Cost velocity ($/hour) and configurable cost alert thresholds
 - Active sessions dashboard with signal grade, cost, and cleanable tokens
+- Status line telemetry with mtime-based caching (<2ms repeat calls)
 - Watch mode with live context polling, compaction alerts, and color transitions
 
 **Cleanup**
@@ -64,7 +65,7 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 - CWD-based session targeting
 - Federated project identity (project aliases across directories)
 
-**Planned:** Vector Control panel, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline, reasoning entropy score, project reasoning graph, decision lineage, conflict detection, project memory synthesis. See [Roadmap](#roadmap).
+**Planned:** Vector Control panel, cleanup cadence, budget protection, sidechain repair, session timeline, reasoning entropy score, project reasoning graph, decision lineage, conflict detection, project memory synthesis. See [Roadmap](#roadmap).
 
 ## What it is NOT
 
@@ -146,7 +147,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, Vector Control panel, status line telemetry, cleanup cadence, budget protection, sidechain repair, session timeline |
+| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, status line telemetry ✓, Vector Control panel, cleanup cadence, budget protection, sidechain repair, session timeline |
 | 5. Reasoning memory | Planned | Project reasoning graph, decision lineage, conflict detection, project memory synthesis, CLAUDE.md sync |
 
 ## Known limitations
