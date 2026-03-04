@@ -764,6 +764,26 @@ type ProjectListOutput struct {
 	Aliases []ProjectAliasJSON `json:"aliases"`
 }
 
+// SearchHitJSON is a single search match for JSON output.
+type SearchHitJSON struct {
+	SessionID  string `json:"session_id"`
+	Slug       string `json:"slug,omitempty"`
+	Project    string `json:"project"`
+	EntryIndex int    `json:"entry_index"`
+	Timestamp  string `json:"timestamp"`
+	Role       string `json:"role"`
+	Snippet    string `json:"snippet"`
+}
+
+// SearchOutputJSON is the JSON output for the search command.
+type SearchOutputJSON struct {
+	Query    string          `json:"query"`
+	Total    int             `json:"total_hits"`
+	Sessions int             `json:"sessions_searched"`
+	Matches  int             `json:"sessions_with_matches"`
+	Hits     []SearchHitJSON `json:"hits"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
