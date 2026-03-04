@@ -25,6 +25,7 @@ const DefaultIdleThreshold = 2 * time.Second
 // CleanLiveOpts configures a live cleanup pass.
 type CleanLiveOpts struct {
 	Aggressive bool          // include Tier 4-5 (images, separators, truncation)
+	Tier3      bool          // include stale reads + failed retries
 	Threshold  time.Duration // idle threshold (default: DefaultIdleThreshold)
 }
 
@@ -32,6 +33,8 @@ type CleanLiveOpts struct {
 type CleanLiveResult struct {
 	ProgressRemoved    int
 	SnapshotsRemoved   int
+	StaleReadsRemoved  int // Tier 3, only with Tier3
+	FailedRetries      int // Tier 3, only with Tier3
 	ImagesReplaced     int // Tier 4, only with Aggressive
 	SeparatorsStripped int // Tier 4, only with Aggressive
 	OutputsTruncated   int // Tier 5, only with Aggressive
@@ -206,6 +209,50 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 		return true, nil
 	}); err != nil {
 		return nil, err
+	}
+
+	// --- Tier 3: Stale reads (Tier3 only) ---
+	if opts.Tier3 {
+		if err := runStep("stale-reads", func() (bool, error) {
+			entries, err := jsonl.Parse(path)
+			if err != nil {
+				return false, err
+			}
+			dupResult := analyzer.FindDuplicateReads(entries)
+			if len(dupResult.Groups) == 0 {
+				return false, nil
+			}
+			dr, err := DeduplicateReads(path, dupResult)
+			if err != nil {
+				return false, err
+			}
+			result.StaleReadsRemoved = dr.StaleReadsRemoved
+			return dr.StaleReadsRemoved > 0, nil
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	// --- Tier 3: Failed retries (Tier3 only) ---
+	if opts.Tier3 {
+		if err := runStep("failed-retries", func() (bool, error) {
+			entries, err := jsonl.Parse(path)
+			if err != nil {
+				return false, err
+			}
+			retryResult := analyzer.FindFailedRetries(entries)
+			if len(retryResult.Sequences) == 0 {
+				return false, nil
+			}
+			rr, err := RemoveFailedRetries(path, retryResult)
+			if err != nil {
+				return false, err
+			}
+			result.FailedRetries = rr.FailedRemoved
+			return rr.FailedRemoved > 0, nil
+		}); err != nil {
+			return nil, err
+		}
 	}
 
 	// --- Tier 4: Image replacement (aggressive only) ---
