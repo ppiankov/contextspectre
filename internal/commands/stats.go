@@ -49,8 +49,14 @@ func runStats(cmd *cobra.Command, args []string) error {
 	// Scope drift analysis
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 
+	duration := sessionDuration(entries)
+
 	if isJSON() {
-		out := buildStatsOutput(sessionID, stats, rec, driftResult)
+		threshold := loadCostAlertThreshold()
+		out := buildStatsOutput(sessionID, stats, rec, driftResult, statsOutputOpt{
+			duration:           duration,
+			costAlertThreshold: threshold,
+		})
 		return printJSON(out)
 	}
 
@@ -197,6 +203,13 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Total:         %s (%s/turn)\n",
 			analyzer.FormatCost(stats.Cost.TotalCost),
 			analyzer.FormatCost(stats.Cost.CostPerTurn))
+
+		// Cost velocity ($/hour)
+		duration := sessionDuration(entries)
+		if duration > 0 && stats.Cost.TotalCost > 0 {
+			velocity := stats.Cost.TotalCost / duration.Hours()
+			fmt.Printf("  Velocity:      %s/hour\n", analyzer.FormatCost(velocity))
+		}
 
 		// Breakdown by component, sorted by magnitude
 		type costLine struct {
@@ -351,6 +364,12 @@ func runStats(cmd *cobra.Command, args []string) error {
 			}
 		}
 		fmt.Println()
+	}
+
+	// Cost alert check (text output only — JSON handled above)
+	if stats.Cost != nil && stats.Cost.TotalCost > 0 {
+		threshold := loadCostAlertThreshold()
+		printCostAlert(stats.Cost.TotalCost, threshold)
 	}
 
 	return nil

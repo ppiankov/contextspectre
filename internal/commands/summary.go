@@ -145,6 +145,12 @@ func printFullSummary(sessionID string, stats *analyzer.ContextStats, health *an
 			formatTokens(rec.TotalTokens), rec.TotalTurnsGained)
 	}
 
+	// Cost alert
+	if stats.Cost != nil && stats.Cost.TotalCost > 0 {
+		threshold := loadCostAlertThreshold()
+		printCostAlert(stats.Cost.TotalCost, threshold)
+	}
+
 	return nil
 }
 
