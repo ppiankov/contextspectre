@@ -720,6 +720,35 @@ type VectorOutputJSON struct {
 	Files           []string         `json:"files"`
 }
 
+// ContinuityOutputJSON is the JSON output for the continuity command.
+type ContinuityOutputJSON struct {
+	ProjectName     string             `json:"project_name"`
+	SessionsScanned int                `json:"sessions_scanned"`
+	RepeatedFiles   []RepeatedFileJSON `json:"repeated_files"`
+	RepeatedTexts   []RepeatedTextJSON `json:"repeated_texts"`
+	TotalFileTokens int                `json:"total_repeated_file_tokens"`
+	TotalTextTokens int                `json:"total_repeated_text_tokens"`
+	TotalTaxTokens  int                `json:"total_tax_tokens"`
+	TotalTaxCost    float64            `json:"total_tax_cost"`
+}
+
+// RepeatedFileJSON is a single repeated file for JSON output.
+type RepeatedFileJSON struct {
+	Path            string   `json:"path"`
+	SessionCount    int      `json:"session_count"`
+	Sessions        []string `json:"sessions"`
+	EstimatedTokens int      `json:"estimated_tokens"`
+}
+
+// RepeatedTextJSON is a single repeated text block for JSON output.
+type RepeatedTextJSON struct {
+	Text            string   `json:"text"`
+	CharCount       int      `json:"char_count"`
+	SessionCount    int      `json:"session_count"`
+	Sessions        []string `json:"sessions"`
+	EstimatedTokens int      `json:"estimated_tokens"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
