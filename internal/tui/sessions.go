@@ -327,23 +327,23 @@ func (m sessionsModel) View() string {
 	// Column header
 	var hdr strings.Builder
 	hdr.WriteString("    ") // prefix: active char + selector + space
-	hdr.WriteString(fmt.Sprintf("%-*s ", cols.projW, "Project"))
-	hdr.WriteString(fmt.Sprintf("%-*s ", cols.slugW, "Slug"))
-	hdr.WriteString(fmt.Sprintf("%-*s ", cols.idW, "ID"))
+	fmt.Fprintf(&hdr, "%-*s ", cols.projW, "Project")
+	fmt.Fprintf(&hdr, "%-*s ", cols.slugW, "Slug")
+	fmt.Fprintf(&hdr, "%-*s ", cols.idW, "ID")
 	if cols.showBranch {
-		hdr.WriteString(fmt.Sprintf("%-*s ", cols.branchW, "Branch"))
+		fmt.Fprintf(&hdr, "%-*s ", cols.branchW, "Branch")
 	}
-	hdr.WriteString(fmt.Sprintf("%*s ", cols.msgsW, "Msgs"))
+	fmt.Fprintf(&hdr, "%*s ", cols.msgsW, "Msgs")
 	if cols.showSize {
-		hdr.WriteString(fmt.Sprintf("%*s ", cols.sizeW, "Size"))
+		fmt.Fprintf(&hdr, "%*s ", cols.sizeW, "Size")
 	}
-	hdr.WriteString(fmt.Sprintf("%-*s ", cols.barW, "Context"))
-	hdr.WriteString(fmt.Sprintf("%*s ", cols.pctW, ""))
+	fmt.Fprintf(&hdr, "%-*s ", cols.barW, "Context")
+	fmt.Fprintf(&hdr, "%*s ", cols.pctW, "")
 	if !cols.mergeSignal {
-		hdr.WriteString(fmt.Sprintf("%*s ", cols.sigW, "Sig"))
+		fmt.Fprintf(&hdr, "%*s ", cols.sigW, "Sig")
 	}
-	hdr.WriteString(fmt.Sprintf("%*s ", cols.costW, "Cost"))
-	hdr.WriteString(fmt.Sprintf("%*s", cols.modW, "Modified"))
+	fmt.Fprintf(&hdr, "%*s ", cols.costW, "Cost")
+	fmt.Fprintf(&hdr, "%*s", cols.modW, "Modified")
 	b.WriteString(styleHeader.Render(hdr.String()))
 	b.WriteString("\n")
 	b.WriteString(styleMuted.Render(" " + strings.Repeat("─", m.width-2)))

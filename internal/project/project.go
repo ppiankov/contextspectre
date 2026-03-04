@@ -67,7 +67,7 @@ func Save(claudeDir string, cfg *Config) error {
 		return fmt.Errorf("write temp config: %w", err)
 	}
 	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
+		_ = os.Remove(tmp)
 		return fmt.Errorf("rename config: %w", err)
 	}
 	return nil
