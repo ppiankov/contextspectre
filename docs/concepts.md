@@ -4,6 +4,7 @@
 
 | Term | Definition |
 |------|------------|
+| **Context decay** | The gradual degradation of a reasoning session's quality, cost efficiency, and structural coherence over time. Happens along three axes simultaneously: economic, reasoning, and structural. Not a bug — a physics problem. Fixed-size window + unbounded session = decay. |
 | **Compaction** | Claude Code's automatic context compression. Triggers at ~165K tokens, summarizes the conversation, resets to ~40-50K. You lose specificity. |
 | **Compaction epoch** | The period between two compactions. The fundamental unit of reasoning history — each epoch has its own topic, cost, and drift profile. |
 | **Compaction archaeology** | Forensic reconstruction of what a compaction preserved and discarded: files touched, tools used, decisions made, compression ratio. |
@@ -40,7 +41,8 @@
 | **Cleanup cadence** | The rhythm of proactive cleanup during a session. Optimal cadence is noise-ratio-driven (clean when noise > 15%), not event-driven (clean when context overflows). Planned (Phase 4). |
 | **Cadence score** | A 0-100 composite metric measuring cleanup urgency. Weighted from noise ratio (40%), compaction proximity (30%), token growth rate (20%), and time since last cleanup (10%). Score > 70 = clean now. 40-70 = due. < 40 = healthy. Planned (Phase 4). |
 | **Continuity index** | A 0-100 score measuring cross-session efficiency for a project. 100 = no redundant reads or re-explanation. 0 = every session starts from scratch. Based on unique vs total file reads and text block deduplication. Planned (Phase 4). |
-| **Vector Control** | TUI instrument panel for reasoning lifecycle management. Three panels: Now (current state), What-if (projected cost without cleanup), If clean now (projected gains). One-key actions: C (clean), S (split tangent), E (export). The reasoning flight instrument panel. Planned (Phase 4). |
+| **Vector control** (practice) | The practice of monitoring and correcting the direction of a reasoning session so that exploration, decisions, and execution remain aligned with the project goal. The operational layer that keeps all three axes of context decay healthy. Encompasses the inspect → detect drift → correct → continue loop. |
+| **Vector Control panel** (TUI) | TUI instrument panel implementing vector control. Three panels: Now (current state), What-if (projected cost without cleanup), If clean now (projected gains). One-key actions: C (clean), S (split tangent), E (export). Planned (Phase 4). |
 | **Expert hygiene mode** | Opt-in auto-clean for safe tiers (1-3: progress, snapshots, stale reads). Triggers on user actions only (stats, TUI refresh, watch poll), never in background. Everything tier 4+ remains manual. Planned (Phase 4). |
 | **Budget protection** | Combined risk assessment from compaction proximity, noise ratio, and weekly budget remaining. Produces ranked action recommendations with cost-efficiency estimates. Planned (Phase 4). |
 | **Cooldown** | Claude Code's weekly usage limit enforcement. When the limit is reached, a cooldown period prevents further usage until the billing week resets. Invisible to users until they hit the wall. |
