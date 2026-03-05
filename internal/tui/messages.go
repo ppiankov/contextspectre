@@ -46,6 +46,13 @@ type messagesModel struct {
 	width, height  int
 }
 
+// Max lines for variable-length sections in the Messages context meter.
+// Prevents ghost files and compaction history from pushing the message list off screen.
+const (
+	maxArchLines  = 3
+	maxGhostLines = 3
+)
+
 type backToSessionsMsg struct{}
 
 type showConfirmMsg struct {
@@ -709,9 +716,14 @@ func (m messagesModel) renderContextMeter() string {
 			m.driftResult.OverallDrift*100, m.driftResult.TotalOutScope)))
 	}
 
-	// Compaction archaeology summary lines
+	// Compaction archaeology summary lines (capped to preserve message list space).
 	if m.stats.Archaeology != nil {
-		for _, arch := range m.stats.Archaeology.Events {
+		events := m.stats.Archaeology.Events
+		shown := len(events)
+		if shown > maxArchLines {
+			shown = maxArchLines
+		}
+		for _, arch := range events[:shown] {
 			b.WriteString("\n")
 			archLine := fmt.Sprintf("  #%d: %d turns, %d files, %d tools → %d chars (%.0fx compression)",
 				arch.CompactionIndex+1, arch.Before.TurnCount,
@@ -719,18 +731,31 @@ func (m messagesModel) renderContextMeter() string {
 				arch.After.SummaryCharCount, arch.After.CompressionRatio)
 			b.WriteString(styleMuted.Render(archLine))
 		}
+		if len(events) > maxArchLines {
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("  ... %d more compactions (Overview tab)", len(events)-maxArchLines)))
+		}
 	}
 
-	// Ghost context warning
+	// Ghost context warning (capped to preserve message list space).
 	if m.stats.GhostReport != nil && m.stats.GhostReport.TotalGhosts > 0 {
 		b.WriteString("\n")
 		ghostLine := fmt.Sprintf(" !! Ghost context: %d files modified after compaction — summary may be stale",
 			m.stats.GhostReport.TotalGhosts)
 		b.WriteString(styleWarning.Render(ghostLine))
-		for _, g := range m.stats.GhostReport.Files {
+		files := m.stats.GhostReport.Files
+		shown := len(files)
+		if shown > maxGhostLines {
+			shown = maxGhostLines
+		}
+		for _, g := range files[:shown] {
 			b.WriteString("\n")
 			b.WriteString(styleMuted.Render(fmt.Sprintf("    #%d → %s",
 				g.CompactionIndex+1, g.Path)))
+		}
+		if len(files) > maxGhostLines {
+			b.WriteString("\n")
+			b.WriteString(styleMuted.Render(fmt.Sprintf("    ... %d more files (Ghost tab)", len(files)-maxGhostLines)))
 		}
 	}
 
@@ -987,14 +1012,24 @@ func (m messagesModel) visibleRows() int {
 	if m.stats != nil && m.stats.CompactionCount > 0 {
 		reserved++
 	}
-	// Extra lines for compaction archaeology
+	// Extra lines for compaction archaeology (capped at maxArchLines).
 	if m.stats != nil && m.stats.Archaeology != nil {
-		reserved += len(m.stats.Archaeology.Events)
+		n := len(m.stats.Archaeology.Events)
+		if n > maxArchLines {
+			reserved += maxArchLines + 1 // capped lines + "... N more" line
+		} else {
+			reserved += n
+		}
 	}
-	// Extra lines for ghost context warning
+	// Extra lines for ghost context warning (capped at maxGhostLines).
 	if m.stats != nil && m.stats.GhostReport != nil && m.stats.GhostReport.TotalGhosts > 0 {
-		reserved++                                  // header line
-		reserved += m.stats.GhostReport.TotalGhosts // one per ghost file
+		reserved++ // header line
+		n := m.stats.GhostReport.TotalGhosts
+		if n > maxGhostLines {
+			reserved += maxGhostLines + 1 // capped lines + "... N more" line
+		} else {
+			reserved += n
+		}
 	}
 	// Extra line for image weight warning
 	if m.stats != nil && m.stats.CurrentContextTokens > 0 && m.stats.ImageCount > 0 {
