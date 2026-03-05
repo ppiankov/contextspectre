@@ -105,6 +105,21 @@ func gradeStyle(grade string) lipgloss.Style {
 	}
 }
 
+func entropyStyle(level string) lipgloss.Style {
+	switch level {
+	case "LOW":
+		return lipgloss.NewStyle().Foreground(colorGreen)
+	case "MEDIUM":
+		return lipgloss.NewStyle().Foreground(colorYellow)
+	case "HIGH":
+		return lipgloss.NewStyle().Foreground(colorAmber)
+	case "CRITICAL":
+		return lipgloss.NewStyle().Foreground(colorRed)
+	default:
+		return lipgloss.NewStyle().Foreground(colorMuted)
+	}
+}
+
 // gaugeStateColor returns a color for the vector gauge state.
 func gaugeStateColor(state analyzer.VectorState) lipgloss.Color {
 	switch state {

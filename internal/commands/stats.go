@@ -57,6 +57,19 @@ func runStats(cmd *cobra.Command, args []string) error {
 
 	// Scope drift analysis
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
+	health := analyzer.ComputeHealth(stats, rec)
+	signalRatio := analyzer.SignalRatioForGrade("A")
+	if health != nil {
+		signalRatio = analyzer.SignalRatioForGrade(health.Grade)
+	}
+	entropy := analyzer.CalculateEntropy(analyzer.EntropyInput{
+		SignalRatio:     signalRatio,
+		CurrentTokens:   stats.CurrentContextTokens,
+		DriftRatio:      driftResult.OverallDrift,
+		OrphanTokens:    stats.SidechainTokens,
+		TotalTokens:     stats.CurrentContextTokens,
+		CompactionCount: stats.CompactionCount,
+	})
 
 	duration := sessionDuration(entries)
 
@@ -70,6 +83,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 			costAlertThreshold: threshold,
 			decisionEconomics:  decEconJSON,
 			vectorGauge:        gauge,
+			entropy:            &entropy,
 		})
 		return printJSON(out)
 	}
@@ -104,7 +118,6 @@ func runStats(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Context health
-	health := analyzer.ComputeHealth(stats, rec)
 	if health != nil && health.TotalTokens > 0 {
 		fmt.Println("Context health:")
 		fmt.Printf("  Signal:           %.1f%% (%s)\n", health.SignalPercent, health.Grade)
@@ -113,6 +126,13 @@ func runStats(cmd *cobra.Command, args []string) error {
 		if health.BiggestOffender != "" {
 			fmt.Printf("  Biggest offender: %s (%s tokens)\n", health.BiggestOffender, formatTokens(health.OffenderTokens))
 		}
+		fmt.Printf("  Session entropy:  %s (%.1f/100)\n", entropy.Level, entropy.Score)
+		fmt.Printf("  Entropy axes:     noise %.1f | pressure %.1f | drift %.1f | orphans %.1f | compression %.1f\n",
+			entropy.Breakdown.Noise,
+			entropy.Breakdown.CompactionPressure,
+			entropy.Breakdown.Drift,
+			entropy.Breakdown.Orphans,
+			entropy.Breakdown.CompressionLoss)
 		fmt.Println()
 	}
 
