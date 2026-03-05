@@ -18,14 +18,17 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "contextspectre",
 	Short: "contextspectre — Claude Code conversation context manager",
-	Long: `contextspectre shows context usage for Claude Code conversations and
-enables selective cleanup to extend conversation lifespan before compaction.
+	Long: `contextspectre gives you visibility and control over Claude Code session context.
 
-It reads JSONL conversation files from ~/.claude/projects/ and provides:
-  - Context usage meter with compaction distance estimate
-  - Selective message deletion with impact prediction
-  - Image replacement to reclaim context space
-  - Automatic backup before any modification`,
+Quick start:
+  contextspectre status          One-screen summary (auto-detects from CWD)
+  contextspectre active          Show active sessions with signal grades
+  contextspectre quick-clean     One-command cleanup of most recent session
+  contextspectre                 Launch interactive TUI
+
+Aliases: "status" = summary, "list" = sessions
+
+See https://github.com/ppiankov/contextspectre for full documentation.`,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		logging.Init(verbose)
 	},

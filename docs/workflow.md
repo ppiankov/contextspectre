@@ -55,7 +55,8 @@ signal=""
 cleanable=""
 
 if [ -f "$cache" ]; then
-  cache_age=$(( $(date +%s) - $(stat -f %m "$cache" 2>/dev/null || echo 0) ))
+  mtime=$(stat -f %m "$cache" 2>/dev/null || stat -c %Y "$cache" 2>/dev/null || echo 0)
+  cache_age=$(( $(date +%s) - mtime ))
   if [ "$cache_age" -lt 60 ]; then
     signal=$(jq -r '.signal_grade // empty' "$cache" 2>/dev/null)
     cleanable_raw=$(jq -r '.cleanable_tokens // 0' "$cache" 2>/dev/null)
