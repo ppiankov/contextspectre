@@ -420,8 +420,7 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	done, sigCh := watchSignalHandler()
 	defer signal.Stop(sigCh)
 
 	acc := &watchAccumulator{start: time.Now()}
@@ -446,6 +445,15 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	for {
 		select {
 		case now := <-ticker.C:
+			// Check if shutdown was requested during a long clean cycle.
+			select {
+			case <-done:
+				acc.printSummary()
+				recordWatchSnapshots(sinceDuration)
+				return nil
+			default:
+			}
+
 			// Detect sleep/wake: if wall-clock gap exceeds threshold, reset state.
 			if gap := now.Sub(lastTick); gap > sleepThreshold {
 				ts := now.Format("15:04:05")
@@ -453,7 +461,6 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 					ts, formatDuration(gap))
 				consecutiveClean = 0
 				lastHeartbeat = now
-				// Drain any accumulated ticker ticks to prevent burst.
 				drainTicker(ticker)
 			}
 			lastTick = now
@@ -468,7 +475,7 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 			}
 			acc.cycles++
 			printCumulative(acc.tokens, acc.cycles, acc.start)
-		case <-sigCh:
+		case <-done:
 			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
 			return nil
@@ -488,6 +495,27 @@ func drainTicker(ticker *time.Ticker) {
 	}
 }
 
+// watchSignalHandler starts a goroutine that handles graceful and forced shutdown.
+// First signal sets the done channel (graceful). Second signal exits immediately.
+// Returns the done channel to check in the main loop.
+func watchSignalHandler() (chan struct{}, chan os.Signal) {
+	sigCh := make(chan os.Signal, 2) // buffer 2 so second signal isn't lost
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+
+	done := make(chan struct{})
+
+	go func() {
+		<-sigCh // first signal — request graceful stop
+		close(done)
+
+		<-sigCh // second signal — force exit
+		fmt.Fprintf(os.Stderr, "\nForce quit.\n")
+		os.Exit(1)
+	}()
+
+	return done, sigCh
+}
+
 const smartPollInterval = 5 * time.Second
 const sessionCooldown = 30 * time.Second
 
@@ -500,8 +528,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	ticker := time.NewTicker(smartPollInterval)
 	defer ticker.Stop()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	done, sigCh := watchSignalHandler()
 	defer signal.Stop(sigCh)
 
 	acc := &watchAccumulator{start: time.Now()}
@@ -529,18 +556,25 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	for {
 		select {
 		case now := <-ticker.C:
+			// Check if shutdown was requested during a long clean cycle.
+			select {
+			case <-done:
+				acc.printSummary()
+				recordWatchSnapshots(sinceDuration)
+				return nil
+			default:
+			}
+
 			// Detect sleep/wake: if wall-clock gap exceeds threshold, reset state.
 			if gap := now.Sub(lastTick); gap > sleepThreshold {
 				ts := now.Format("15:04:05")
 				fmt.Printf("[%s] Recovered from sleep (%s gap), resetting mtime cache\n",
 					ts, formatDuration(gap))
-				// Clear mtime/cooldown maps so all sessions are re-evaluated.
 				clear(lastMtime)
 				clear(lastClean)
 				seedMtimeMap(sinceDuration, lastMtime, lastClean)
 				consecutiveClean = 0
 				lastHeartbeat = now
-				// Drain accumulated ticks to prevent burst.
 				drainTicker(ticker)
 			}
 			lastTick = now
@@ -573,7 +607,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 			}
 			acc.cycles++
 			printCumulative(acc.tokens, acc.cycles, acc.start)
-		case <-sigCh:
+		case <-done:
 			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
 			return nil
