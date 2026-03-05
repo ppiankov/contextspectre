@@ -30,7 +30,92 @@ contextspectre | Opus 4.6 | ctx:65% [#############-------] | sig:F clean:149K | 
 
 The status line shows model, context fill, signal grade, cleanable tokens, and session cost — all at a glance while you work. When the signal grade drops or cleanable tokens grow, you know it's time to act.
 
-**Setup.** Add `contextspectre status-line --stdin` as your Claude Code status line hook. It reads the session path from stdin and outputs telemetry in the configured format (tab, shell, human, or json). The mtime cache ensures near-zero overhead — it only re-parses when the session file actually changes.
+**Setup.** Create a status line hook in your settings. Claude Code calls this script on every turn, passing session metadata as JSON on stdin.
+
+1. Create the hook script (e.g., `~/.claude/hooks/statusline.sh`):
+
+```bash
+#!/bin/bash
+# Status line hook: model, context %, signal grade, cleanable tokens, cost
+# contextspectre data via background cache (never blocks the UI)
+
+input=$(cat)
+
+repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")")
+model=$(echo "$input" | jq -r '.model.display_name // "?"')
+ctx_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
+cost=$(printf '%.2f' "$(echo "$input" | jq -r '.cost.total_cost_usd // 0')")
+added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
+removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
+
+# contextspectre: read cached signal grade and cleanable tokens
+# Background refresh keeps data fresh without blocking
+cache="/tmp/contextspectre-status-$PPID.json"
+signal=""
+cleanable=""
+
+if [ -f "$cache" ]; then
+  cache_age=$(( $(date +%s) - $(stat -f %m "$cache" 2>/dev/null || echo 0) ))
+  if [ "$cache_age" -lt 60 ]; then
+    signal=$(jq -r '.signal_grade // empty' "$cache" 2>/dev/null)
+    cleanable_raw=$(jq -r '.cleanable_tokens // 0' "$cache" 2>/dev/null)
+    if [ "$cleanable_raw" -gt 1000 ] 2>/dev/null; then
+      cleanable="$(( cleanable_raw / 1000 ))K"
+    fi
+  fi
+fi
+
+# Fork background refresh (non-blocking, never stalls the prompt)
+if [ ! -f "$cache" ] || [ "${cache_age:-999}" -ge 60 ]; then
+  (contextspectre summary --cwd --format json > "$cache" 2>/dev/null &)
+fi
+
+# Color context by usage level
+if [ "$ctx_pct" -ge 80 ]; then ctx_color="\033[31m"    # red
+elif [ "$ctx_pct" -ge 60 ]; then ctx_color="\033[33m"   # yellow
+else ctx_color="\033[32m"; fi                            # green
+reset="\033[0m"
+
+# Build 20-char progress bar
+filled=$((ctx_pct / 5)); empty=$((20 - filled))
+bar=""; i=0; while [ $i -lt $filled ]; do bar="${bar}#"; i=$((i+1)); done
+i=0; while [ $i -lt $empty ]; do bar="${bar}-"; i=$((i+1)); done
+
+# Assemble contextspectre segment
+cs_seg=""
+[ -n "$signal" ] && cs_seg=" | sig:${signal}"
+[ -n "$cleanable" ] && cs_seg="${cs_seg} clean:${cleanable}"
+
+printf '%b' "${repo} | ${model} | ${ctx_color}ctx:${ctx_pct}%${reset} [${bar}]${cs_seg} | \$${cost} | +${added}/-${removed}"
+```
+
+2. Make it executable:
+
+```bash
+chmod +x ~/.claude/hooks/statusline.sh
+```
+
+3. Register the hook in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "StatusLine": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/statusline.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The hook runs `contextspectre summary --cwd --format json` in the background every 60 seconds, caching the result. The status line reads from cache so it never blocks — even on large sessions.
 
 **What to watch for:**
 - Signal grade dropping from A/B to D/F — noise is accumulating
