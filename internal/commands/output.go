@@ -52,6 +52,7 @@ type StatsOutput struct {
 	Health             *HealthScoreJSON       `json:"health,omitempty"`
 	Entropy            *EntropyJSON           `json:"entropy,omitempty"`
 	Cadence            *CadenceJSON           `json:"cadence,omitempty"`
+	BudgetProtection   *BudgetProtectionJSON  `json:"budget_protection,omitempty"`
 	Cost               *CostJSON              `json:"cost,omitempty"`
 	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
 	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
@@ -261,6 +262,31 @@ type CadenceJSON struct {
 	PerTurnSaveCost      float64 `json:"per_turn_save_cost"`
 }
 
+// BudgetProtectionJSON holds combined risk assessment and ranked actions.
+type BudgetProtectionJSON struct {
+	RiskLevel                 string             `json:"risk_level"`
+	WeeklyLimit               float64            `json:"weekly_limit"`
+	WeeklySpent               float64            `json:"weekly_spent"`
+	WeeklyRemaining           float64            `json:"weekly_remaining"`
+	WeeklyRemainingPercent    float64            `json:"weekly_remaining_percent"`
+	TurnsUntilCompaction      int                `json:"turns_until_compaction"`
+	NoiseTokens               int                `json:"noise_tokens"`
+	NoiseRatio                float64            `json:"noise_ratio"`
+	EstimatedCostToCompaction float64            `json:"estimated_cost_to_compaction"`
+	ExpectedTurnsGained       int                `json:"expected_turns_gained"`
+	ExpectedDelayMinutes      int                `json:"expected_delay_minutes"`
+	RecommendedAction         string             `json:"recommended_action"`
+	RecommendedSavings        float64            `json:"recommended_savings"`
+	OffloadHint               bool               `json:"offload_hint"`
+	Actions                   []BudgetActionJSON `json:"actions,omitempty"`
+}
+
+// BudgetActionJSON is one ranked budget action.
+type BudgetActionJSON struct {
+	Action           string  `json:"action"`
+	EstimatedSavings float64 `json:"estimated_savings"`
+}
+
 // RecommendationJSON holds cleanup recommendations for JSON output.
 type RecommendationJSON struct {
 	Items               []CleanupItemJSON `json:"items"`
@@ -420,6 +446,7 @@ type statsOutputOpt struct {
 	vectorGauge        *analyzer.VectorGauge
 	entropy            *analyzer.EntropyScore
 	cadence            *analyzer.CadenceAssessment
+	budget             *analyzer.BudgetAssessment
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
@@ -493,6 +520,31 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			ProjectedSaveCost:    opt.cadence.ProjectedSaveCost,
 			PerTurnSaveCost:      opt.cadence.PerTurnSaveCost,
 		}
+	}
+	if opt.budget != nil {
+		bj := &BudgetProtectionJSON{
+			RiskLevel:                 string(opt.budget.RiskLevel),
+			WeeklyLimit:               opt.budget.WeeklyLimit,
+			WeeklySpent:               opt.budget.WeeklySpent,
+			WeeklyRemaining:           opt.budget.WeeklyRemaining,
+			WeeklyRemainingPercent:    opt.budget.WeeklyRemainingPercent,
+			TurnsUntilCompaction:      opt.budget.TurnsUntilCompaction,
+			NoiseTokens:               opt.budget.NoiseTokens,
+			NoiseRatio:                opt.budget.NoiseRatio,
+			EstimatedCostToCompaction: opt.budget.EstimatedCostToCompaction,
+			ExpectedTurnsGained:       opt.budget.ExpectedTurnsGained,
+			ExpectedDelayMinutes:      opt.budget.ExpectedDelayMinutes,
+			RecommendedAction:         opt.budget.RecommendedAction,
+			RecommendedSavings:        opt.budget.RecommendedSavings,
+			OffloadHint:               opt.budget.OffloadHint,
+		}
+		for _, a := range opt.budget.Actions {
+			bj.Actions = append(bj.Actions, BudgetActionJSON{
+				Action:           a.Action,
+				EstimatedSavings: a.EstimatedSavings,
+			})
+		}
+		out.BudgetProtection = bj
 	}
 
 	// Fill message counts

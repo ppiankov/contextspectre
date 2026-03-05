@@ -71,6 +71,14 @@ func runStats(cmd *cobra.Command, args []string) error {
 		CompactionCount: stats.CompactionCount,
 	})
 	cadence := analyzer.AssessCleanupCadence(stats, rec)
+	var budgetProtection *analyzer.BudgetAssessment
+	weeklyBudgetLimit := loadWeeklyBudgetLimit()
+	if weeklyBudgetLimit > 0 {
+		weeklySpent, _, err := computeWeeklySpend(resolveClaudeDir())
+		if err == nil {
+			budgetProtection = analyzer.AssessBudgetRisk(stats, rec, driftResult, weeklyBudgetLimit, weeklySpent)
+		}
+	}
 
 	duration := sessionDuration(entries)
 
@@ -86,6 +94,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 			vectorGauge:        gauge,
 			entropy:            &entropy,
 			cadence:            cadence,
+			budget:             budgetProtection,
 		})
 		return printJSON(out)
 	}
@@ -416,6 +425,46 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Budget protection section (WO-058).
+	if budgetProtection != nil {
+		fmt.Println()
+		fmt.Println("Budget protection:")
+		fmt.Printf("  Risk level:        %s\n", strings.ToUpper(string(budgetProtection.RiskLevel)))
+		fmt.Printf("  Compaction:        %d turns\n", budgetProtection.TurnsUntilCompaction)
+		fmt.Printf("  Noise:             %s tokens (%.1f%%)\n",
+			formatTokens(budgetProtection.NoiseTokens), budgetProtection.NoiseRatio*100)
+		fmt.Printf("  Weekly budget:     %s remaining (%s/%s)\n",
+			analyzer.FormatCost(budgetProtection.WeeklyRemaining),
+			analyzer.FormatCost(budgetProtection.WeeklySpent),
+			analyzer.FormatCost(budgetProtection.WeeklyLimit))
+		fmt.Printf("  Est. to compaction:%s\n", analyzer.FormatCost(budgetProtection.EstimatedCostToCompaction))
+		if budgetProtection.RecommendedAction != "" {
+			fmt.Printf("  Recommended:       %s (%s potential savings)\n",
+				budgetProtection.RecommendedAction,
+				analyzer.FormatCost(budgetProtection.RecommendedSavings))
+		}
+		if budgetProtection.ExpectedTurnsGained > 0 || budgetProtection.RecommendedSavings > 0 {
+			fmt.Printf("  After clean:       +%d turns, -%s cache reads, delays compaction by ~%d minutes\n",
+				budgetProtection.ExpectedTurnsGained,
+				analyzer.FormatCost(budgetProtection.RecommendedSavings),
+				budgetProtection.ExpectedDelayMinutes)
+		}
+		if budgetProtection.OffloadHint {
+			fmt.Println("  Hint: consider offloading tests/static analysis/security scans/formatting to cheaper agents or CI.")
+		}
+		if len(budgetProtection.Actions) > 0 {
+			fmt.Println("  Ranked actions:")
+			limit := 4
+			if len(budgetProtection.Actions) < limit {
+				limit = len(budgetProtection.Actions)
+			}
+			for i := 0; i < limit; i++ {
+				a := budgetProtection.Actions[i]
+				fmt.Printf("    %d) %s -> saves ~%s\n", i+1, a.Action, analyzer.FormatCost(a.EstimatedSavings))
+			}
+		}
+	}
+
 	// Past savings for this session
 	dir := resolveClaudeDir()
 	if allEvents, err := savings.Load(dir); err == nil && len(allEvents) > 0 {
@@ -425,6 +474,10 @@ func runStats(cmd *cobra.Command, args []string) error {
 				formatTokens(sessionSavings.TotalRemoved),
 				analyzer.FormatCost(sessionSavings.TotalSavedCost),
 				sessionSavings.TotalCleanups)
+		}
+		weeklySaved := computeWeeklySavings(dir)
+		if weeklySaved > 0 {
+			fmt.Printf("Saved by ContextSpectre this week: %s\n", analyzer.FormatCost(weeklySaved))
 		}
 	}
 
