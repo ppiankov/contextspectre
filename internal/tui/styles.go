@@ -120,6 +120,19 @@ func entropyStyle(level string) lipgloss.Style {
 	}
 }
 
+func cleanupStatusDot(status string) string {
+	switch status {
+	case "clean":
+		return lipgloss.NewStyle().Foreground(colorGreen).Render("●")
+	case "due":
+		return lipgloss.NewStyle().Foreground(colorAmber).Render("●")
+	case "overdue":
+		return lipgloss.NewStyle().Foreground(colorRed).Render("●")
+	default:
+		return styleMuted.Render("·")
+	}
+}
+
 // gaugeStateColor returns a color for the vector gauge state.
 func gaugeStateColor(state analyzer.VectorState) lipgloss.Color {
 	switch state {

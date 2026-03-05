@@ -32,6 +32,8 @@ type SessionJSON struct {
 	SignalPercent  *int      `json:"signal_percent,omitempty"`
 	EntropyScore   *float64  `json:"entropy_score,omitempty"`
 	EntropyLevel   string    `json:"entropy_level,omitempty"`
+	CleanupStatus  string    `json:"cleanup_status,omitempty"`
+	CadenceScore   *float64  `json:"cadence_score,omitempty"`
 	ClientType     string    `json:"client_type,omitempty"`
 }
 
@@ -49,6 +51,7 @@ type StatsOutput struct {
 	Context            ContextJSON            `json:"context"`
 	Health             *HealthScoreJSON       `json:"health,omitempty"`
 	Entropy            *EntropyJSON           `json:"entropy,omitempty"`
+	Cadence            *CadenceJSON           `json:"cadence,omitempty"`
 	Cost               *CostJSON              `json:"cost,omitempty"`
 	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
 	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
@@ -243,6 +246,21 @@ type EntropyJSON struct {
 	CompressionLoss    float64 `json:"compression_loss"`
 }
 
+// CadenceJSON holds cleanup cadence urgency and savings projection.
+type CadenceJSON struct {
+	Score                float64 `json:"score"`
+	Status               string  `json:"status"`
+	Reason               string  `json:"reason"`
+	RecommendedAction    string  `json:"recommended_action"`
+	NoiseTokens          int     `json:"noise_tokens"`
+	NoiseRatio           float64 `json:"noise_ratio"`
+	TurnsUntilCompaction int     `json:"turns_until_compaction"`
+	TurnsSinceCleanup    int     `json:"turns_since_cleanup"`
+	ProjectedSaveTokens  int     `json:"projected_save_tokens"`
+	ProjectedSaveCost    float64 `json:"projected_save_cost"`
+	PerTurnSaveCost      float64 `json:"per_turn_save_cost"`
+}
+
 // RecommendationJSON holds cleanup recommendations for JSON output.
 type RecommendationJSON struct {
 	Items               []CleanupItemJSON `json:"items"`
@@ -401,6 +419,7 @@ type statsOutputOpt struct {
 	decisionEconomics  *analyzer.DecisionEconomics
 	vectorGauge        *analyzer.VectorGauge
 	entropy            *analyzer.EntropyScore
+	cadence            *analyzer.CadenceAssessment
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
@@ -458,6 +477,21 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			Drift:              opt.entropy.Breakdown.Drift,
 			Orphans:            opt.entropy.Breakdown.Orphans,
 			CompressionLoss:    opt.entropy.Breakdown.CompressionLoss,
+		}
+	}
+	if opt.cadence != nil {
+		out.Cadence = &CadenceJSON{
+			Score:                opt.cadence.Score,
+			Status:               string(opt.cadence.Status),
+			Reason:               opt.cadence.Reason,
+			RecommendedAction:    opt.cadence.RecommendedAction,
+			NoiseTokens:          opt.cadence.NoiseTokens,
+			NoiseRatio:           opt.cadence.NoiseRatio,
+			TurnsUntilCompaction: opt.cadence.TurnsUntilCompaction,
+			TurnsSinceCleanup:    opt.cadence.TurnsSinceCleanup,
+			ProjectedSaveTokens:  opt.cadence.ProjectedSaveTokens,
+			ProjectedSaveCost:    opt.cadence.ProjectedSaveCost,
+			PerTurnSaveCost:      opt.cadence.PerTurnSaveCost,
 		}
 	}
 

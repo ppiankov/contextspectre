@@ -60,6 +60,8 @@ type QuickStats struct {
 	ClientType           string  // "cli", "desktop", or "unknown"
 	EntropyScore         float64 // 0-100
 	EntropyLevel         string  // LOW/MEDIUM/HIGH/CRITICAL
+	CleanupStatus        string  // clean/due/overdue
+	CleanupCadenceScore  float64 // 0-100
 }
 
 func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
@@ -307,4 +309,26 @@ func applyEntropyQuickStats(stats *QuickStats) {
 	})
 	stats.EntropyScore = entropy.Score
 	stats.EntropyLevel = string(entropy.Level)
+
+	// Approximate cadence for session list using quick stats only.
+	noiseTokens := stats.ContextTokens * (100 - stats.SignalPercent) / 100
+	quick := &analyzer.ContextStats{
+		CurrentContextTokens: stats.ContextTokens,
+		CompactionCount:      stats.CompactionCount,
+		Model:                stats.Model,
+		TokenGrowthRate:      1200, // list-level default growth estimate
+	}
+	remaining := analyzer.CompactionThreshold - stats.ContextTokens
+	if remaining < 0 {
+		quick.EstimatedTurnsLeft = 0
+	} else {
+		quick.EstimatedTurnsLeft = remaining / 1200
+	}
+	cadence := analyzer.AssessCleanupCadence(quick, &analyzer.CleanupRecommendation{
+		TotalTokens: noiseTokens,
+	})
+	if cadence != nil {
+		stats.CleanupStatus = string(cadence.Status)
+		stats.CleanupCadenceScore = cadence.Score
+	}
 }

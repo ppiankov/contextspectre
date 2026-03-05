@@ -70,6 +70,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 		TotalTokens:     stats.CurrentContextTokens,
 		CompactionCount: stats.CompactionCount,
 	})
+	cadence := analyzer.AssessCleanupCadence(stats, rec)
 
 	duration := sessionDuration(entries)
 
@@ -84,6 +85,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 			decisionEconomics:  decEconJSON,
 			vectorGauge:        gauge,
 			entropy:            &entropy,
+			cadence:            cadence,
 		})
 		return printJSON(out)
 	}
@@ -133,6 +135,10 @@ func runStats(cmd *cobra.Command, args []string) error {
 			entropy.Breakdown.Drift,
 			entropy.Breakdown.Orphans,
 			entropy.Breakdown.CompressionLoss)
+		if cadence != nil {
+			fmt.Printf("  Cleanup status:   %s (cadence %.1f/100)\n",
+				strings.ToUpper(string(cadence.Status)), cadence.Score)
+		}
 		fmt.Println()
 	}
 
@@ -393,6 +399,20 @@ func runStats(cmd *cobra.Command, args []string) error {
 				fmt.Printf("  Projected savings if cleaned now: ~%s cache-read tokens (~%s)\n",
 					formatTokens(avoidedTokens), analyzer.FormatCost(avoidedCost))
 			}
+		}
+		if cadence != nil && cadence.Status != analyzer.CadenceClean {
+			fmt.Printf("  %s — ~%s noise tokens (~%s in cache reads per remaining turn)\n",
+				cadence.Reason,
+				formatTokens(cadence.NoiseTokens),
+				analyzer.FormatCost(cadence.PerTurnSaveCost))
+			if cadence.ProjectedSaveTokens > 0 && cadence.ProjectedSaveCost > 0 {
+				fmt.Printf("  clean now — %s recoverable tokens × %d remaining turns = ~%s saved cache reads (~%s)\n",
+					formatTokens(cadence.NoiseTokens),
+					cadence.TurnsUntilCompaction,
+					formatTokens(cadence.ProjectedSaveTokens),
+					analyzer.FormatCost(cadence.ProjectedSaveCost))
+			}
+			fmt.Printf("  Recommended action: %s\n", cadence.RecommendedAction)
 		}
 	}
 
