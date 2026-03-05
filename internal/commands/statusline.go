@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -18,6 +20,7 @@ var (
 	statusLinePath   string
 	statusLineStdin  bool
 	statusLineFormat string
+	statusLinePPID   int
 )
 
 var statusLineCmd = &cobra.Command{
@@ -33,6 +36,7 @@ func init() {
 	statusLineCmd.Flags().StringVar(&statusLinePath, "path", "", "Direct path to transcript JSONL file")
 	statusLineCmd.Flags().BoolVar(&statusLineStdin, "stdin", false, "Read JSON from stdin (Claude Code hook format)")
 	statusLineCmd.Flags().StringVar(&statusLineFormat, "format", "tab", "Output format: tab, shell, human, json")
+	statusLineCmd.Flags().IntVar(&statusLinePPID, "ppid", 0, "Write ctx cache file for the provided parent PID")
 	rootCmd.AddCommand(statusLineCmd)
 }
 
@@ -76,6 +80,9 @@ func runStatusLine(_ *cobra.Command, _ []string) error {
 			return err
 		}
 		writeStatusLineCache(sessionID, info.ModTime().UnixNano(), data)
+	}
+	if err := writeContextPercentCache(statusLinePPID, data.ContextPercent); err != nil {
+		return err
 	}
 
 	tryExpertClean(path)
@@ -130,7 +137,7 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		noiseTokens = currentTokens * (100 - stats.SignalPercent) / 100
 	}
 
-	// Turns remaining — epoch growth rate (same as WO-078 logic).
+	// Turns remaining — epoch growth rate.
 	assistantTurns := stats.EpochAssistantCount
 	if assistantTurns == 0 {
 		assistantTurns = stats.AssistantCount
@@ -254,4 +261,26 @@ func writeStatusLineCache(sessionID string, fileMtime int64, d *statusLineData) 
 		return
 	}
 	_ = os.Rename(tmp, statusLineCachePath(sessionID))
+}
+
+func contextPercentCachePath(ppid int) string {
+	return filepath.Join(os.TempDir(), fmt.Sprintf("claude-ctx-%d", ppid))
+}
+
+func writeContextPercentCache(ppid int, contextPercent float64) error {
+	if ppid <= 0 {
+		return nil
+	}
+	value := int(math.Round(contextPercent))
+	data := []byte(strconv.Itoa(value))
+	path := contextPercentCachePath(ppid)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+		return fmt.Errorf("write ctx cache: %w", err)
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("rename ctx cache: %w", err)
+	}
+	return nil
 }
