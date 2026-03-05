@@ -26,7 +26,10 @@ var summaryCmd = &cobra.Command{
 }
 
 func runSummary(cmd *cobra.Command, args []string) error {
-	path, err := resolveSessionArg(args, summaryCWD)
+	// Default to CWD auto-detection when invoked with no args.
+	// "contextspectre status" should just work without flags.
+	useCWD := summaryCWD || len(args) == 0
+	path, err := resolveSessionArg(args, useCWD)
 	if err != nil {
 		return err
 	}
