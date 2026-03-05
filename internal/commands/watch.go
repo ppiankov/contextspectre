@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -36,8 +35,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	done, sigCh := watchSignalHandler()
 	defer signal.Stop(sigCh)
 
 	var prevTokens int
@@ -61,7 +59,7 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 			prevTokens = displayWatchLine(path, prevTokens, &alerted)
 			tryExpertClean(path)
-		case <-sigCh:
+		case <-done:
 			fmt.Println()
 			return nil
 		}
