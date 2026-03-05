@@ -230,7 +230,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Budget health (WO-058), only when weekly budget is configured.
+	// Budget health, only when weekly budget is configured.
 	weeklyLimit := loadWeeklyBudgetLimit()
 	if weeklyLimit > 0 {
 		weeklySpent, highDaily, err := computeWeeklySpend(dir)

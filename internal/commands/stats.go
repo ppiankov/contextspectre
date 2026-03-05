@@ -425,7 +425,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Budget protection section (WO-058).
+	// Budget protection section.
 	if budgetProtection != nil {
 		fmt.Println()
 		fmt.Println("Budget protection:")
