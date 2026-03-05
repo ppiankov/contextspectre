@@ -73,6 +73,9 @@ func runSessions(cmd *cobra.Command, args []string) error {
 					es := s.ContextStats.EntropyScore
 					sj.EntropyScore = &es
 					sj.EntropyLevel = s.ContextStats.EntropyLevel
+					sj.CleanupStatus = s.ContextStats.CleanupStatus
+					cs := s.ContextStats.CleanupCadenceScore
+					sj.CadenceScore = &cs
 				}
 			}
 			out.Sessions = append(out.Sessions, sj)

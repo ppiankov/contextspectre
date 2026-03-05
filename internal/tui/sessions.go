@@ -582,9 +582,11 @@ func (m sessionsModel) View() string {
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			grade := analyzer.GradeFromSignalPercent(s.ContextStats.SignalPercent)
 			ent := entropyShort(s.ContextStats.EntropyLevel)
-			sigStr = fmt.Sprintf("%s/%s",
+			cleanDot := cleanupStatusDot(s.ContextStats.CleanupStatus)
+			sigStr = fmt.Sprintf("%s/%s%s",
 				gradeStyle(grade).Render(grade),
-				entropyStyle(s.ContextStats.EntropyLevel).Render(ent))
+				entropyStyle(s.ContextStats.EntropyLevel).Render(ent),
+				cleanDot)
 		}
 
 		// Cost alert indicator

@@ -31,6 +31,8 @@ type DoctorOutput struct {
 	SidechainSessions int                    `json:"sidechain_sessions,omitempty"`
 	EntropyHealth     DoctorCheck            `json:"entropy"`
 	EntropySessions   []DoctorEntropySession `json:"entropy_sessions,omitempty"`
+	CadenceHealth     DoctorCheck            `json:"cleanup_cadence"`
+	CadenceSessions   []DoctorCadenceSession `json:"cleanup_priority,omitempty"`
 	Companions        []CompanionCheck       `json:"companions"`
 }
 
@@ -57,6 +59,20 @@ type DoctorEntropySession struct {
 	EntropyLevel string  `json:"entropy_level"`
 	SignalGrade  string  `json:"signal_grade,omitempty"`
 	Compactions  int     `json:"compactions,omitempty"`
+}
+
+// DoctorCadenceSession is one cleanup-priority row for doctor output.
+type DoctorCadenceSession struct {
+	SessionID         string  `json:"session_id"`
+	Slug              string  `json:"slug,omitempty"`
+	Project           string  `json:"project,omitempty"`
+	CadenceScore      float64 `json:"cadence_score"`
+	CleanupStatus     string  `json:"cleanup_status"`
+	Reason            string  `json:"reason"`
+	RecommendedAction string  `json:"recommended_action"`
+	PotentialSaveCost float64 `json:"potential_save_cost"`
+	PotentialSaveTok  int     `json:"potential_save_tokens"`
+	TurnsToCompaction int     `json:"turns_until_compaction"`
 }
 
 func runDoctor(cmd *cobra.Command, args []string) error {
@@ -92,6 +108,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		sidechainEntries := 0
 		sidechainSessions := 0
 		var entropySessions []DoctorEntropySession
+		var cadenceSessions []DoctorCadenceSession
 		for _, si := range sessions {
 			entries, err := jsonl.Parse(si.FullPath)
 			if err != nil {
@@ -134,13 +151,33 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				SignalGrade:  signalGrade,
 				Compactions:  stats.CompactionCount,
 			})
+
+			cadence := analyzer.AssessCleanupCadence(stats, rec)
+			if cadence != nil {
+				cadenceSessions = append(cadenceSessions, DoctorCadenceSession{
+					SessionID:         si.SessionID,
+					Slug:              si.Slug,
+					Project:           si.ProjectName,
+					CadenceScore:      cadence.Score,
+					CleanupStatus:     string(cadence.Status),
+					Reason:            cadence.Reason,
+					RecommendedAction: cadence.RecommendedAction,
+					PotentialSaveCost: cadence.ProjectedSaveCost,
+					PotentialSaveTok:  cadence.ProjectedSaveTokens,
+					TurnsToCompaction: cadence.TurnsUntilCompaction,
+				})
+			}
 		}
 		sort.Slice(entropySessions, func(i, j int) bool {
 			return entropySessions[i].EntropyScore > entropySessions[j].EntropyScore
 		})
+		sort.Slice(cadenceSessions, func(i, j int) bool {
+			return cadenceSessions[i].CadenceScore > cadenceSessions[j].CadenceScore
+		})
 		out.SidechainEntries = sidechainEntries
 		out.SidechainSessions = sidechainSessions
 		out.EntropySessions = entropySessions
+		out.CadenceSessions = cadenceSessions
 		if sidechainEntries == 0 {
 			out.SidechainHealth = DoctorCheck{
 				Status:  "ok",
@@ -167,6 +204,23 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			out.EntropyHealth = DoctorCheck{
 				Status:  status,
 				Message: fmt.Sprintf("sessions ranked by entropy (highest: %.1f %s)", top.EntropyScore, top.EntropyLevel),
+			}
+		}
+
+		if len(cadenceSessions) == 0 {
+			out.CadenceHealth = DoctorCheck{
+				Status:  "warn",
+				Message: "no sessions could be assessed for cleanup cadence",
+			}
+		} else {
+			top := cadenceSessions[0]
+			status := "ok"
+			if top.CadenceScore >= 40 {
+				status = "warn"
+			}
+			out.CadenceHealth = DoctorCheck{
+				Status:  status,
+				Message: fmt.Sprintf("cleanup priority ranked by cadence (highest: %.1f %s)", top.CadenceScore, top.CleanupStatus),
 			}
 		}
 	}
@@ -199,6 +253,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	if out.EntropyHealth.Message != "" {
 		printCheck("Entropy", out.EntropyHealth)
 	}
+	if out.CadenceHealth.Message != "" {
+		printCheck("Cleanup cadence", out.CadenceHealth)
+	}
 
 	fmt.Println()
 	if len(out.EntropySessions) > 0 {
@@ -215,6 +272,28 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			}
 			fmt.Printf("  %d. %-24s %8s %5.1f  (%s)\n",
 				i+1, label, es.EntropyLevel, es.EntropyScore, es.Project)
+		}
+		fmt.Println()
+	}
+	if len(out.CadenceSessions) > 0 {
+		fmt.Println("Cleanup priority (highest first):")
+		limit := 10
+		if len(out.CadenceSessions) < limit {
+			limit = len(out.CadenceSessions)
+		}
+		for i := 0; i < limit; i++ {
+			cs := out.CadenceSessions[i]
+			label := cs.Slug
+			if label == "" {
+				label = shortSessionID(cs.SessionID)
+			}
+			fmt.Printf("  Priority %d: %s (score %.1f, %s, save %s) -> %s\n",
+				i+1,
+				label,
+				cs.CadenceScore,
+				cs.CleanupStatus,
+				analyzer.FormatCost(cs.PotentialSaveCost),
+				cs.RecommendedAction)
 		}
 		fmt.Println()
 	}
