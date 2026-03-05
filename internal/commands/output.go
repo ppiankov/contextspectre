@@ -30,6 +30,8 @@ type SessionJSON struct {
 	EstimatedCost  float64   `json:"estimated_cost,omitempty"`
 	Model          string    `json:"model,omitempty"`
 	SignalPercent  *int      `json:"signal_percent,omitempty"`
+	EntropyScore   *float64  `json:"entropy_score,omitempty"`
+	EntropyLevel   string    `json:"entropy_level,omitempty"`
 	ClientType     string    `json:"client_type,omitempty"`
 }
 
@@ -46,6 +48,7 @@ type StatsOutput struct {
 	ClientType         string                 `json:"client_type,omitempty"`
 	Context            ContextJSON            `json:"context"`
 	Health             *HealthScoreJSON       `json:"health,omitempty"`
+	Entropy            *EntropyJSON           `json:"entropy,omitempty"`
 	Cost               *CostJSON              `json:"cost,omitempty"`
 	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
 	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
@@ -229,6 +232,17 @@ type HealthScoreJSON struct {
 	OffenderTokens  int     `json:"offender_tokens,omitempty"`
 }
 
+// EntropyJSON holds session entropy score and per-axis breakdown.
+type EntropyJSON struct {
+	Score              float64 `json:"score"`
+	Level              string  `json:"level"`
+	Noise              float64 `json:"noise"`
+	CompactionPressure float64 `json:"compaction_pressure"`
+	Drift              float64 `json:"drift"`
+	Orphans            float64 `json:"orphans"`
+	CompressionLoss    float64 `json:"compression_loss"`
+}
+
 // RecommendationJSON holds cleanup recommendations for JSON output.
 type RecommendationJSON struct {
 	Items               []CleanupItemJSON `json:"items"`
@@ -386,6 +400,7 @@ type statsOutputOpt struct {
 	costAlertThreshold float64
 	decisionEconomics  *analyzer.DecisionEconomics
 	vectorGauge        *analyzer.VectorGauge
+	entropy            *analyzer.EntropyScore
 }
 
 // buildStatsOutput converts analyzer stats to JSON output.
@@ -432,6 +447,17 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			Grade:           health.Grade,
 			BiggestOffender: health.BiggestOffender,
 			OffenderTokens:  health.OffenderTokens,
+		}
+	}
+	if opt.entropy != nil {
+		out.Entropy = &EntropyJSON{
+			Score:              opt.entropy.Score,
+			Level:              string(opt.entropy.Level),
+			Noise:              opt.entropy.Breakdown.Noise,
+			CompactionPressure: opt.entropy.Breakdown.CompactionPressure,
+			Drift:              opt.entropy.Breakdown.Drift,
+			Orphans:            opt.entropy.Breakdown.Orphans,
+			CompressionLoss:    opt.entropy.Breakdown.CompressionLoss,
 		}
 	}
 

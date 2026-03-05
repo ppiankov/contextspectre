@@ -492,7 +492,7 @@ func (m sessionsModel) View() string {
 	fmt.Fprintf(&hdr, "%*s ", cols.pctW, "")
 	hdr.WriteString("     ") // compaction count column (4 chars + space)
 	if !cols.mergeSignal {
-		sigLabel := "Sig"
+		sigLabel := "Sig/Ent"
 		if m.sortBy == sortSignal {
 			sigLabel += sortInd
 		}
@@ -581,7 +581,10 @@ func (m sessionsModel) View() string {
 		sigStr := "\u2014"
 		if s.ContextStats != nil && s.ContextStats.ContextTokens > 0 {
 			grade := analyzer.GradeFromSignalPercent(s.ContextStats.SignalPercent)
-			sigStr = gradeStyle(grade).Render(grade)
+			ent := entropyShort(s.ContextStats.EntropyLevel)
+			sigStr = fmt.Sprintf("%s/%s",
+				gradeStyle(grade).Render(grade),
+				entropyStyle(s.ContextStats.EntropyLevel).Render(ent))
 		}
 
 		// Cost alert indicator
@@ -707,7 +710,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		msgsW: 6,
 		barW:  10,
 		pctW:  6,
-		sigW:  3,
+		sigW:  7,
 		costW: 8,
 	}
 
@@ -754,11 +757,11 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 	default: // Narrow (<120)
 		c.showBranch = false
 		c.showSize = false
-		c.mergeSignal = true
+		c.mergeSignal = false
 		c.modW = 5
 		c.costW = 7
 		c.pctW = 5
-		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.costW + c.modW + 7
+		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 8
 		remaining := width - fixed
 		if remaining < 16 {
 			remaining = 16
@@ -817,5 +820,20 @@ func timeAgoStr(t time.Time) string {
 		return fmt.Sprintf("%dh ago", int(d.Hours()))
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+}
+
+func entropyShort(level string) string {
+	switch level {
+	case "LOW":
+		return "L"
+	case "MEDIUM":
+		return "M"
+	case "HIGH":
+		return "H"
+	case "CRITICAL":
+		return "C"
+	default:
+		return "\u2014"
 	}
 }

@@ -70,6 +70,9 @@ func runSessions(cmd *cobra.Command, args []string) error {
 				if s.ContextStats.ContextTokens > 0 {
 					sp := s.ContextStats.SignalPercent
 					sj.SignalPercent = &sp
+					es := s.ContextStats.EntropyScore
+					sj.EntropyScore = &es
+					sj.EntropyLevel = s.ContextStats.EntropyLevel
 				}
 			}
 			out.Sessions = append(out.Sessions, sj)

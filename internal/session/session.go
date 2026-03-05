@@ -56,8 +56,10 @@ type QuickStats struct {
 	LastCompactionAfter  int
 	EstimatedCost        float64
 	Model                string
-	SignalPercent        int    // 0-100, estimated signal/noise ratio
-	ClientType           string // "cli", "desktop", or "unknown"
+	SignalPercent        int     // 0-100, estimated signal/noise ratio
+	ClientType           string  // "cli", "desktop", or "unknown"
+	EntropyScore         float64 // 0-100
+	EntropyLevel         string  // LOW/MEDIUM/HIGH/CRITICAL
 }
 
 func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
@@ -212,6 +214,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100
+				applyEntropyQuickStats(info.ContextStats)
 			}
 			info.ContextStats.EstimatedCost = analyzer.QuickCost(
 				stats.TotalInputTokens, stats.TotalOutputTokens,
@@ -259,6 +262,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
 				info.ContextStats.ContextPct = float64(stats.LastUsage.TotalContextTokens()) / 200000 * 100
+				applyEntropyQuickStats(info.ContextStats)
 			}
 			info.ContextStats.EstimatedCost = analyzer.QuickCost(
 				stats.TotalInputTokens, stats.TotalOutputTokens,
@@ -287,4 +291,20 @@ func ProjectNameFromDir(dir string) string {
 		}
 	}
 	return name
+}
+
+func applyEntropyQuickStats(stats *QuickStats) {
+	if stats == nil || stats.ContextTokens <= 0 {
+		return
+	}
+	grade := analyzer.GradeFromSignalPercent(stats.SignalPercent)
+	ratio := analyzer.SignalRatioForGrade(grade)
+	entropy := analyzer.CalculateEntropy(analyzer.EntropyInput{
+		SignalRatio:     ratio,
+		CurrentTokens:   stats.ContextTokens,
+		TotalTokens:     stats.ContextTokens,
+		CompactionCount: stats.CompactionCount,
+	})
+	stats.EntropyScore = entropy.Score
+	stats.EntropyLevel = string(entropy.Level)
 }
