@@ -54,14 +54,23 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 		cfg.CostAlertThreshold = v
 	case "weekly-budget":
+		fallthrough
+	case "weekly-limit":
 		v, err := strconv.ParseFloat(value, 64)
 		if err != nil {
-			return fmt.Errorf("invalid weekly-budget value: %s (must be a number)", value)
+			return fmt.Errorf("invalid %s value: %s (must be a number)", key, value)
 		}
 		if v < 0 {
-			return fmt.Errorf("weekly-budget must be >= 0 (0 disables)")
+			return fmt.Errorf("%s must be >= 0 (0 disables)", key)
 		}
+		cfg.WeeklyLimit = v
 		cfg.WeeklyBudgetLimit = v
+	case "billing-week-start":
+		v, err := validateBillingWeekStart(value)
+		if err != nil {
+			return err
+		}
+		cfg.BillingWeekStart = v
 	case "expert-mode":
 		switch value {
 		case "true", "1", "on":
@@ -108,7 +117,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 		cfg.HealthCDRWarn = v
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, weekly-limit, billing-week-start, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 
 	if err := project.Save(dir, cfg); err != nil {
@@ -139,10 +148,22 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 			fmt.Printf("cost-alert: %s\n", analyzer.FormatCost(cfg.CostAlertThreshold))
 		}
 	case "weekly-budget":
-		if cfg.WeeklyBudgetLimit == 0 {
-			fmt.Println("weekly-budget: disabled")
+		fallthrough
+	case "weekly-limit":
+		limit := cfg.WeeklyLimit
+		if limit == 0 {
+			limit = cfg.WeeklyBudgetLimit
+		}
+		if limit == 0 {
+			fmt.Printf("%s: disabled\n", key)
 		} else {
-			fmt.Printf("weekly-budget: %s/week\n", analyzer.FormatCost(cfg.WeeklyBudgetLimit))
+			fmt.Printf("%s: %s/week\n", key, analyzer.FormatCost(limit))
+		}
+	case "billing-week-start":
+		if cfg.BillingWeekStart == "" {
+			fmt.Println("billing-week-start: monday")
+		} else {
+			fmt.Printf("billing-week-start: %s\n", cfg.BillingWeekStart)
 		}
 	case "expert-mode":
 		if cfg.ExpertMode {
@@ -175,7 +196,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 			fmt.Printf("health-cdr-warn: default (%.2f)\n", analyzer.DefaultGaugeThresholds.CDRWarn)
 		}
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, weekly-limit, billing-week-start, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 	return nil
 }
@@ -197,10 +218,19 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Println("  cost-alert: disabled")
 	}
-	if cfg.WeeklyBudgetLimit > 0 {
-		fmt.Printf("  weekly-budget: %s/week\n", analyzer.FormatCost(cfg.WeeklyBudgetLimit))
+	limit := cfg.WeeklyLimit
+	if limit == 0 {
+		limit = cfg.WeeklyBudgetLimit
+	}
+	if limit > 0 {
+		fmt.Printf("  weekly-limit: %s/week\n", analyzer.FormatCost(limit))
 	} else {
-		fmt.Println("  weekly-budget: disabled")
+		fmt.Println("  weekly-limit: disabled")
+	}
+	if cfg.BillingWeekStart == "" {
+		fmt.Println("  billing-week-start: monday")
+	} else {
+		fmt.Printf("  billing-week-start: %s\n", cfg.BillingWeekStart)
 	}
 	if cfg.ExpertMode {
 		fmt.Println("  expert-mode: enabled")
@@ -229,6 +259,8 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 type ConfigJSON struct {
 	CostAlertThreshold float64 `json:"cost_alert_threshold"`
 	WeeklyBudgetLimit  float64 `json:"weekly_budget_limit"`
+	WeeklyLimit        float64 `json:"weekly_limit"`
+	BillingWeekStart   string  `json:"billing_week_start"`
 	ExpertMode         bool    `json:"expert_mode"`
 	HealthContextWarn  float64 `json:"health_context_warn"`
 	HealthCPDWarn      float64 `json:"health_cpd_warn"`
@@ -238,9 +270,19 @@ type ConfigJSON struct {
 
 func buildConfigJSON(cfg *project.Config) *ConfigJSON {
 	t := loadGaugeThresholds()
+	limit := cfg.WeeklyLimit
+	if limit == 0 {
+		limit = cfg.WeeklyBudgetLimit
+	}
+	weekStart := cfg.BillingWeekStart
+	if weekStart == "" {
+		weekStart = "monday"
+	}
 	return &ConfigJSON{
 		CostAlertThreshold: cfg.CostAlertThreshold,
 		WeeklyBudgetLimit:  cfg.WeeklyBudgetLimit,
+		WeeklyLimit:        limit,
+		BillingWeekStart:   weekStart,
 		ExpertMode:         cfg.ExpertMode,
 		HealthContextWarn:  t.ContextWarn,
 		HealthCPDWarn:      t.CPDWarn,

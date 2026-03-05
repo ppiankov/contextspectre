@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
 	"sort"
+	"strings"
+	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
@@ -71,13 +71,15 @@ func runStats(cmd *cobra.Command, args []string) error {
 		CompactionCount: stats.CompactionCount,
 	})
 	cadence := analyzer.AssessCleanupCadence(stats, rec)
+	weeklyUsage, _ := computeWeeklyUsageSummary(resolveClaudeDir(), sessionID, time.Now())
 	var budgetProtection *analyzer.BudgetAssessment
 	weeklyBudgetLimit := loadWeeklyBudgetLimit()
 	if weeklyBudgetLimit > 0 {
-		weeklySpent, _, err := computeWeeklySpend(resolveClaudeDir())
-		if err == nil {
-			budgetProtection = analyzer.AssessBudgetRisk(stats, rec, driftResult, weeklyBudgetLimit, weeklySpent)
+		weeklySpent := 0.0
+		if weeklyUsage != nil {
+			weeklySpent = weeklyUsage.TotalCost
 		}
+		budgetProtection = analyzer.AssessBudgetRisk(stats, rec, driftResult, weeklyBudgetLimit, weeklySpent)
 	}
 
 	duration := sessionDuration(entries)
@@ -252,6 +254,21 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Total:         %s (%s/turn)\n",
 			analyzer.FormatCost(stats.Cost.TotalCost),
 			analyzer.FormatCost(stats.Cost.CostPerTurn))
+		if weeklyUsage != nil {
+			weekLine := fmt.Sprintf("  Week usage:    %s", analyzer.FormatCost(weeklyUsage.TotalCost))
+			if weeklyUsage.WeeklyLimit > 0 {
+				weekLine += fmt.Sprintf(" / %s | Remaining: %s",
+					analyzer.FormatCost(weeklyUsage.WeeklyLimit),
+					analyzer.FormatCost(weeklyUsage.Remaining))
+			}
+			weekLine += fmt.Sprintf(" | Reset: %s", weeklyUsage.ResetInHuman)
+			fmt.Println(weekLine)
+		}
+		fmt.Printf("  Rate this session: %s/turn\n", analyzer.FormatCost(stats.Cost.CostPerTurn))
+		if stats.EstimatedTurnsLeft > 0 && stats.Cost.CostPerTurn > 0 {
+			projected := float64(stats.EstimatedTurnsLeft) * stats.Cost.CostPerTurn
+			fmt.Printf("  Projected to compaction: ~%s\n", analyzer.FormatCost(projected))
+		}
 
 		// Cost velocity ($/hour)
 		duration := sessionDuration(entries)
