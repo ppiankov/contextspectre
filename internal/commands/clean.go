@@ -255,12 +255,8 @@ func runClean(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("parse for sidechains: %w", err)
 		}
-		toDelete := make(map[int]bool)
-		for i, e := range entries {
-			if e.IsSidechain {
-				toDelete[i] = true
-			}
-		}
+		report := analyzer.DetectSidechains(entries)
+		toDelete := analyzer.SidechainIndexSet(report)
 		if len(toDelete) == 0 {
 			fmt.Println("No sidechain entries found.")
 		} else {
@@ -268,8 +264,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 			if err != nil {
 				return fmt.Errorf("remove sidechains: %w", err)
 			}
-			fmt.Printf("Removed %d sidechain entries, saved %s\n",
+			fmt.Printf("Removed %d sidechain entries (%d groups), saved %s\n",
 				result.EntriesRemoved,
+				report.GroupCount,
 				formatBytes(result.BytesBefore-result.BytesAfter))
 			slog.Info("Sidechains removed", "count", result.EntriesRemoved)
 		}

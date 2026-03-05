@@ -43,6 +43,12 @@ func runStats(cmd *cobra.Command, args []string) error {
 	stats := analyzer.Analyze(entries)
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 
+	// Structural sidechain detection (not just explicit isSidechain flags).
+	sidechainReport := analyzer.DetectSidechains(entries)
+	stats.SidechainCount = sidechainReport.TotalEntries
+	stats.SidechainGroups = sidechainReport.GroupCount
+	stats.SidechainTokens = sidechainReport.TotalTokens
+
 	// Compute cleanup recommendations
 	dupResult := analyzer.FindDuplicateReads(entries)
 	retryResult := analyzer.FindFailedRetries(entries)
@@ -327,6 +333,15 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf(" (%.1f MB)", float64(stats.ImageBytesTotal)/1024/1024)
 	}
 	fmt.Println()
+	if sidechainReport.TotalEntries > 0 {
+		fmt.Printf("Sidechains: %d entries (%d groups, ~%s tokens)\n",
+			sidechainReport.TotalEntries,
+			sidechainReport.GroupCount,
+			formatTokens(sidechainReport.TotalTokens))
+		fmt.Printf("  Repairable: %d | Prune-only: %d\n",
+			sidechainReport.RepairableCount,
+			sidechainReport.PruneOnlyCount)
+	}
 
 	// Cleanup recommendations
 	if rec != nil && len(rec.Items) > 0 {

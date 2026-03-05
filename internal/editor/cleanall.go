@@ -106,10 +106,11 @@ func CleanAll(path string) (*CleanAllResult, error) {
 
 	// 1c. Remove sidechain entries
 	entries, _ = jsonl.Parse(path)
-	toDelete = make(map[int]bool)
-	for i, e := range entries {
-		if e.IsSidechain && !isKept(e.UUID) {
-			toDelete[i] = true
+	sidechains := analyzer.DetectSidechains(entries)
+	toDelete = analyzer.SidechainIndexSet(sidechains)
+	for idx := range toDelete {
+		if idx < len(entries) && isKept(entries[idx].UUID) {
+			delete(toDelete, idx)
 		}
 	}
 	if len(toDelete) > 0 {

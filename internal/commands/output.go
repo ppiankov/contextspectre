@@ -58,6 +58,7 @@ type StatsOutput struct {
 	Images             ImagesJSON             `json:"images"`
 	GrowthRate         GrowthRateJSON         `json:"growth_rate"`
 	Recommendation     *RecommendationJSON    `json:"recommendation,omitempty"`
+	Sidechains         *SidechainStatsJSON    `json:"sidechains,omitempty"`
 	EpochTimeline      []EpochTimelineJSON    `json:"epoch_timeline,omitempty"`
 	ScopeDrift         *ScopeDriftJSON        `json:"scope_drift,omitempty"`
 	GhostContext       *GhostReportJSON       `json:"ghost_context,omitempty"`
@@ -246,6 +247,13 @@ type CleanupItemJSON struct {
 	Count       int    `json:"count"`
 	TokensSaved int    `json:"tokens_saved"`
 	TurnsGained int    `json:"turns_gained"`
+}
+
+// SidechainStatsJSON holds structural sidechain stats.
+type SidechainStatsJSON struct {
+	Count      int `json:"count"`
+	GroupCount int `json:"group_count"`
+	Tokens     int `json:"tokens"`
 }
 
 // ScopeDriftJSON holds scope drift analysis for JSON output.
@@ -456,6 +464,13 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 	// Estimate image tokens
 	if stats.ImageBytesTotal > 0 {
 		out.Images.EstimatedTokens = int(stats.ImageBytesTotal / 750)
+	}
+	if stats.SidechainCount > 0 {
+		out.Sidechains = &SidechainStatsJSON{
+			Count:      stats.SidechainCount,
+			GroupCount: stats.SidechainGroups,
+			Tokens:     stats.SidechainTokens,
+		}
 	}
 
 	// Cost attribution
@@ -928,6 +943,30 @@ type RepeatedTextJSON struct {
 	SessionCount    int      `json:"session_count"`
 	Sessions        []string `json:"sessions"`
 	EstimatedTokens int      `json:"estimated_tokens"`
+}
+
+// SidechainOutputJSON is the JSON output for sidechains and repair dry-runs.
+type SidechainOutputJSON struct {
+	TotalEntries    int                  `json:"total_entries"`
+	TotalTokens     int                  `json:"total_tokens"`
+	GroupCount      int                  `json:"group_count"`
+	RepairableCount int                  `json:"repairable_count"`
+	PruneOnlyCount  int                  `json:"prune_only_count"`
+	Entries         []SidechainEntryJSON `json:"entries"`
+}
+
+// SidechainEntryJSON is a single sidechain entry.
+type SidechainEntryJSON struct {
+	EntryIndex      int      `json:"entry_index"`
+	LineNumber      int      `json:"line_number"`
+	UUID            string   `json:"uuid,omitempty"`
+	ParentUUID      string   `json:"parent_uuid,omitempty"`
+	ToolUseID       string   `json:"tool_use_id,omitempty"`
+	TokenCost       int      `json:"token_cost"`
+	Preview         string   `json:"preview,omitempty"`
+	Reasons         []string `json:"reasons"`
+	Classification  string   `json:"classification"`
+	ReconnectParent string   `json:"reconnect_parent,omitempty"`
 }
 
 // ProjectAliasJSON is a single project alias for JSON output.
