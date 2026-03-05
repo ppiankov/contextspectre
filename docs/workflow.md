@@ -22,13 +22,23 @@ ContextSpectre does not require this workflow — it works with any Claude Code 
 
 ## CLI status line integration
 
-Claude Code CLI supports a custom status line hook that shows context usage in real time:
+Claude Code CLI supports a custom status line hook. ContextSpectre's `status-line` command is designed for it — sub-2ms on repeat calls via mtime-based caching:
 
 ```
-Opus 4.6 | ctx:41% [########------------] | $11.13 | +1874/-2
+contextspectre | Opus 4.6 | ctx:65% [#############-------] | sig:F clean:149K | $160.81
 ```
 
-This gives you live awareness while working. ContextSpectre complements it — the status line tells you *how full* you are; ContextSpectre tells you *what's filling it*, *what it costs*, and lets you act on it.
+The status line shows model, context fill, signal grade, cleanable tokens, and session cost — all at a glance while you work. When the signal grade drops or cleanable tokens grow, you know it's time to act.
+
+**Setup.** Add `contextspectre status-line --stdin` as your Claude Code status line hook. It reads the session path from stdin and outputs telemetry in the configured format (tab, shell, human, or json). The mtime cache ensures near-zero overhead — it only re-parses when the session file actually changes.
+
+**What to watch for:**
+- Signal grade dropping from A/B to D/F — noise is accumulating
+- Cleanable tokens growing — run `quick-clean` or `clean --all`
+- Context above 75% — approaching compaction territory
+- Cost velocity spikes — session may be drifting
+
+This gives you live awareness while working. The status line tells you *how full* and *how clean* your context is. `contextspectre status` or the TUI tells you the details and lets you act.
 
 ## Working during cooldowns
 
