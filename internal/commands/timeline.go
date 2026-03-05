@@ -112,7 +112,11 @@ func runTimeline(cmd *cobra.Command, args []string) error {
 			if label == "" {
 				label = m.UUID
 			}
-			fmt.Printf("    %s: %s\n", strings.Title(m.Type), label)
+			typeName := m.Type
+			if len(typeName) > 0 {
+				typeName = strings.ToUpper(typeName[:1]) + typeName[1:]
+			}
+			fmt.Printf("    %s: %s\n", typeName, label)
 		}
 	}
 	return nil
