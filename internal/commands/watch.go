@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -31,14 +32,17 @@ func runWatch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	ticker := time.NewTicker(time.Duration(watchInterval) * time.Second)
+	interval := time.Duration(watchInterval) * time.Second
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	var prevTokens int
 	alerted := false
+	lastTick := time.Now()
 
 	// Print header
 	fmt.Printf("Watching: %s  (interval: %ds, Ctrl+C to quit)\n", path, watchInterval)
@@ -48,7 +52,13 @@ func runWatch(cmd *cobra.Command, args []string) error {
 
 	for {
 		select {
-		case <-ticker.C:
+		case now := <-ticker.C:
+			// Detect sleep/wake: if wall-clock gap exceeds threshold, drain and continue.
+			if gap := now.Sub(lastTick); gap > sleepThreshold {
+				drainTicker(ticker)
+			}
+			lastTick = now
+
 			prevTokens = displayWatchLine(path, prevTokens, &alerted)
 			tryExpertClean(path)
 		case <-sigCh:

@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -420,7 +421,8 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	defer ticker.Stop()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
@@ -428,6 +430,7 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 
 	var consecutiveClean int
 	lastHeartbeat := time.Now()
+	lastTick := time.Now()
 
 	// Run first cycle immediately.
 	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
@@ -442,7 +445,19 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 
 	for {
 		select {
-		case <-ticker.C:
+		case now := <-ticker.C:
+			// Detect sleep/wake: if wall-clock gap exceeds threshold, reset state.
+			if gap := now.Sub(lastTick); gap > sleepThreshold {
+				ts := now.Format("15:04:05")
+				fmt.Printf("[%s] Recovered from sleep (%s gap), resetting state\n",
+					ts, formatDuration(gap))
+				consecutiveClean = 0
+				lastHeartbeat = now
+				// Drain any accumulated ticker ticks to prevent burst.
+				drainTicker(ticker)
+			}
+			lastTick = now
+
 			ct, cs := runWatchCycleDiscover(sinceDuration, acc)
 			if cs > 0 {
 				consecutiveClean = 0
@@ -461,8 +476,24 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	}
 }
 
+// drainTicker empties any accumulated ticks from the ticker channel
+// to prevent burst processing after sleep/wake.
+func drainTicker(ticker *time.Ticker) {
+	for {
+		select {
+		case <-ticker.C:
+		default:
+			return
+		}
+	}
+}
+
 const smartPollInterval = 5 * time.Second
 const sessionCooldown = 30 * time.Second
+
+// sleepThreshold is the wall-clock gap that indicates a system sleep occurred.
+// If the time between ticks exceeds this, we assume sleep/wake and reset state.
+const sleepThreshold = 30 * time.Second
 
 // runSmartWatch polls session mtimes every 5s and only cleans changed sessions.
 func runSmartWatch(sinceDuration time.Duration) error {
@@ -470,7 +501,8 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	defer ticker.Stop()
 
 	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, os.Interrupt)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	defer signal.Stop(sigCh)
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
@@ -481,6 +513,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 
 	var consecutiveClean int
 	lastHeartbeat := time.Now()
+	lastTick := time.Now()
 
 	// Run first cycle immediately on all active sessions.
 	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
@@ -495,23 +528,39 @@ func runSmartWatch(sinceDuration time.Duration) error {
 
 	for {
 		select {
-		case <-ticker.C:
+		case now := <-ticker.C:
+			// Detect sleep/wake: if wall-clock gap exceeds threshold, reset state.
+			if gap := now.Sub(lastTick); gap > sleepThreshold {
+				ts := now.Format("15:04:05")
+				fmt.Printf("[%s] Recovered from sleep (%s gap), resetting mtime cache\n",
+					ts, formatDuration(gap))
+				// Clear mtime/cooldown maps so all sessions are re-evaluated.
+				clear(lastMtime)
+				clear(lastClean)
+				seedMtimeMap(sinceDuration, lastMtime, lastClean)
+				consecutiveClean = 0
+				lastHeartbeat = now
+				// Drain accumulated ticks to prevent burst.
+				drainTicker(ticker)
+			}
+			lastTick = now
+
 			changed := findChangedSessions(sinceDuration, lastMtime, lastClean)
 			if len(changed) == 0 {
 				continue
 			}
 
-			ts := time.Now().Format("15:04:05")
+			ts := now.Format("15:04:05")
 			fmt.Printf("[%s] Cleaning %d changed sessions...\n", ts, len(changed))
 			totalTokens, cleaned := cleanActiveSessionsWatch(changed, acc)
 
 			// Update maps.
-			now := time.Now()
+			updateNow := time.Now()
 			for _, s := range changed {
 				if fi, err := os.Stat(s.FullPath); err == nil {
 					lastMtime[s.FullPath] = fi.ModTime()
 				}
-				lastClean[s.FullPath] = now
+				lastClean[s.FullPath] = updateNow
 			}
 
 			if cleaned > 0 {
