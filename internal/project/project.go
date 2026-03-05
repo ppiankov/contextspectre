@@ -18,6 +18,8 @@ type Config struct {
 	Aliases            map[string]Alias `json:"aliases"`
 	CostAlertThreshold float64          `json:"cost_alert_threshold,omitempty"`
 	WeeklyBudgetLimit  float64          `json:"weekly_budget_limit,omitempty"`
+	WeeklyLimit        float64          `json:"weekly_limit,omitempty"`
+	BillingWeekStart   string           `json:"billing_week_start,omitempty"`
 	ExpertMode         bool             `json:"expert_mode,omitempty"`
 	HealthContextWarn  float64          `json:"health_context_warn,omitempty"`
 	HealthCPDWarn      float64          `json:"health_cpd_warn,omitempty"`
