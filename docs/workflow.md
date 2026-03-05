@@ -25,40 +25,39 @@ ContextSpectre does not require this workflow — it works with any Claude Code 
 Claude Code CLI supports a custom status line hook. ContextSpectre's `status-line` command is designed for it — sub-2ms on repeat calls via mtime-based caching:
 
 ```
-contextspectre | Opus 4.6 | ctx:65% [#############-------] | sig:F clean:149K | $160.81
+contextspectre | Opus 4.6 | ctx:73% | sig:A clean:3K ips:77 | $86.66
 ```
 
-The status line shows model, context fill, signal grade, cleanable tokens, and session cost — all at a glance while you work. When the signal grade drops or cleanable tokens grow, you know it's time to act.
+The status line shows repo, model, context fill, signal grade, cleanable tokens, input purity score, and session cost — all at a glance while you work. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
 
 **Setup.** Create a status line hook in your settings. Claude Code calls this script on every turn, passing session metadata as JSON on stdin.
 
-1. Create the hook script (e.g., `~/.claude/hooks/statusline.sh`):
+1. Create the hook script (e.g., `~/.claude/statusline.sh`):
 
 ```bash
 #!/bin/bash
-# Status line hook: model, context %, signal grade, cleanable tokens, cost
-# contextspectre data via background cache (never blocks the UI)
+# Status line: model, context %, signal grade, cleanable tokens, IPS, cost
+# contextspectre data via background cache (never blocks)
 
 input=$(cat)
 
-repo=$(basename "$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")")
+root=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
+repo=$(basename "$root")
 model=$(echo "$input" | jq -r '.model.display_name // "?"')
 ctx_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
 cost=$(printf '%.2f' "$(echo "$input" | jq -r '.cost.total_cost_usd // 0')")
-added=$(echo "$input" | jq -r '.cost.total_lines_added // 0')
-removed=$(echo "$input" | jq -r '.cost.total_lines_removed // 0')
 
-# contextspectre: read cached signal grade and cleanable tokens
+# contextspectre: read cached data (signal, cleanable, IPS)
 # Background refresh keeps data fresh without blocking
 cache="/tmp/contextspectre-status-$PPID.json"
 signal=""
 cleanable=""
 
 if [ -f "$cache" ]; then
-  mtime=$(stat -f %m "$cache" 2>/dev/null || stat -c %Y "$cache" 2>/dev/null || echo 0)
-  cache_age=$(( $(date +%s) - mtime ))
+  cache_age=$(( $(date +%s) - $(stat -f %m "$cache" 2>/dev/null || echo 0) ))
   if [ "$cache_age" -lt 60 ]; then
     signal=$(jq -r '.signal_grade // empty' "$cache" 2>/dev/null)
+    ips_raw=$(jq -r '.input_purity // empty' "$cache" 2>/dev/null)
     cleanable_raw=$(jq -r '.cleanable_tokens // 0' "$cache" 2>/dev/null)
     if [ "$cleanable_raw" -gt 1000 ] 2>/dev/null; then
       cleanable="$(( cleanable_raw / 1000 ))K"
@@ -72,72 +71,99 @@ if [ ! -f "$cache" ] || [ "${cache_age:-999}" -ge 60 ]; then
 fi
 
 # Color context by usage level
-if [ "$ctx_pct" -ge 80 ]; then ctx_color="\033[31m"    # red
-elif [ "$ctx_pct" -ge 60 ]; then ctx_color="\033[33m"   # yellow
-else ctx_color="\033[32m"; fi                            # green
+if [ "$ctx_pct" -ge 80 ]; then ctx_color="\033[31m"      # red
+elif [ "$ctx_pct" -ge 60 ]; then ctx_color="\033[33m"     # yellow
+else ctx_color="\033[32m"; fi                              # green
 reset="\033[0m"
 
-# Build 20-char progress bar
-filled=$((ctx_pct / 5)); empty=$((20 - filled))
-bar=""; i=0; while [ $i -lt $filled ]; do bar="${bar}#"; i=$((i+1)); done
-i=0; while [ $i -lt $empty ]; do bar="${bar}-"; i=$((i+1)); done
+# Color cleanable tokens by severity
+clean_seg=""
+if [ -n "$cleanable" ]; then
+  if [ "$cleanable_raw" -ge 500000 ] 2>/dev/null; then
+    clean_color="\033[31m"    # red: >500K
+  elif [ "$cleanable_raw" -ge 100000 ] 2>/dev/null; then
+    clean_color="\033[33m"    # yellow: >100K
+  else
+    clean_color="\033[32m"    # green: <100K
+  fi
+  clean_seg=" clean:${clean_color}${cleanable}${reset}"
+fi
 
-# Assemble contextspectre segment
-cs_seg=""
-[ -n "$signal" ] && cs_seg=" | sig:${signal}"
-[ -n "$cleanable" ] && cs_seg="${cs_seg} clean:${cleanable}"
+# Color signal grade by health
+sig_seg=""
+if [ -n "$signal" ]; then
+  case "$signal" in
+    A|B) sig_color="\033[32m" ;;  # green
+    C|D) sig_color="\033[33m" ;;  # yellow
+    *)   sig_color="\033[31m" ;;  # red
+  esac
+  sig_seg=" | sig:${sig_color}${signal}${reset}"
+fi
 
-printf '%b' "${repo} | ${model} | ${ctx_color}ctx:${ctx_pct}%${reset} [${bar}]${cs_seg} | \$${cost} | +${added}/-${removed}"
+# Color input purity score
+ips_seg=""
+if [ -n "$ips_raw" ] && [ "$ips_raw" != "0" ]; then
+  ips_int=$(printf '%.0f' "$ips_raw")
+  if [ "$ips_int" -ge 80 ] 2>/dev/null; then
+    ips_color="\033[32m"      # green: well-purified
+  elif [ "$ips_int" -ge 50 ] 2>/dev/null; then
+    ips_color="\033[33m"      # yellow: room to improve
+  else
+    ips_color="\033[31m"      # red: mostly raw input
+  fi
+  ips_seg=" ips:${ips_color}${ips_int}${reset}"
+fi
+
+# Assemble and print
+cs_seg="${sig_seg}${clean_seg}${ips_seg}"
+printf '%b' "${repo} | ${model} | ctx:${ctx_color}${ctx_pct}%${reset}${cs_seg} | \$${cost}"
 ```
 
 2. Make it executable:
 
 ```bash
-chmod +x ~/.claude/hooks/statusline.sh
+chmod +x ~/.claude/statusline.sh
 ```
 
 3. Register the hook in `~/.claude/settings.json`:
 
 ```json
 {
-  "hooks": {
-    "StatusLine": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash ~/.claude/hooks/statusline.sh"
-          }
-        ]
-      }
-    ]
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh",
+    "padding": 2
   }
 }
 ```
 
 The hook runs `contextspectre summary --cwd --format json` in the background every 60 seconds, caching the result. The status line reads from cache so it never blocks — even on large sessions.
 
-**What to watch for:**
-- Signal grade dropping from A/B to D/F — noise is accumulating
-- Context above 75% — approaching compaction territory
-- Cost velocity spikes — session may be drifting
+**Color-coded indicators.** Labels stay neutral (white). Only values are colored — the number pops when it needs attention.
 
-**Color-coded indicators.** Two values are color-coded to give instant visual feedback:
-
-`ctx:%` — context fill:
+`ctx:` — context fill:
 - 🟢 Green (< 60%) — healthy headroom
 - 🟡 Yellow (60-79%) — monitor, approaching compaction
 - 🔴 Red (80%+) — compaction imminent, consolidate or clean
 
-`clean:` — cleanable tokens (watch mode can't reach tangents/retries, only tiers 1-3):
+`sig:` — signal grade (signal-to-noise ratio):
+- 🟢 Green (A/B) — healthy signal, minimal noise
+- 🟡 Yellow (C/D) — degrading, noise accumulating
+- 🔴 Red (F) — noise-dominated, clean immediately
+
+`clean:` — cleanable tokens (watch mode handles tiers 1-3 only):
 - 🟢 Green (< 100K) — healthy, watch mode handling it
 - 🟡 Yellow (100K-500K) — consider running `clean --all` manually
 - 🔴 Red (> 500K) — manual intervention needed, tangents accumulating
 
-When `clean:` is red, watch mode is running but the bulk of the waste is tangents (tier 7) that watch mode intentionally skips on active sessions. Run `contextspectre clean <session> --all` to clear them.
+`ips:` — input purity score (how much tool output is pre-compressed):
+- 🟢 Green (≥ 80) — well-purified, input compression working
+- 🟡 Yellow (50-79) — room to improve, some raw output entering context
+- 🔴 Red (< 50) — mostly raw input, consider adding input purification (e.g., [RTK](https://github.com/rtk-ai/rtk))
 
-This gives you live awareness while working. The status line tells you *how full* and *how clean* your context is. Color tells you whether to act. `contextspectre status` or the TUI gives the details.
+**When `clean:` is red**, watch mode is running but the bulk of the waste is tangents (tier 7) and retries (tier 5) that watch mode intentionally skips on active sessions. Run `contextspectre clean <session> --all` to clear them.
+
+**Reading the status line at a glance:** All green = healthy session. Any yellow = monitor. Any red = act now. The four indicators cover the full lifecycle: how full (ctx), how clean (sig), how much to clean (clean), how pure the input (ips).
 
 ## Continuous cleanup in a side terminal
 
