@@ -170,6 +170,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | [CLI & TUI Reference](docs/commands.md) | All commands, flags, keybindings, cleanup tiers |
 | [Concepts & Glossary](docs/concepts.md) | Full glossary, reasoning phases |
 | [Architecture](docs/architecture.md) | How it works, safety model, design decisions |
+| [Computation Methodology](docs/methodology.md) | Formula-level specification with source references |
 | [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
 | [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
 | [Session Architecture](docs/session-architecture.md) | Session storage, multi-instance safety |
