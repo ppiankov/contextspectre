@@ -15,13 +15,15 @@ var (
 )
 
 var continuityCmd = &cobra.Command{
-	Use:   "continuity",
+	Use:   "continuity [session-id-or-path]",
 	Short: "Measure re-explanation tax across sessions for a project",
+	Args:  cobra.MaximumNArgs(1),
 	Long: `Scan all sessions for a project and find repeated file reads and
 user text blocks across sessions. Quantifies the cost of rebuilding
 context that existed in prior sessions.
 
 Examples:
+  contextspectre continuity 5d624f4a
   contextspectre continuity --cwd
   contextspectre continuity --project myapp
   contextspectre continuity --cwd --format json`,
@@ -29,10 +31,6 @@ Examples:
 }
 
 func runContinuity(cmd *cobra.Command, args []string) error {
-	if continuityProject == "" && !continuityCWD {
-		return fmt.Errorf("--project or --cwd is required")
-	}
-
 	dir := resolveClaudeDir()
 	d := &session.Discoverer{ClaudeDir: dir}
 
@@ -41,12 +39,29 @@ func runContinuity(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("list sessions: %w", err)
 	}
 
-	filtered := filterDistillSessions(sessions, continuityProject, continuityCWD)
+	projectFilter := continuityProject
+	useCWD := continuityCWD
+	if len(args) > 0 {
+		targetPath := resolveSessionPath(args[0])
+		for _, si := range sessions {
+			if si.FullPath == targetPath || si.SessionID == args[0] || si.ShortID() == args[0] {
+				projectFilter = si.ProjectName
+				break
+			}
+		}
+	}
+	if projectFilter == "" && !useCWD {
+		return fmt.Errorf("--project, --cwd, or session-id is required")
+	}
+
+	filtered := filterDistillSessions(sessions, projectFilter, useCWD)
 	if len(filtered) == 0 {
 		if isJSON() {
 			return printJSON(ContinuityOutputJSON{
 				RepeatedFiles: []RepeatedFileJSON{},
 				RepeatedTexts: []RepeatedTextJSON{},
+				RepeatTopics:  []RepeatTopicJSON{},
+				Suggestions:   []ContinuitySuggestJSON{},
 			})
 		}
 		fmt.Println("No matching sessions found.")
@@ -85,6 +100,8 @@ func runContinuity(cmd *cobra.Command, args []string) error {
 				SessionsScanned: len(inputs),
 				RepeatedFiles:   []RepeatedFileJSON{},
 				RepeatedTexts:   []RepeatedTextJSON{},
+				RepeatTopics:    []RepeatTopicJSON{},
+				Suggestions:     []ContinuitySuggestJSON{},
 			})
 		}
 		fmt.Println("Need at least 2 sessions for continuity analysis.")
@@ -105,6 +122,12 @@ func runContinuity(cmd *cobra.Command, args []string) error {
 func printContinuityReport(r *analyzer.ContinuityReport) {
 	fmt.Printf("Cross-session continuity — %s (%d sessions)\n\n",
 		r.ProjectName, r.SessionsScanned)
+	fmt.Printf("Continuity index: %.1f/100\n", r.ContinuityIndex)
+	if r.TotalFileReads > 0 || r.TotalTextBlocks > 0 {
+		fmt.Printf("  Files: %d unique / %d reads\n", r.UniqueFileReads, r.TotalFileReads)
+		fmt.Printf("  Text blocks: %d unique / %d blocks\n", r.UniqueTextBlocks, r.TotalTextBlocks)
+	}
+	fmt.Println()
 
 	if len(r.RepeatedFiles) > 0 {
 		sessionSet := make(map[string]bool)
@@ -120,9 +143,10 @@ func printContinuityReport(r *analyzer.ContinuityReport) {
 			limit = len(r.RepeatedFiles)
 		}
 		for _, rf := range r.RepeatedFiles[:limit] {
-			fmt.Printf("  %-50s %d/%d sessions\n",
+			fmt.Printf("  %-50s %d/%d sessions  %s  (%s)\n",
 				truncatePath(rf.Path, 50),
-				rf.SessionCount, r.SessionsScanned)
+				rf.SessionCount, r.SessionsScanned,
+				formatTokens(rf.EstimatedTokens), analyzer.FormatCost(rf.EstimatedCost))
 		}
 		if len(r.RepeatedFiles) > 10 {
 			fmt.Printf("  ... and %d more\n", len(r.RepeatedFiles)-10)
@@ -140,8 +164,25 @@ func printContinuityReport(r *analyzer.ContinuityReport) {
 			limit = len(r.RepeatedTexts)
 		}
 		for _, rt := range r.RepeatedTexts[:limit] {
-			fmt.Printf("  \"%s\" — %d sessions (%d chars)\n",
-				rt.Text, rt.SessionCount, rt.CharCount)
+			fmt.Printf("  \"%s\" — %d sessions (%d chars, %s, %s)\n",
+				rt.Text, rt.SessionCount, rt.CharCount,
+				formatTokens(rt.EstimatedTokens), analyzer.FormatCost(rt.EstimatedCost))
+		}
+		fmt.Println()
+	}
+
+	if len(r.RepeatTopics) > 0 {
+		fmt.Printf("Repeat topics: %d file clusters\n", len(r.RepeatTopics))
+		limit := 5
+		if len(r.RepeatTopics) < limit {
+			limit = len(r.RepeatTopics)
+		}
+		for _, tp := range r.RepeatTopics[:limit] {
+			fmt.Printf("  [%s] + [%s] — %d sessions (%s)\n",
+				truncatePath(tp.Files[0], 30),
+				truncatePath(tp.Files[1], 30),
+				tp.SessionCount,
+				analyzer.FormatCost(tp.EstimatedCost))
 		}
 		fmt.Println()
 	}
@@ -156,6 +197,19 @@ func printContinuityReport(r *analyzer.ContinuityReport) {
 		formatTokens(r.TotalTextTokens),
 		analyzer.FormatCost(r.TotalTextCost))
 
+	if len(r.Suggestions) > 0 {
+		fmt.Println()
+		fmt.Println("CLAUDE.md candidates:")
+		limit := 5
+		if len(r.Suggestions) < limit {
+			limit = len(r.Suggestions)
+		}
+		for _, s := range r.Suggestions[:limit] {
+			fmt.Printf("  %s  (%d sessions, %s)\n",
+				truncatePath(s.Path, 60), s.SessionCount, analyzer.FormatCost(s.EstimatedCost))
+		}
+	}
+
 	if r.TotalTaxTokens > 1000 {
 		fmt.Println()
 		fmt.Println("Recommendation: export shared context to reduce re-explanation")
@@ -165,20 +219,30 @@ func printContinuityReport(r *analyzer.ContinuityReport) {
 
 func buildContinuityOutputJSON(r *analyzer.ContinuityReport) *ContinuityOutputJSON {
 	out := &ContinuityOutputJSON{
-		ProjectName:     r.ProjectName,
-		SessionsScanned: r.SessionsScanned,
-		TotalFileTokens: r.TotalFileTokens,
-		TotalTextTokens: r.TotalTextTokens,
-		TotalTaxTokens:  r.TotalTaxTokens,
-		TotalTaxCost:    r.TotalTaxCost,
+		ProjectName:      r.ProjectName,
+		SessionsScanned:  r.SessionsScanned,
+		TotalFileReads:   r.TotalFileReads,
+		UniqueFileReads:  r.UniqueFileReads,
+		TotalTextBlocks:  r.TotalTextBlocks,
+		UniqueTextBlocks: r.UniqueTextBlocks,
+		ContinuityIndex:  r.ContinuityIndex,
+		TotalFileTokens:  r.TotalFileTokens,
+		TotalTextTokens:  r.TotalTextTokens,
+		TotalTaxTokens:   r.TotalTaxTokens,
+		TotalFileCost:    r.TotalFileCost,
+		TotalTextCost:    r.TotalTextCost,
+		TotalTaxCost:     r.TotalTaxCost,
 	}
 
 	for _, rf := range r.RepeatedFiles {
 		out.RepeatedFiles = append(out.RepeatedFiles, RepeatedFileJSON{
 			Path:            rf.Path,
 			SessionCount:    rf.SessionCount,
+			ReadCount:       rf.ReadCount,
+			RedundantReads:  rf.RedundantReads,
 			Sessions:        rf.Sessions,
 			EstimatedTokens: rf.EstimatedTokens,
+			EstimatedCost:   rf.EstimatedCost,
 		})
 	}
 	for _, rt := range r.RepeatedTexts {
@@ -186,8 +250,28 @@ func buildContinuityOutputJSON(r *analyzer.ContinuityReport) *ContinuityOutputJS
 			Text:            rt.Text,
 			CharCount:       rt.CharCount,
 			SessionCount:    rt.SessionCount,
+			ReadCount:       rt.ReadCount,
+			RedundantReads:  rt.RedundantReads,
 			Sessions:        rt.Sessions,
 			EstimatedTokens: rt.EstimatedTokens,
+			EstimatedCost:   rt.EstimatedCost,
+		})
+	}
+	for _, tp := range r.RepeatTopics {
+		out.RepeatTopics = append(out.RepeatTopics, RepeatTopicJSON{
+			Files:           tp.Files,
+			SessionCount:    tp.SessionCount,
+			EstimatedTokens: tp.EstimatedTokens,
+			EstimatedCost:   tp.EstimatedCost,
+		})
+	}
+	for _, s := range r.Suggestions {
+		out.Suggestions = append(out.Suggestions, ContinuitySuggestJSON{
+			Path:            s.Path,
+			SessionCount:    s.SessionCount,
+			EstimatedTokens: s.EstimatedTokens,
+			EstimatedCost:   s.EstimatedCost,
+			Reason:          s.Reason,
 		})
 	}
 
@@ -196,6 +280,12 @@ func buildContinuityOutputJSON(r *analyzer.ContinuityReport) *ContinuityOutputJS
 	}
 	if out.RepeatedTexts == nil {
 		out.RepeatedTexts = []RepeatedTextJSON{}
+	}
+	if out.RepeatTopics == nil {
+		out.RepeatTopics = []RepeatTopicJSON{}
+	}
+	if out.Suggestions == nil {
+		out.Suggestions = []ContinuitySuggestJSON{}
 	}
 	return out
 }

@@ -978,22 +978,34 @@ type VectorOutputJSON struct {
 
 // ContinuityOutputJSON is the JSON output for the continuity command.
 type ContinuityOutputJSON struct {
-	ProjectName     string             `json:"project_name"`
-	SessionsScanned int                `json:"sessions_scanned"`
-	RepeatedFiles   []RepeatedFileJSON `json:"repeated_files"`
-	RepeatedTexts   []RepeatedTextJSON `json:"repeated_texts"`
-	TotalFileTokens int                `json:"total_repeated_file_tokens"`
-	TotalTextTokens int                `json:"total_repeated_text_tokens"`
-	TotalTaxTokens  int                `json:"total_tax_tokens"`
-	TotalTaxCost    float64            `json:"total_tax_cost"`
+	ProjectName      string                  `json:"project_name"`
+	SessionsScanned  int                     `json:"sessions_scanned"`
+	RepeatedFiles    []RepeatedFileJSON      `json:"repeated_files"`
+	RepeatedTexts    []RepeatedTextJSON      `json:"repeated_texts"`
+	RepeatTopics     []RepeatTopicJSON       `json:"repeat_topics,omitempty"`
+	Suggestions      []ContinuitySuggestJSON `json:"suggestions,omitempty"`
+	TotalFileReads   int                     `json:"total_file_reads"`
+	UniqueFileReads  int                     `json:"unique_file_reads"`
+	TotalTextBlocks  int                     `json:"total_text_blocks"`
+	UniqueTextBlocks int                     `json:"unique_text_blocks"`
+	ContinuityIndex  float64                 `json:"continuity_index"`
+	TotalFileTokens  int                     `json:"total_repeated_file_tokens"`
+	TotalTextTokens  int                     `json:"total_repeated_text_tokens"`
+	TotalTaxTokens   int                     `json:"total_tax_tokens"`
+	TotalFileCost    float64                 `json:"total_repeated_file_cost"`
+	TotalTextCost    float64                 `json:"total_repeated_text_cost"`
+	TotalTaxCost     float64                 `json:"total_tax_cost"`
 }
 
 // RepeatedFileJSON is a single repeated file for JSON output.
 type RepeatedFileJSON struct {
 	Path            string   `json:"path"`
 	SessionCount    int      `json:"session_count"`
+	ReadCount       int      `json:"read_count"`
+	RedundantReads  int      `json:"redundant_reads"`
 	Sessions        []string `json:"sessions"`
 	EstimatedTokens int      `json:"estimated_tokens"`
+	EstimatedCost   float64  `json:"estimated_cost"`
 }
 
 // RepeatedTextJSON is a single repeated text block for JSON output.
@@ -1001,8 +1013,28 @@ type RepeatedTextJSON struct {
 	Text            string   `json:"text"`
 	CharCount       int      `json:"char_count"`
 	SessionCount    int      `json:"session_count"`
+	ReadCount       int      `json:"read_count"`
+	RedundantReads  int      `json:"redundant_reads"`
 	Sessions        []string `json:"sessions"`
 	EstimatedTokens int      `json:"estimated_tokens"`
+	EstimatedCost   float64  `json:"estimated_cost"`
+}
+
+// RepeatTopicJSON is a repeated file cluster for continuity output.
+type RepeatTopicJSON struct {
+	Files           []string `json:"files"`
+	SessionCount    int      `json:"session_count"`
+	EstimatedTokens int      `json:"estimated_tokens"`
+	EstimatedCost   float64  `json:"estimated_cost"`
+}
+
+// ContinuitySuggestJSON is a continuity suggestion row.
+type ContinuitySuggestJSON struct {
+	Path            string  `json:"path"`
+	SessionCount    int     `json:"session_count"`
+	EstimatedTokens int     `json:"estimated_tokens"`
+	EstimatedCost   float64 `json:"estimated_cost"`
+	Reason          string  `json:"reason"`
 }
 
 // SidechainOutputJSON is the JSON output for sidechains and repair dry-runs.
