@@ -55,7 +55,12 @@ Use --auto to automatically find and clean the most recent session:
 
 func runClean(cmd *cobra.Command, args []string) error {
 	if !cleanImages && !cleanProgress && !cleanSeparators && !cleanSnapshots && !cleanDedupReads && !cleanTruncate && !cleanFailedRetries && !cleanSidechains && !cleanTangents && !cleanAll && !cleanLive && !cleanAuto && !cleanActiveFlag {
-		return fmt.Errorf("specify at least one clean operation flag")
+		fmt.Fprintln(os.Stderr, "No operation specified.\n\nQuick options:")
+		fmt.Fprintln(os.Stderr, "  contextspectre clean <session> --all     Full cleanup (all tiers)")
+		fmt.Fprintln(os.Stderr, "  contextspectre clean --auto              Auto-detect and clean most recent session")
+		fmt.Fprintln(os.Stderr, "  contextspectre quick-clean               One-command cleanup (no session ID needed)")
+		fmt.Fprintln(os.Stderr, "\nRun 'contextspectre clean --help' for all operation flags.")
+		return fmt.Errorf("no operation specified")
 	}
 
 	if cleanAggressive && !cleanLive && !cleanWatch {
