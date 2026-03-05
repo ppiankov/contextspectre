@@ -2,3 +2,19 @@ bin/
 coverage.out
 dist/
 *.bak
+
+# Private docs and agent configs
+docs/work-orders.md
+docs/context.txt
+docs/plans/
+docs/ro-*.md
+docs/takeaways-*.md
+docs/bond.md
+docs/essay-draft.md
+docs/resume.md
+CLAUDE.md
+CLAUDE.local.md
+MEMORY.md
+.claude/
+.cursorrules
+contextspectre
