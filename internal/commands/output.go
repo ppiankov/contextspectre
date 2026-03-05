@@ -890,14 +890,39 @@ type MarkOutput struct {
 	UUID   string `json:"uuid"`
 	Marker string `json:"marker,omitempty"`
 	Phase  string `json:"phase,omitempty"`
+	Label  string `json:"label,omitempty"`
 	Action string `json:"action"`
 }
 
 // MarkListOutput is the JSON output for listing markers.
 type MarkListOutput struct {
-	Markers map[string]string `json:"markers"`
-	Phases  map[string]string `json:"phases,omitempty"`
-	Total   int               `json:"total"`
+	Markers   map[string]string           `json:"markers"`
+	Phases    map[string]string           `json:"phases,omitempty"`
+	Bookmarks map[string]MarkBookmarkJSON `json:"bookmarks,omitempty"`
+	Total     int                         `json:"total"`
+}
+
+// MarkBookmarkJSON is a bookmark entry for mark list JSON output.
+type MarkBookmarkJSON struct {
+	Type  string `json:"type"`
+	Label string `json:"label,omitempty"`
+}
+
+// MarksOutputJSON is the JSON output for contextspectre marks.
+type MarksOutputJSON struct {
+	SessionID string          `json:"session_id"`
+	Marks     []MarkEntryJSON `json:"marks"`
+	Total     int             `json:"total"`
+}
+
+// MarkEntryJSON is a single mark/bookmark/commit-point row.
+type MarkEntryJSON struct {
+	UUID       string `json:"uuid"`
+	Type       string `json:"type"`
+	Label      string `json:"label,omitempty"`
+	EntryIndex int    `json:"entry_index,omitempty"`
+	LineNumber int    `json:"line_number,omitempty"`
+	Epoch      int    `json:"epoch"`
 }
 
 // CollapseOutput is the JSON output for the collapse command.

@@ -36,12 +36,27 @@ type CommitPoint struct {
 	Files       []string  `json:"files,omitempty"`
 }
 
+// BookmarkType is a non-destructive navigational anchor type.
+type BookmarkType string
+
+const (
+	BookmarkCheckpoint BookmarkType = "checkpoint"
+	BookmarkMilestone  BookmarkType = "milestone"
+)
+
+// Bookmark is a user-defined positional anchor with optional label.
+type Bookmark struct {
+	Type  BookmarkType `json:"type"`
+	Label string       `json:"label,omitempty"`
+}
+
 // MarkerFile holds persisted markers in a sidecar file alongside a session JSONL.
 type MarkerFile struct {
 	Version      int                   `json:"version"`
 	Markers      map[string]MarkerType `json:"markers"`
 	Phases       map[string]PhaseType  `json:"phases,omitempty"`
 	CommitPoints []CommitPoint         `json:"commit_points,omitempty"`
+	Bookmarks    map[string]Bookmark   `json:"bookmarks,omitempty"`
 }
 
 // MarkerPath returns the sidecar file path for a given session JSONL path.
@@ -55,7 +70,12 @@ func LoadMarkers(sessionPath string) (*MarkerFile, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &MarkerFile{Version: 1, Markers: map[string]MarkerType{}}, nil
+			return &MarkerFile{
+				Version:   1,
+				Markers:   map[string]MarkerType{},
+				Phases:    map[string]PhaseType{},
+				Bookmarks: map[string]Bookmark{},
+			}, nil
 		}
 		return nil, err
 	}
@@ -63,13 +83,21 @@ func LoadMarkers(sessionPath string) (*MarkerFile, error) {
 	var mf MarkerFile
 	if err := json.Unmarshal(data, &mf); err != nil {
 		// Corrupt file — start fresh
-		return &MarkerFile{Version: 1, Markers: map[string]MarkerType{}}, nil
+		return &MarkerFile{
+			Version:   1,
+			Markers:   map[string]MarkerType{},
+			Phases:    map[string]PhaseType{},
+			Bookmarks: map[string]Bookmark{},
+		}, nil
 	}
 	if mf.Markers == nil {
 		mf.Markers = map[string]MarkerType{}
 	}
 	if mf.Phases == nil {
 		mf.Phases = map[string]PhaseType{}
+	}
+	if mf.Bookmarks == nil {
+		mf.Bookmarks = map[string]Bookmark{}
 	}
 	return &mf, nil
 }
@@ -196,4 +224,32 @@ func (mf *MarkerFile) GetCommitPoint(uuid string) *CommitPoint {
 		}
 	}
 	return nil
+}
+
+// SetBookmark assigns or updates a bookmark on a UUID.
+func (mf *MarkerFile) SetBookmark(uuid string, typ BookmarkType, label string) {
+	if mf.Bookmarks == nil {
+		mf.Bookmarks = map[string]Bookmark{}
+	}
+	mf.Bookmarks[uuid] = Bookmark{
+		Type:  typ,
+		Label: label,
+	}
+}
+
+// GetBookmark returns the bookmark for a UUID, if any.
+func (mf *MarkerFile) GetBookmark(uuid string) (Bookmark, bool) {
+	if mf == nil || mf.Bookmarks == nil {
+		return Bookmark{}, false
+	}
+	b, ok := mf.Bookmarks[uuid]
+	return b, ok
+}
+
+// ClearBookmark removes a bookmark from a UUID.
+func (mf *MarkerFile) ClearBookmark(uuid string) {
+	if mf == nil || mf.Bookmarks == nil {
+		return
+	}
+	delete(mf.Bookmarks, uuid)
 }
