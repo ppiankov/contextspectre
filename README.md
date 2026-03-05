@@ -107,8 +107,11 @@ cd contextspectre && make build
 ## Quick start
 
 ```bash
-# Launch the TUI (default — browse all sessions)
-contextspectre
+# One-screen session summary (auto-detects from current directory)
+contextspectre summary --cwd
+
+# See your active sessions with signal grades and cost
+contextspectre active
 
 # Quick-clean the most recent session (one command, no session ID needed)
 contextspectre quick-clean
@@ -116,7 +119,10 @@ contextspectre quick-clean
 # Live cleanup on an active session (safe between Claude's turns)
 contextspectre quick-clean --live
 
-# Show context stats
+# Launch the TUI (browse all sessions, drill into details)
+contextspectre
+
+# Show detailed context stats
 contextspectre stats <session-id>
 
 # Run all cleanup operations

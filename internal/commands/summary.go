@@ -18,10 +18,11 @@ var (
 )
 
 var summaryCmd = &cobra.Command{
-	Use:   "summary [session-id-or-path]",
-	Short: "Print a one-screen session summary",
-	Args:  cobra.MaximumNArgs(1),
-	RunE:  runSummary,
+	Use:     "summary [session-id-or-path]",
+	Aliases: []string{"status"},
+	Short:   "Print a one-screen session summary",
+	Args:    cobra.MaximumNArgs(1),
+	RunE:    runSummary,
 }
 
 func runSummary(cmd *cobra.Command, args []string) error {

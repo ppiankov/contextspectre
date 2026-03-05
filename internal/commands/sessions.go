@@ -15,12 +15,15 @@ import (
 var (
 	sessionsActive  bool
 	sessionsProject string
+	sessionsAll     bool
+	sessionsLimit   int
 )
 
 var sessionsCmd = &cobra.Command{
-	Use:   "sessions",
-	Short: "List all conversation sessions",
-	RunE:  runSessions,
+	Use:     "sessions",
+	Aliases: []string{"list"},
+	Short:   "List all conversation sessions",
+	RunE:    runSessions,
 }
 
 func runSessions(cmd *cobra.Command, args []string) error {
@@ -34,8 +37,14 @@ func runSessions(cmd *cobra.Command, args []string) error {
 
 	// Apply filters
 	sessions = filterSessions(sessions)
+	total := len(sessions)
 
-	if len(sessions) == 0 {
+	// Apply limit (default 20 unless --all or explicit filters are set).
+	if !sessionsAll && sessionsLimit > 0 && !sessionsActive && sessionsProject == "" && total > sessionsLimit {
+		sessions = sessions[:sessionsLimit]
+	}
+
+	if total == 0 {
 		if isJSON() {
 			return printJSON(SessionsOutput{Sessions: []SessionJSON{}, Total: 0})
 		}
@@ -120,7 +129,14 @@ func runSessions(cmd *cobra.Command, args []string) error {
 			timeAgo(s.Modified),
 		)
 	}
-	return w.Flush()
+	_ = w.Flush()
+
+	// Show truncation hint when output was capped.
+	if len(sessions) < total {
+		fmt.Printf("\nShowing %d of %d sessions. Use --all to see everything.\n", len(sessions), total)
+	}
+
+	return nil
 }
 
 // filterSessions applies --active and --project flags.
@@ -212,5 +228,7 @@ func timeAgo(t time.Time) string {
 func init() {
 	sessionsCmd.Flags().BoolVar(&sessionsActive, "active", false, "Show only active sessions (modified within last 5 minutes)")
 	sessionsCmd.Flags().StringVar(&sessionsProject, "project", "", "Filter by project name (substring match)")
+	sessionsCmd.Flags().BoolVar(&sessionsAll, "all", false, "Show all sessions (no limit)")
+	sessionsCmd.Flags().IntVar(&sessionsLimit, "limit", 20, "Maximum sessions to display")
 	rootCmd.AddCommand(sessionsCmd)
 }
