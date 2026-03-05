@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"runtime"
 
+	"github.com/ppiankov/contextspectre/internal/analyzer"
+	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
 )
@@ -19,11 +21,14 @@ var doctorCmd = &cobra.Command{
 
 // DoctorOutput is the JSON output for the doctor command.
 type DoctorOutput struct {
-	Version    string           `json:"version"`
-	Platform   string           `json:"platform"`
-	ClaudeDir  DoctorCheck      `json:"claude_dir"`
-	Sessions   DoctorCheck      `json:"sessions"`
-	Companions []CompanionCheck `json:"companions"`
+	Version          string           `json:"version"`
+	Platform         string           `json:"platform"`
+	ClaudeDir        DoctorCheck      `json:"claude_dir"`
+	Sessions         DoctorCheck      `json:"sessions"`
+	SidechainHealth  DoctorCheck      `json:"sidechains"`
+	SidechainEntries int              `json:"sidechain_entries,omitempty"`
+	SidechainSessions int             `json:"sidechain_sessions,omitempty"`
+	Companions       []CompanionCheck `json:"companions"`
 }
 
 // DoctorCheck holds a single health check result.
@@ -69,6 +74,33 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			Status:  "ok",
 			Message: fmt.Sprintf("%d sessions found", len(sessions)),
 		}
+
+		sidechainEntries := 0
+		sidechainSessions := 0
+		for _, si := range sessions {
+			entries, err := jsonl.Parse(si.FullPath)
+			if err != nil {
+				continue
+			}
+			report := analyzer.DetectSidechains(entries)
+			if report.TotalEntries > 0 {
+				sidechainEntries += report.TotalEntries
+				sidechainSessions++
+			}
+		}
+		out.SidechainEntries = sidechainEntries
+		out.SidechainSessions = sidechainSessions
+		if sidechainEntries == 0 {
+			out.SidechainHealth = DoctorCheck{
+				Status:  "ok",
+				Message: "no sidechains detected",
+			}
+		} else {
+			out.SidechainHealth = DoctorCheck{
+				Status:  "warn",
+				Message: fmt.Sprintf("%d sidechains across %d sessions", sidechainEntries, sidechainSessions),
+			}
+		}
 	}
 
 	// Check companion tools
@@ -93,6 +125,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 	printCheck("Claude directory", out.ClaudeDir)
 	printCheck("Sessions", out.Sessions)
+	if out.SidechainHealth.Message != "" {
+		printCheck("Sidechains", out.SidechainHealth)
+	}
 
 	fmt.Println()
 	fmt.Println("Companion tools:")

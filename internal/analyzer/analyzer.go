@@ -95,16 +95,6 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 			stats.SnapshotBytesTotal += int64(e.RawSize)
 		}
 
-		// Track sidechains
-		if e.IsSidechain {
-			stats.SidechainCount++
-			stats.SidechainTokens += e.RawSize / 4
-			// Count group boundaries: new group when previous was not sidechain
-			if i == 0 || !entries[i-1].IsSidechain {
-				stats.SidechainGroups++
-			}
-		}
-
 		// Track images
 		if e.HasImages() {
 			blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
@@ -186,6 +176,12 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 	// Estimate turns until next compaction
 	stats.EstimatedTurnsLeft = CompactionDistance(stats)
+
+	// Structural sidechain detection (not only explicit isSidechain flags).
+	sidechains := DetectSidechains(entries)
+	stats.SidechainCount = sidechains.TotalEntries
+	stats.SidechainGroups = sidechains.GroupCount
+	stats.SidechainTokens = sidechains.TotalTokens
 
 	// Calculate cost attribution
 	stats.Cost = CalculateCost(entries)
