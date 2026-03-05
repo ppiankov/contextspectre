@@ -125,6 +125,35 @@ The hook runs `contextspectre summary --cwd --format json` in the background eve
 
 This gives you live awareness while working. The status line tells you *how full* and *how clean* your context is. `contextspectre status` or the TUI tells you the details and lets you act.
 
+## Continuous cleanup in a side terminal
+
+The highest-leverage workflow: run continuous cleanup in a terminal next to Claude Code.
+
+```bash
+contextspectre clean --active --all --watch
+```
+
+This watches all active sessions and cleans them between Claude's turns — progress messages, stale reads, snapshots, and other noise are removed automatically as the session grows. You work in one terminal, contextspectre keeps context clean in the other.
+
+**What it does:**
+- Polls active sessions using mtime-based detection (5s check, 30s cooldown)
+- Runs all 9 cleanup tiers when a session is idle (no writes in the last few seconds)
+- Skips sessions that Claude is actively writing to (mtime race detection)
+- Prints a running summary: tokens recovered, cost saved, sessions cleaned
+- Ctrl+C exits cleanly with a final summary; double Ctrl+C force-quits
+
+**Why it matters:** In a long session, noise accumulates continuously — every file read, every progress message, every failed retry. Without cleanup, noise compounds until compaction triggers and reasoning quality drops. Continuous watch keeps the session clean so compaction happens later (or never), and when it does happen, there's less noise to compress into the summary.
+
+**Variants:**
+
+```bash
+# Fixed 30-second interval instead of smart mtime polling
+contextspectre clean --active --all --watch --interval 30
+
+# Watch only sessions for the current project
+contextspectre clean --active --all --watch --project myproject
+```
+
 ## Working during cooldowns
 
 Long AI sessions can hit provider limits or cooldown periods. When this happens, the most effective workflow is to shift mechanical work away from the primary reasoning session.
