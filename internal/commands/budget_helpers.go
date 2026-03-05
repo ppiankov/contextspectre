@@ -81,11 +81,6 @@ func computeWeeklySavings(claudeDir string) float64 {
 	return total
 }
 
-func startOfWeek(t time.Time) time.Time {
-	start, _ := billingWeekWindow(t, loadBillingWeekStart())
-	return start
-}
-
 func billingWeekWindow(now time.Time, startSpec string) (time.Time, time.Time) {
 	dayStart := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 	startSpec = strings.TrimSpace(startSpec)
