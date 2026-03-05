@@ -112,6 +112,7 @@ func sessionsHelp() []helpEntry {
 		{"/", "Search sessions"},
 		{"n/N", "Next/prev search match"},
 		{"s", "Cycle sort column"},
+		{"v", "Vector control panel"},
 		{"q", "Quit"},
 		{"?", "Toggle this help"},
 	}
@@ -179,6 +180,24 @@ func branchesHelp() []helpEntry {
 		{"e", "Export selected"},
 		{"W", "Export + wipe"},
 		{"q/Esc", "Back"},
+		{"?", "Toggle this help"},
+	}
+}
+
+// vectorHelp returns help entries for the vector control panel.
+func vectorHelp() []helpEntry {
+	return []helpEntry{
+		{"j/\u2193", "Scroll down"},
+		{"k/\u2191", "Scroll up"},
+		{"G/End", "Jump to bottom"},
+		{"gg/Home", "Jump to top"},
+		{"Ctrl+d", "Half page down"},
+		{"Ctrl+u", "Half page up"},
+		{"Space", "Full page down"},
+		{"C", "Clean session"},
+		{"S", "Split tangent range"},
+		{"E", "Export decisions (TBD)"},
+		{"q/Esc", "Back to sessions"},
 		{"?", "Toggle this help"},
 	}
 }
