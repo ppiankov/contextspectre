@@ -1096,10 +1096,11 @@ func recordCleanupSavings(path string, tokensSaved int) *savings.Event {
 		return nil
 	}
 
-	// Compute avoided cost
-	pricing := analyzer.PricingForModel(postStats.Model)
+	// Compute avoided cost.
+	// We intentionally use cache-read pricing for all avoided cache-read tokens.
+	// Claude usage does not expose a separate "vision cache read" bucket.
 	avoidedTokens := tokensSaved * turnsRemaining
-	avoidedCost := float64(avoidedTokens) / 1_000_000 * pricing.CacheReadPerMillion
+	avoidedCost := analyzer.CacheReadCostForTokens(postStats.Model, avoidedTokens)
 
 	// Extract session identity
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
