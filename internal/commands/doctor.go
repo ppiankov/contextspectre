@@ -33,6 +33,11 @@ type DoctorOutput struct {
 	EntropySessions   []DoctorEntropySession `json:"entropy_sessions,omitempty"`
 	CadenceHealth     DoctorCheck            `json:"cleanup_cadence"`
 	CadenceSessions   []DoctorCadenceSession `json:"cleanup_priority,omitempty"`
+	BudgetHealth      DoctorCheck            `json:"budget"`
+	WeeklyBudgetLimit float64                `json:"weekly_budget_limit,omitempty"`
+	WeeklyBudgetSpent float64                `json:"weekly_budget_spent,omitempty"`
+	WeeklyBudgetLeft  float64                `json:"weekly_budget_left,omitempty"`
+	HighDailySessions int                    `json:"high_daily_sessions,omitempty"`
 	Companions        []CompanionCheck       `json:"companions"`
 }
 
@@ -225,6 +230,48 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Budget health (WO-058), only when weekly budget is configured.
+	weeklyLimit := loadWeeklyBudgetLimit()
+	if weeklyLimit > 0 {
+		weeklySpent, highDaily, err := computeWeeklySpend(dir)
+		if err != nil {
+			out.BudgetHealth = DoctorCheck{
+				Status:  "warn",
+				Message: fmt.Sprintf("budget health unavailable: %v", err),
+			}
+		} else {
+			out.WeeklyBudgetLimit = weeklyLimit
+			out.WeeklyBudgetSpent = weeklySpent
+			out.HighDailySessions = highDaily
+
+			left := weeklyLimit - weeklySpent
+			if left < 0 {
+				left = 0
+			}
+			out.WeeklyBudgetLeft = left
+
+			remainingPct := left / weeklyLimit * 100
+			burnPerTurn := 0.0
+			if len(sessions) > 0 && sessions[0].ContextStats != nil && sessions[0].MessageCount > 0 {
+				burnPerTurn = sessions[0].ContextStats.EstimatedCost / float64(sessions[0].MessageCount)
+			}
+
+			status := "ok"
+			msg := fmt.Sprintf("budget healthy: %s remaining, current session ~%s/turn",
+				analyzer.FormatCost(left), analyzer.FormatCost(burnPerTurn))
+			if remainingPct < 20 {
+				status = "warn"
+				msg = fmt.Sprintf("budget at risk: %s remaining, current session ~%s/turn",
+					analyzer.FormatCost(left), analyzer.FormatCost(burnPerTurn))
+			}
+			if highDaily >= 3 {
+				status = "warn"
+				msg += fmt.Sprintf("; %d sessions consuming >$5/day — consider cleanup", highDaily)
+			}
+			out.BudgetHealth = DoctorCheck{Status: status, Message: msg}
+		}
+	}
+
 	// Check companion tools
 	companions := []string{"ancc", "chainwatch"}
 	for _, name := range companions {
@@ -255,6 +302,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 	if out.CadenceHealth.Message != "" {
 		printCheck("Cleanup cadence", out.CadenceHealth)
+	}
+	if out.BudgetHealth.Message != "" {
+		printCheck("Budget", out.BudgetHealth)
 	}
 
 	fmt.Println()

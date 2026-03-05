@@ -53,6 +53,15 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("cost-alert must be >= 0 (0 disables)")
 		}
 		cfg.CostAlertThreshold = v
+	case "weekly-budget":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid weekly-budget value: %s (must be a number)", value)
+		}
+		if v < 0 {
+			return fmt.Errorf("weekly-budget must be >= 0 (0 disables)")
+		}
+		cfg.WeeklyBudgetLimit = v
 	case "expert-mode":
 		switch value {
 		case "true", "1", "on":
@@ -99,7 +108,7 @@ func runConfigSet(cmd *cobra.Command, args []string) error {
 		}
 		cfg.HealthCDRWarn = v
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 
 	if err := project.Save(dir, cfg); err != nil {
@@ -128,6 +137,12 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 			fmt.Println("cost-alert: disabled")
 		} else {
 			fmt.Printf("cost-alert: %s\n", analyzer.FormatCost(cfg.CostAlertThreshold))
+		}
+	case "weekly-budget":
+		if cfg.WeeklyBudgetLimit == 0 {
+			fmt.Println("weekly-budget: disabled")
+		} else {
+			fmt.Printf("weekly-budget: %s/week\n", analyzer.FormatCost(cfg.WeeklyBudgetLimit))
 		}
 	case "expert-mode":
 		if cfg.ExpertMode {
@@ -160,7 +175,7 @@ func runConfigGet(cmd *cobra.Command, args []string) error {
 			fmt.Printf("health-cdr-warn: default (%.2f)\n", analyzer.DefaultGaugeThresholds.CDRWarn)
 		}
 	default:
-		return fmt.Errorf("unknown config key: %s (available: cost-alert, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
+		return fmt.Errorf("unknown config key: %s (available: cost-alert, weekly-budget, expert-mode, health-context-warn, health-cpd-warn, health-ttc-warn, health-cdr-warn)", key)
 	}
 	return nil
 }
@@ -181,6 +196,11 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  cost-alert: %s\n", analyzer.FormatCost(cfg.CostAlertThreshold))
 	} else {
 		fmt.Println("  cost-alert: disabled")
+	}
+	if cfg.WeeklyBudgetLimit > 0 {
+		fmt.Printf("  weekly-budget: %s/week\n", analyzer.FormatCost(cfg.WeeklyBudgetLimit))
+	} else {
+		fmt.Println("  weekly-budget: disabled")
 	}
 	if cfg.ExpertMode {
 		fmt.Println("  expert-mode: enabled")
@@ -208,6 +228,7 @@ func runConfigList(cmd *cobra.Command, args []string) error {
 // ConfigJSON is the JSON output for the config list command.
 type ConfigJSON struct {
 	CostAlertThreshold float64 `json:"cost_alert_threshold"`
+	WeeklyBudgetLimit  float64 `json:"weekly_budget_limit"`
 	ExpertMode         bool    `json:"expert_mode"`
 	HealthContextWarn  float64 `json:"health_context_warn"`
 	HealthCPDWarn      float64 `json:"health_cpd_warn"`
@@ -219,6 +240,7 @@ func buildConfigJSON(cfg *project.Config) *ConfigJSON {
 	t := loadGaugeThresholds()
 	return &ConfigJSON{
 		CostAlertThreshold: cfg.CostAlertThreshold,
+		WeeklyBudgetLimit:  cfg.WeeklyBudgetLimit,
 		ExpertMode:         cfg.ExpertMode,
 		HealthContextWarn:  t.ContextWarn,
 		HealthCPDWarn:      t.CPDWarn,
