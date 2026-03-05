@@ -120,11 +120,24 @@ The hook runs `contextspectre summary --cwd --format json` in the background eve
 
 **What to watch for:**
 - Signal grade dropping from A/B to D/F — noise is accumulating
-- Cleanable tokens growing — run `quick-clean` or `clean --all`
 - Context above 75% — approaching compaction territory
 - Cost velocity spikes — session may be drifting
 
-This gives you live awareness while working. The status line tells you *how full* and *how clean* your context is. `contextspectre status` or the TUI tells you the details and lets you act.
+**Color-coded indicators.** Two values are color-coded to give instant visual feedback:
+
+`ctx:%` — context fill:
+- 🟢 Green (< 60%) — healthy headroom
+- 🟡 Yellow (60-79%) — monitor, approaching compaction
+- 🔴 Red (80%+) — compaction imminent, consolidate or clean
+
+`clean:` — cleanable tokens (watch mode can't reach tangents/retries, only tiers 1-3):
+- 🟢 Green (< 100K) — healthy, watch mode handling it
+- 🟡 Yellow (100K-500K) — consider running `clean --all` manually
+- 🔴 Red (> 500K) — manual intervention needed, tangents accumulating
+
+When `clean:` is red, watch mode is running but the bulk of the waste is tangents (tier 7) that watch mode intentionally skips on active sessions. Run `contextspectre clean <session> --all` to clear them.
+
+This gives you live awareness while working. The status line tells you *how full* and *how clean* your context is. Color tells you whether to act. `contextspectre status` or the TUI gives the details.
 
 ## Continuous cleanup in a side terminal
 
