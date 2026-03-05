@@ -162,6 +162,16 @@ func (m sessionsModel) handleKey(msg tea.KeyMsg) (sessionsModel, tea.Cmd) {
 		m.help.toggle("Session Browser", sessionsHelp())
 	case msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 's':
 		m.cycleSortField()
+	case msg.Type == tea.KeyRunes && len(msg.Runes) == 1 && msg.Runes[0] == 'v':
+		if m.cursor >= 0 && m.cursor < len(m.displayRows) && !m.displayRows[m.cursor].isHeader {
+			src := m.activeSessions()
+			idx := m.displayRows[m.cursor].sessionIdx
+			if idx >= 0 && idx < len(src) {
+				return m, func() tea.Msg {
+					return openVectorMsg{info: src[idx]}
+				}
+			}
+		}
 	}
 	return m, nil
 }
@@ -639,7 +649,7 @@ func (m sessionsModel) View() string {
 		b.WriteString(styleFooter.Render(fmt.Sprintf(" / %s  (%s)  Esc clear  \u2191\u2193 navigate  Enter open", m.searchQuery, matchInfo)))
 	} else {
 		sortLabel := m.sortBy.label()
-		b.WriteString(styleFooter.Render(fmt.Sprintf(" \u2191\u2193/G/gg navigate  / search  s sort (%s)  ? help  Enter open  q quit", sortLabel)))
+		b.WriteString(styleFooter.Render(fmt.Sprintf(" \u2191\u2193/G/gg navigate  / search  s sort (%s)  v vector  ? help  Enter open  q quit", sortLabel)))
 	}
 
 	// Help overlay on top if visible.

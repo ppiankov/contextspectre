@@ -23,6 +23,7 @@ const (
 	viewConfirm
 	viewCommitPoint
 	viewEpochs
+	viewVector
 )
 
 // AppModel is the top-level Bubble Tea model.
@@ -35,6 +36,7 @@ type AppModel struct {
 	confirm       confirmModel
 	commitPoint   commitPointModel
 	epochs        epochsModel
+	vector        vectorModel
 	claudeDir     string
 	version       string
 	width, height int
@@ -120,6 +122,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commitPoint.height = msg.Height
 		m.epochs.width = msg.Width
 		m.epochs.height = msg.Height
+		m.vector.width = msg.Width
+		m.vector.height = msg.Height
 		return m, nil
 
 	case tea.KeyMsg:
@@ -273,6 +277,17 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentView = viewMessages
 		}
 		return m, nil
+
+	case openVectorMsg:
+		m.vector = newVectorModel(msg.info, m.claudeDir)
+		m.vector.width = m.width
+		m.vector.height = m.height
+		m.currentView = viewVector
+		return m, nil
+
+	case backFromVectorMsg:
+		m.currentView = viewSessions
+		return m, nil
 	}
 
 	// Delegate to current view
@@ -295,6 +310,8 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.commitPoint, cmd = m.commitPoint.Update(msg)
 	case viewEpochs:
 		m.epochs, cmd = m.epochs.Update(msg)
+	case viewVector:
+		m.vector, cmd = m.vector.Update(msg)
 	}
 
 	return m, cmd
@@ -314,6 +331,8 @@ func (m AppModel) View() string {
 		return m.commitPoint.View()
 	case viewEpochs:
 		return m.epochs.View()
+	case viewVector:
+		return m.vector.View()
 	default:
 		return m.sessions.View()
 	}
