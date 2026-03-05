@@ -53,6 +53,7 @@ type ContextStats struct {
 	Model                string
 	Archaeology          *CompactionReport
 	GhostReport          *GhostReport
+	InputPurity          *InputPurity
 	ClientType           string // "cli", "desktop", or "unknown"
 }
 
@@ -197,6 +198,9 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 	if stats.Archaeology != nil && len(stats.Archaeology.Events) > 0 {
 		stats.GhostReport = DetectGhosts(entries, stats.Archaeology, stats.Compactions)
 	}
+
+	// Input purity
+	stats.InputPurity = ComputeInputPurity(entries)
 
 	// Client type detection
 	if stats.SnapshotCount > 0 {
