@@ -90,6 +90,9 @@ func (m detailModel) countOverviewLines() int {
 	if m.stats != nil && m.stats.GhostReport != nil && len(m.stats.GhostReport.Files) > 0 {
 		count += 3
 	}
+	if m.stats != nil && m.stats.InputPurity != nil && m.stats.InputPurity.TotalResultTokens > 0 {
+		count++
+	}
 	count += 2 // footer hint
 	return count
 }
@@ -347,6 +350,11 @@ func (m detailModel) renderOverview(height int) string {
 		lines = append(lines, fmt.Sprintf(" Health: %s  Signal: %.0f%%  Turns: %d  Est. left: %s",
 			gradeStr, m.health.SignalPercent,
 			stats.ConversationalTurns, turnsLeft))
+	}
+
+	if stats.InputPurity != nil && stats.InputPurity.TotalResultTokens > 0 {
+		lines = append(lines, fmt.Sprintf(" Input purity: %.0f%% (%.0f%% compressible)",
+			stats.InputPurity.Score, 100-stats.InputPurity.Score))
 	}
 
 	lines = append(lines, "")

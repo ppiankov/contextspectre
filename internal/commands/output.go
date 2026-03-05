@@ -69,6 +69,7 @@ type StatsOutput struct {
 	EpochTimeline      []EpochTimelineJSON    `json:"epoch_timeline,omitempty"`
 	ScopeDrift         *ScopeDriftJSON        `json:"scope_drift,omitempty"`
 	GhostContext       *GhostReportJSON       `json:"ghost_context,omitempty"`
+	InputPurity        *analyzer.InputPurity  `json:"input_purity,omitempty"`
 }
 
 // DecisionEconomicsJSON holds CPD/TTC/CDR for JSON output.
@@ -801,6 +802,10 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 			})
 		}
 		out.GhostContext = gj
+	}
+
+	if stats.InputPurity != nil && stats.InputPurity.TotalResultTokens > 0 {
+		out.InputPurity = stats.InputPurity
 	}
 
 	return out

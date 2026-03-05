@@ -270,6 +270,7 @@ type SummaryJSON struct {
 	VectorAction string   `json:"vector_action,omitempty"`
 	TopFiles     []string `json:"top_files,omitempty"`
 	Cleanable    int      `json:"cleanable_tokens,omitempty"`
+	InputPurity  float64  `json:"input_purity"`
 }
 
 func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration, entries []jsonl.Entry) *SummaryJSON {
@@ -304,6 +305,9 @@ func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *an
 	gauge := analyzer.ComputeGauge(stats, decEcon, loadGaugeThresholds())
 	out.VectorState = string(gauge.State)
 	out.VectorAction = string(gauge.Action)
+	if stats.InputPurity != nil {
+		out.InputPurity = stats.InputPurity.Score
+	}
 	return out
 }
 

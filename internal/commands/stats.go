@@ -153,6 +153,19 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	// Input purity
+	if stats.InputPurity != nil && stats.InputPurity.TotalResultTokens > 0 {
+		compressiblePct := 100 - stats.InputPurity.Score
+		fmt.Printf("Input purity:       %.0f%% (%.0f%% of input compressible)\n",
+			stats.InputPurity.Score, compressiblePct)
+		for cat, tokens := range stats.InputPurity.ByCategory {
+			if tokens > 0 {
+				fmt.Printf("  %-18s ~%s tokens compressible\n", cat+":", formatTokens(tokens))
+			}
+		}
+		fmt.Println()
+	}
+
 	// Compaction info
 	fmt.Printf("Compactions: %d\n", stats.CompactionCount)
 	if stats.CompactionCount > 0 {
