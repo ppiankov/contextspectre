@@ -162,6 +162,7 @@ func Collapse(path string, commitPointUUID string) (*CollapseResult, error) {
 		uuid := entries[i].UUID
 		if uuid != "" && toDelete[i] {
 			markers.Clear(uuid)
+			markers.ClearBookmark(uuid)
 		}
 	}
 	markers.RemoveCommitPoint(commitPointUUID)

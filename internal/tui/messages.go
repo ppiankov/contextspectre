@@ -427,15 +427,23 @@ func (m messagesModel) View() string {
 		}
 		if e.UUID != "" && m.markers != nil {
 			if m.markers.HasCommitPoint(e.UUID) {
-				typeStr = lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("[P]") + typeStr
+				typeStr = lipgloss.NewStyle().Foreground(colorCyan).Bold(true).Render("◆") + typeStr
 			} else {
 				switch m.markers.Get(e.UUID) {
 				case editor.MarkerKeep:
-					typeStr = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("[K]") + typeStr
+					typeStr = lipgloss.NewStyle().Foreground(colorGreen).Bold(true).Render("🔒") + typeStr
 				case editor.MarkerNoise:
 					typeStr = lipgloss.NewStyle().Foreground(colorRed).Bold(true).Render("[N]") + typeStr
 				case editor.MarkerCandidate:
 					typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("[C]") + typeStr
+				}
+			}
+			if bm, ok := m.markers.GetBookmark(e.UUID); ok {
+				switch bm.Type {
+				case editor.BookmarkCheckpoint:
+					typeStr = lipgloss.NewStyle().Foreground(colorYellow).Bold(true).Render("◇") + typeStr
+				case editor.BookmarkMilestone:
+					typeStr = lipgloss.NewStyle().Foreground(colorAmber).Bold(true).Render("★") + typeStr
 				}
 			}
 			switch m.markers.GetPhase(e.UUID) {
