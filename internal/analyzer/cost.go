@@ -16,6 +16,19 @@ type ModelPricing struct {
 	CacheReadPerMillion  float64
 }
 
+// CacheReadCostForTokens computes cache-read dollar cost for a token count.
+//
+// Claude usage fields expose a single cache_read_input_tokens counter; it does
+// not split text vs. vision token classes. ContextSpectre therefore applies the
+// same cache-read rate to all cache-read tokens, including image-derived tokens.
+func CacheReadCostForTokens(model string, cacheReadTokens int) float64 {
+	if cacheReadTokens <= 0 {
+		return 0
+	}
+	pricing := PricingForModel(model)
+	return float64(cacheReadTokens) / 1_000_000 * pricing.CacheReadPerMillion
+}
+
 // KnownPricing maps model IDs to their pricing. Prices are per million tokens.
 var KnownPricing = map[string]ModelPricing{
 	"claude-opus-4-6": {
