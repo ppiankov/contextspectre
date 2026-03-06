@@ -42,6 +42,7 @@ func init() {
 
 // statusLineData holds computed telemetry for a single session.
 type statusLineData struct {
+	SessionID      string  `json:"session_id"`
 	ContextPercent float64 `json:"context_percent"`
 	TurnsRemaining int     `json:"turns_remaining"`
 	NoiseTokens    int     `json:"noise_tokens"`
@@ -182,7 +183,13 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		vectorAction = "clean"
 	}
 
+	shortID := sessionID
+	if len(shortID) > 8 {
+		shortID = shortID[:8]
+	}
+
 	return &statusLineData{
+		SessionID:      shortID,
 		ContextPercent: contextPct,
 		TurnsRemaining: turnsRemaining,
 		NoiseTokens:    noiseTokens,
@@ -205,8 +212,8 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainOK = 0
 		}
-		fmt.Printf("CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
-			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
+		fmt.Printf("SID=%s; CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
+			d.SessionID, d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
 			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainOK)
 	case "human":
 		parts := []string{
@@ -231,8 +238,8 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainVal = "broken"
 		}
-		fmt.Printf("ctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\tchain=%s\n",
-			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
+		fmt.Printf("sid=%s\tctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\tchain=%s\n",
+			d.SessionID, d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
 			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainVal)
 	}
 	return nil
