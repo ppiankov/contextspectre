@@ -228,7 +228,15 @@ Running high effort on routine work is token bleed: you burn 3-5x more thinking 
 
 **Rule of thumb:** If you can describe the change in one sentence, medium effort is enough. Save high effort for turns where you'd want a human engineer to stop and think carefully before writing code.
 
-**Reading the signals.** The status line already tells you whether high effort is affordable: `ctx:` shows how full the window is, `turns:` shows how many turns remain at current burn rate. If context is yellow and turns is single digits, ultrathink will eat most of your remaining runway on a single response. The indicators are the effort gauge — no separate metric needed.
+**Reading the signals.** The status line already tells you whether high effort is affordable. Use `ctx:` as the effort gauge:
+
+| ctx:     | Suggested max effort | Why                                              |
+|----------|---------------------|--------------------------------------------------|
+| < 40%    | High (ultrathink)   | Plenty of runway, deep reasoning affordable      |
+| 40-74%   | Medium              | Conserve tokens, most tasks don't need deep think |
+| 75%+     | Low or medium       | Every token counts, compaction imminent           |
+
+This is guidance, not a rule. A subtle architecture bug at 80% context may genuinely need ultrathink — but you're making a tradeoff: one deep turn might trigger compaction and lose earlier reasoning. The table helps you make that choice consciously instead of leaving effort on max by default.
 
 ## Working during cooldowns
 
