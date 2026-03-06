@@ -147,6 +147,8 @@ The pattern applies to any autonomous agent — not just Claude Code. The more r
 
 **Structural defense.** Directive clarity is a policy — it depends on the agent following instructions. For defense in depth, pair it with structural guards: hooks that block destructive writes (content shrinkage, section removal), required sections that cannot be deleted, and per-repo diff review before cross-repo operations land. Policy catches the intent; structure catches the execution.
 
+See [Ambiguous vector](concepts.md#glossary) in the glossary for the formal definition of this failure mode.
+
 ## Reasoning effort and token budget
 
 High effort on routine work is token bleed: 3-5x more thinking tokens per turn with no quality improvement, faster compaction, lost context. Most coding work — flag additions, string changes, bug fixes — is mechanical. Medium effort handles it fine. Save high effort for architecture decisions and subtle multi-file reasoning.
