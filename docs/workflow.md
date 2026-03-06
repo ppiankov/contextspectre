@@ -125,6 +125,28 @@ contextspectre clean --active --all --watch --interval 30
 contextspectre clean --active --all --watch --project myproject
 ```
 
+## Directive clarity — scope before execution
+
+A vague directive with write access is not a task — it is an incident waiting to happen.
+
+AI agents interpret ambiguity by filling in gaps with reasonable-sounding defaults. When the directive is "clean up the README" and the agent has write access to 18 repos, "reasonable" can mean replacing 500 lines of vivid documentation with a 72-line template — across every repo, in one pass, with no review gate. The content is gone before you notice.
+
+**Vague directive signals:**
+- "Clean up" / "align" / "standardize" without specifying what to change and what to preserve
+- Cross-repo operations without per-repo review criteria
+- "Make it consistent" without a reference example
+- Any bulk operation touching documentation, configuration, or public-facing content
+
+**What to do instead:**
+1. State what you think the directive means
+2. State what would be destroyed or changed
+3. Ask: "What specifically should change, and what must be preserved?"
+4. Do not proceed until the scope is explicit
+
+The pattern applies to any autonomous agent — not just Claude Code. The more repos, files, or artifacts in scope, the more important it is to define what "done" looks like before the agent starts writing.
+
+**Structural defense.** Directive clarity is a policy — it depends on the agent following instructions. For defense in depth, pair it with structural guards: hooks that block destructive writes (content shrinkage, section removal), required sections that cannot be deleted, and per-repo diff review before cross-repo operations land. Policy catches the intent; structure catches the execution.
+
 ## Reasoning effort and token budget
 
 High effort on routine work is token bleed: 3-5x more thinking tokens per turn with no quality improvement, faster compaction, lost context. Most coding work — flag additions, string changes, bug fixes — is mechanical. Medium effort handles it fine. Save high effort for architecture decisions and subtle multi-file reasoning.
