@@ -271,6 +271,7 @@ type SummaryJSON struct {
 	TopFiles     []string `json:"top_files,omitempty"`
 	Cleanable    int      `json:"cleanable_tokens,omitempty"`
 	InputPurity  float64  `json:"input_purity"`
+	ChainHealthy bool     `json:"chain_healthy"`
 }
 
 func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *analyzer.HealthScore, rec *analyzer.CleanupRecommendation, topFiles []fileCount, duration time.Duration, entries []jsonl.Entry) *SummaryJSON {
@@ -308,6 +309,7 @@ func buildSummaryJSON(sessionID string, stats *analyzer.ContextStats, health *an
 	if stats.InputPurity != nil {
 		out.InputPurity = stats.InputPurity.Score
 	}
+	out.ChainHealthy = stats.Integrity == nil || stats.Integrity.Healthy
 	return out
 }
 
