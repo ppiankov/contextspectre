@@ -1180,6 +1180,44 @@ type SearchOutputJSON struct {
 	Hits     []SearchHitJSON `json:"hits"`
 }
 
+// LineageTouchJSON represents a single file touch in the lineage trace.
+type LineageTouchJSON struct {
+	SessionID  string  `json:"session_id"`
+	Slug       string  `json:"slug,omitempty"`
+	Project    string  `json:"project"`
+	EntryIndex int     `json:"entry_index"`
+	Timestamp  string  `json:"timestamp"`
+	Action     string  `json:"action"`
+	ToolName   string  `json:"tool_name"`
+	Epoch      int     `json:"epoch"`
+	TurnCost   float64 `json:"turn_cost"`
+}
+
+// LineageDecisionJSON represents a decision referencing the queried subject.
+type LineageDecisionJSON struct {
+	SessionID  string   `json:"session_id"`
+	Slug       string   `json:"slug,omitempty"`
+	Project    string   `json:"project"`
+	UUID       string   `json:"uuid"`
+	Goal       string   `json:"goal"`
+	Decisions  []string `json:"decisions,omitempty"`
+	Epoch      int      `json:"epoch"`
+	EntryIndex int      `json:"entry_index"`
+	Timestamp  string   `json:"timestamp"`
+}
+
+// LineageOutputJSON is the top-level JSON output for the lineage command.
+type LineageOutputJSON struct {
+	Query           string                `json:"query"`
+	Mode            string                `json:"mode"`
+	SessionsScanned int                   `json:"sessions_scanned"`
+	SessionsMatched int                   `json:"sessions_matched"`
+	TotalTouches    int                   `json:"total_touches"`
+	TotalCost       float64               `json:"total_cost"`
+	Touches         []LineageTouchJSON    `json:"touches"`
+	Decisions       []LineageDecisionJSON `json:"decisions"`
+}
+
 // ExportOutput is the JSON output for the export command.
 type ExportOutput struct {
 	SessionID        string          `json:"session_id"`
