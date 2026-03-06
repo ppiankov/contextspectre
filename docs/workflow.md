@@ -25,12 +25,12 @@ ContextSpectre does not require this workflow — it works with any Claude Code 
 Claude Code CLI supports a custom status line hook. ContextSpectre's `status-line` command is designed for it — sub-2ms on repeat calls via mtime-based caching:
 
 ```
-contextspectre | Opus 4.6 | ctx:73% | sig:A clean:3K ips:77 | $86.66
+contextspectre | Opus 4.6 15c93cef | ctx:73% | sig:A clean:3K ips:77 | $86.66
 ```
 
 When a session has a broken parent chain, a red `⚠` appears at the end of the status line. This indicates the session's JSONL file has structural corruption that will prevent resume — run `contextspectre fix <session-id> --apply` to repair it. See [chain integrity](#chain-integrity) below.
 
-The status line shows repo, model, context fill, signal grade, cleanable tokens, input purity score, and session cost — all at a glance while you work. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
+The status line shows repo, model, session ID (first 8 chars), context fill, signal grade, cleanable tokens, input purity score, and session cost — all at a glance while you work. The session ID lets you cross-reference with `contextspectre stats`, `fix`, or `doctor` without hunting for the full UUID — essential when debugging corruption or managing multiple sessions. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
 
 **Setup.** Create a status line hook in your settings. Claude Code calls this script on every turn, passing session metadata as JSON on stdin.
 
@@ -45,6 +45,7 @@ input=$(cat)
 
 root=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
 repo=$(basename "$root")
+sid=$(echo "$input" | jq -r '.transcript_path // ""' | xargs basename 2>/dev/null | sed 's/\.jsonl$//' | cut -c1-8)
 model=$(echo "$input" | jq -r '.model.display_name // "?"')
 ctx_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
 cost=$(printf '%.2f' "$(echo "$input" | jq -r '.cost.total_cost_usd // 0')")
@@ -125,7 +126,9 @@ fi
 
 # Assemble and print
 cs_seg="${sig_seg}${clean_seg}${ips_seg}${chain_seg}"
-printf '%b' "${repo} | ${model} | ctx:${ctx_color}${ctx_pct}%${reset}${cs_seg} | \$${cost}"
+sid_seg=""
+[ -n "$sid" ] && sid_seg=" ${sid}"
+printf '%b' "${repo} | ${model}${sid_seg} | ctx:${ctx_color}${ctx_pct}%${reset}${cs_seg} | \$${cost}"
 ```
 
 2. Make it executable:
