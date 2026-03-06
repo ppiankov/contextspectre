@@ -238,6 +238,8 @@ Running high effort on routine work is token bleed: you burn 3-5x more thinking 
 
 This is guidance, not a rule. A subtle architecture bug at 80% context may genuinely need ultrathink — but you're making a tradeoff: one deep turn might trigger compaction and lose earlier reasoning. The table helps you make that choice consciously instead of leaving effort on max by default.
 
+**The queue trick.** When context is above 75% and you have a task that needs deep reasoning, don't force it. Switch to small mechanical items — flag wiring, doc fixes, test additions — at low effort. These burn minimal tokens while still making progress. After compaction clears the window (or you start a fresh session), tackle the architecture task with full ultrathink and a clean context. The hard problem gets better reasoning *and* more runway.
+
 ## Working during cooldowns
 
 Long AI sessions can hit provider limits or cooldown periods. When this happens, the most effective workflow is to shift mechanical work away from the primary reasoning session.
