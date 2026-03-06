@@ -28,6 +28,8 @@ Claude Code CLI supports a custom status line hook. ContextSpectre's `status-lin
 contextspectre | Opus 4.6 | ctx:73% | sig:A clean:3K ips:77 | $86.66
 ```
 
+When a session has a broken parent chain, a red `⚠` appears at the end of the status line. This indicates the session's JSONL file has structural corruption that will prevent resume — run `contextspectre fix <session-id> --apply` to repair it. See [chain integrity](#chain-integrity) below.
+
 The status line shows repo, model, context fill, signal grade, cleanable tokens, input purity score, and session cost — all at a glance while you work. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
 
 **Setup.** Create a status line hook in your settings. Claude Code calls this script on every turn, passing session metadata as JSON on stdin.
@@ -114,8 +116,15 @@ if [ -n "$ips_raw" ] && [ "$ips_raw" != "0" ]; then
   ips_seg=" ips:${ips_color}${ips_int}${reset}"
 fi
 
+# Chain integrity — red ⚠ if broken
+chain_seg=""
+chain_raw=$(jq -r '.chain_healthy // true' "$cache" 2>/dev/null)
+if [ "$chain_raw" = "false" ]; then
+  chain_seg=" \033[31m⚠\033[0m"
+fi
+
 # Assemble and print
-cs_seg="${sig_seg}${clean_seg}${ips_seg}"
+cs_seg="${sig_seg}${clean_seg}${ips_seg}${chain_seg}"
 printf '%b' "${repo} | ${model} | ctx:${ctx_color}${ctx_pct}%${reset}${cs_seg} | \$${cost}"
 ```
 
@@ -161,9 +170,24 @@ The hook runs `contextspectre summary --cwd --format json` in the background eve
 - 🟡 Yellow (50-79) — room to improve, some raw output entering context
 - 🔴 Red (< 50) — mostly raw input, consider adding input purification (e.g., [RTK](https://github.com/rtk-ai/rtk))
 
+`⚠` — chain integrity (appears only when broken):
+- 🔴 Red — session has a broken parent chain, resume will fail. Run `contextspectre fix <id> --apply`
+
 **When `clean:` is red**, watch mode is running but the bulk of the waste is tangents (tier 7) and retries (tier 5) that watch mode intentionally skips on active sessions. Run `contextspectre clean <session> --all` to clear them.
 
-**Reading the status line at a glance:** All green = healthy session. Any yellow = monitor. Any red = act now. The four indicators cover the full lifecycle: how full (ctx), how clean (sig), how much to clean (clean), how pure the input (ips).
+**Reading the status line at a glance:** All green = healthy session. Any yellow = monitor. Any red = act now. Red `⚠` = act immediately (session is unresumable). The five indicators cover the full lifecycle: how full (ctx), how clean (sig), how much to clean (clean), how pure the input (ips), and whether the session file is structurally sound (⚠).
+
+## Chain integrity
+
+Claude Code stores conversations as JSONL files with entries linked by `parentUuid`. When multiple subagents write to the same file concurrently, the writer can drop an assistant message — leaving an orphaned `tool_result` whose parent doesn't exist. If this orphan lands in the active parent chain, the session becomes permanently unresumable: the API rejects every request, and `claude --resume` hangs on large files.
+
+This is a known Claude Code bug ([anthropics/claude-code#31328](https://github.com/anthropics/claude-code/issues/31328)). ContextSpectre detects it early so you can repair before the session is lost.
+
+**Detection.** The `stats`, `doctor`, and `watch` commands all check chain integrity. The status line shows a red `⚠` when a session has a broken chain. Detection is cheap — it walks the active parent chain (typically 20-50 entries after compaction), not the entire file.
+
+**Repair.** Run `contextspectre fix <session-id> --apply` to amputate the broken entry and re-parent the chain. The `doctor` command also reports integrity issues across all sessions.
+
+**When it happens.** The corruption pattern is specific: 3+ concurrent subagents writing to the same JSONL file. The risk increases with heavy parallel tool use (e.g., multiple file reads or shell commands running simultaneously). Single-agent sessions are not affected.
 
 ## Continuous cleanup in a side terminal
 
