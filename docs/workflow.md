@@ -1,5 +1,15 @@
 # Workflow Patterns
 
+## Core workflow
+
+1. **Explore** in a fresh session — read files, compare approaches, design
+2. **Commit** the plan — mark the decision boundary
+3. **Collapse** exploration into decisions — `clean --all` at the plan-to-code boundary
+4. **Execute** in Claude Code CLI with focused, scoped prompts
+5. **Monitor** ctx/sig/clean/ips in the status line
+6. **Clean continuously** — run `contextspectre watch` in a side terminal
+7. **Offload** mechanical work during cooldowns
+
 ## The explore-execute-collapse cycle
 
 For large projects, separating exploratory reasoning from structured execution reduces context drift. One effective pattern:
@@ -32,112 +42,7 @@ When a session has a broken parent chain, a red `⚠` appears at the end of the 
 
 The status line shows repo, model, session ID (first 8 chars), context fill, signal grade, cleanable tokens, input purity score, and session cost — all at a glance while you work. The session ID lets you cross-reference with `contextspectre stats`, `fix`, or `doctor` without hunting for the full UUID — essential when debugging corruption or managing multiple sessions. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
 
-**Setup.** Create a status line hook in your settings. Claude Code calls this script on every turn, passing session metadata as JSON on stdin.
-
-1. Create the hook script (e.g., `~/.claude/statusline.sh`):
-
-```bash
-#!/bin/bash
-# Status line: model, context %, signal grade, cleanable tokens, IPS, cost
-# contextspectre data via background cache (never blocks)
-
-input=$(cat)
-
-root=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
-repo=$(basename "$root")
-sid=$(echo "$input" | jq -r '.transcript_path // ""' | xargs basename 2>/dev/null | sed 's/\.jsonl$//' | cut -c1-8)
-model=$(echo "$input" | jq -r '.model.display_name // "?"')
-ctx_pct=$(echo "$input" | jq -r '.context_window.used_percentage // 0' | cut -d. -f1)
-cost=$(printf '%.2f' "$(echo "$input" | jq -r '.cost.total_cost_usd // 0')")
-
-# contextspectre: read cached data (signal, cleanable, IPS)
-# Background refresh keeps data fresh without blocking
-cache="/tmp/contextspectre-status-$PPID.json"
-signal=""
-cleanable=""
-
-if [ -f "$cache" ]; then
-  cache_age=$(( $(date +%s) - $(stat -f %m "$cache" 2>/dev/null || echo 0) ))
-  if [ "$cache_age" -lt 60 ]; then
-    signal=$(jq -r '.signal_grade // empty' "$cache" 2>/dev/null)
-    ips_raw=$(jq -r '.input_purity // empty' "$cache" 2>/dev/null)
-    cleanable_raw=$(jq -r '.cleanable_tokens // 0' "$cache" 2>/dev/null)
-    if [ "$cleanable_raw" -gt 1000 ] 2>/dev/null; then
-      cleanable="$(( cleanable_raw / 1000 ))K"
-    fi
-  fi
-fi
-
-# Fork background refresh (non-blocking, never stalls the prompt)
-if [ ! -f "$cache" ] || [ "${cache_age:-999}" -ge 60 ]; then
-  (contextspectre summary --cwd --format json > "$cache" 2>/dev/null &)
-fi
-
-# Color context by usage level
-if [ "$ctx_pct" -ge 80 ]; then ctx_color="\033[31m"      # red
-elif [ "$ctx_pct" -ge 60 ]; then ctx_color="\033[33m"     # yellow
-else ctx_color="\033[32m"; fi                              # green
-reset="\033[0m"
-
-# Color cleanable tokens by severity
-clean_seg=""
-if [ -n "$cleanable" ]; then
-  if [ "$cleanable_raw" -ge 500000 ] 2>/dev/null; then
-    clean_color="\033[31m"    # red: >500K
-  elif [ "$cleanable_raw" -ge 100000 ] 2>/dev/null; then
-    clean_color="\033[33m"    # yellow: >100K
-  else
-    clean_color="\033[32m"    # green: <100K
-  fi
-  clean_seg=" clean:${clean_color}${cleanable}${reset}"
-fi
-
-# Color signal grade by health
-sig_seg=""
-if [ -n "$signal" ]; then
-  case "$signal" in
-    A|B) sig_color="\033[32m" ;;  # green
-    C|D) sig_color="\033[33m" ;;  # yellow
-    *)   sig_color="\033[31m" ;;  # red
-  esac
-  sig_seg=" | sig:${sig_color}${signal}${reset}"
-fi
-
-# Color input purity score
-ips_seg=""
-if [ -n "$ips_raw" ] && [ "$ips_raw" != "0" ]; then
-  ips_int=$(printf '%.0f' "$ips_raw")
-  if [ "$ips_int" -ge 80 ] 2>/dev/null; then
-    ips_color="\033[32m"      # green: well-purified
-  elif [ "$ips_int" -ge 50 ] 2>/dev/null; then
-    ips_color="\033[33m"      # yellow: room to improve
-  else
-    ips_color="\033[31m"      # red: mostly raw input
-  fi
-  ips_seg=" ips:${ips_color}${ips_int}${reset}"
-fi
-
-# Chain integrity — red ⚠ if broken
-chain_seg=""
-chain_raw=$(jq -r '.chain_healthy // true' "$cache" 2>/dev/null)
-if [ "$chain_raw" = "false" ]; then
-  chain_seg=" \033[31m⚠\033[0m"
-fi
-
-# Assemble and print
-cs_seg="${sig_seg}${clean_seg}${ips_seg}${chain_seg}"
-sid_seg=""
-[ -n "$sid" ] && sid_seg=" ${sid}"
-printf '%b' "${repo} | ${model}${sid_seg} | ctx:${ctx_color}${ctx_pct}%${reset}${cs_seg} | \$${cost}"
-```
-
-2. Make it executable:
-
-```bash
-chmod +x ~/.claude/statusline.sh
-```
-
-3. Register the hook in `~/.claude/settings.json`:
+**Setup.** Register a status line hook in `~/.claude/settings.json` and point it at the hook script:
 
 ```json
 {
@@ -149,7 +54,7 @@ chmod +x ~/.claude/statusline.sh
 }
 ```
 
-The hook runs `contextspectre summary --cwd --format json` in the background every 60 seconds, caching the result. The status line reads from cache so it never blocks — even on large sessions.
+The hook reads ContextSpectre data from a background cache that refreshes every 60 seconds — it never blocks the CLI prompt. Full hook script with color logic: [statusline-hook.md](statusline-hook.md).
 
 **Color-coded indicators.** Labels stay neutral (white). Only values are colored — the number pops when it needs attention.
 
@@ -192,29 +97,28 @@ This is a known Claude Code bug ([anthropics/claude-code#31328](https://github.c
 
 **When it happens.** The corruption pattern is specific: 3+ concurrent subagents writing to the same JSONL file. The risk increases with heavy parallel tool use (e.g., multiple file reads or shell commands running simultaneously). Single-agent sessions are not affected.
 
-## Continuous cleanup in a side terminal
+## Recommended: continuous cleanup in a side terminal
 
-The highest-leverage workflow: run continuous cleanup in a terminal next to Claude Code.
+The highest-leverage operating pattern for long sessions:
 
-```bash
-contextspectre clean --active --all --watch
+```
+Terminal 1: Claude Code          Terminal 2: contextspectre watch
+┌─────────────────────┐          ┌─────────────────────────────┐
+│ claude               │          │ contextspectre clean         │
+│                      │          │   --active --all --watch     │
+│ (you work here)      │          │   (runs automatically)       │
+└─────────────────────┘          └─────────────────────────────┘
 ```
 
-This watches all active sessions and cleans them between Claude's turns — progress messages, stale reads, snapshots, and other noise are removed automatically as the session grows. You work in one terminal, contextspectre keeps context clean in the other.
+Watch mode polls active sessions, detects idle gaps between Claude's turns, and cleans all 9 tiers automatically. Progress messages, stale reads, snapshots, retries, and tangents are removed as they accumulate — not after the session overflows.
 
-**What it does:**
-- Polls active sessions using mtime-based detection (5s check, 30s cooldown)
-- Runs all 9 cleanup tiers when a session is idle (no writes in the last few seconds)
-- Skips sessions that Claude is actively writing to (mtime race detection)
-- Prints a running summary: tokens recovered, cost saved, sessions cleaned
-- Ctrl+C exits cleanly with a final summary; double Ctrl+C force-quits
-
-**Why it matters:** In a long session, noise accumulates continuously — every file read, every progress message, every failed retry. Without cleanup, noise compounds until compaction triggers and reasoning quality drops. Continuous watch keeps the session clean so compaction happens later (or never), and when it does happen, there's less noise to compress into the summary.
-
-**Variants:**
+Noise compounds with every turn. Without cleanup, compaction triggers sooner and reasoning quality drops. Continuous watch keeps the session clean so compaction happens later (or never), and when it does happen, there's less noise to compress into the summary.
 
 ```bash
-# Fixed 30-second interval instead of smart mtime polling
+# Default: smart mtime-based polling (5s check, 30s cooldown)
+contextspectre clean --active --all --watch
+
+# Fixed 30-second interval
 contextspectre clean --active --all --watch --interval 30
 
 # Watch only sessions for the current project
@@ -223,15 +127,11 @@ contextspectre clean --active --all --watch --project myproject
 
 ## Reasoning effort and token budget
 
-Claude Code's reasoning effort setting controls how many thinking tokens the model uses per turn. Higher effort means deeper reasoning but also faster context fill, more frequent compactions, and higher cost per turn.
+High effort on routine work is token bleed: 3-5x more thinking tokens per turn with no quality improvement, faster compaction, lost context. Most coding work — flag additions, string changes, bug fixes — is mechanical. Medium effort handles it fine. Save high effort for architecture decisions and subtle multi-file reasoning.
 
-**Match effort to the task.** Most coding work — flag additions, string changes, bug fixes, wiring a field through a few files — is mechanical. Medium effort handles it fine. High effort (ultrathink) is for architecture decisions, subtle multi-file refactors, or debugging where the model needs to hold many constraints in mind simultaneously.
+**Rule of thumb:** If you can describe the change in one sentence, medium effort is enough.
 
-Running high effort on routine work is token bleed: you burn 3-5x more thinking tokens per turn with no quality improvement, hit compaction sooner, and lose reasoning context faster. ContextSpectre makes this visible — watch the `ctx:` indicator climb faster on high-effort sessions doing simple work.
-
-**Rule of thumb:** If you can describe the change in one sentence, medium effort is enough. Save high effort for turns where you'd want a human engineer to stop and think carefully before writing code.
-
-**Reading the signals.** The status line already tells you whether high effort is affordable. Use `ctx:` as the effort gauge:
+Use `ctx:` as the effort gauge:
 
 | ctx:     | Suggested max effort | Why                                              |
 |----------|---------------------|--------------------------------------------------|
@@ -239,9 +139,7 @@ Running high effort on routine work is token bleed: you burn 3-5x more thinking 
 | 40-74%   | Medium              | Conserve tokens, most tasks don't need deep think |
 | 75%+     | Low or medium       | Every token counts, compaction imminent           |
 
-This is guidance, not a rule. A subtle architecture bug at 80% context may genuinely need ultrathink — but you're making a tradeoff: one deep turn might trigger compaction and lose earlier reasoning. The table helps you make that choice consciously instead of leaving effort on max by default.
-
-**The queue trick.** When context is above 75% and you have a task that needs deep reasoning, don't force it. Switch to small mechanical items — flag wiring, doc fixes, test additions — at low effort. These burn minimal tokens while still making progress. After compaction clears the window (or you start a fresh session), tackle the architecture task with full ultrathink and a clean context. The hard problem gets better reasoning *and* more runway.
+**The queue trick.** When context is above 75% and you need deep reasoning — don't force it. Switch to small mechanical items (flag wiring, doc fixes, test additions) at low effort. After compaction or a fresh session, tackle the hard problem with ultrathink and a clean context. The hard problem gets better reasoning *and* more runway.
 
 ## Working during cooldowns
 
