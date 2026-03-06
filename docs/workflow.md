@@ -228,6 +228,8 @@ Running high effort on routine work is token bleed: you burn 3-5x more thinking 
 
 **Rule of thumb:** If you can describe the change in one sentence, medium effort is enough. Save high effort for turns where you'd want a human engineer to stop and think carefully before writing code.
 
+**Reading the signals.** The status line already tells you whether high effort is affordable: `ctx:` shows how full the window is, `turns:` shows how many turns remain at current burn rate. If context is yellow and turns is single digits, ultrathink will eat most of your remaining runway on a single response. The indicators are the effort gauge — no separate metric needed.
+
 ## Working during cooldowns
 
 Long AI sessions can hit provider limits or cooldown periods. When this happens, the most effective workflow is to shift mechanical work away from the primary reasoning session.
