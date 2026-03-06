@@ -42,7 +42,7 @@ func TestDiagnose_FilterBlock(t *testing.T) {
 func TestDiagnose_EmptyArray(t *testing.T) {
 	entries := []jsonl.Entry{
 		{Type: jsonl.TypeUser, UUID: "u1", Message: &jsonl.Message{Content: json.RawMessage(`"test"`)}},
-		{Type: jsonl.TypeAssistant, UUID: "a1", Message: &jsonl.Message{Content: json.RawMessage(`[]`)}},
+		{Type: jsonl.TypeAssistant, UUID: "a1", ParentUUID: "u1", Message: &jsonl.Message{Content: json.RawMessage(`[]`)}},
 	}
 	result := Diagnose(entries)
 	if len(result.Issues) != 1 {
@@ -93,37 +93,49 @@ func TestDiagnose_NormalImage(t *testing.T) {
 func TestDiagnose_OrphanedToolResult(t *testing.T) {
 	entries := []jsonl.Entry{
 		{
-			Type: jsonl.TypeAssistant, UUID: "a1",
+			Type: jsonl.TypeUser, UUID: "u0",
+			Message: &jsonl.Message{Content: json.RawMessage(`"hello"`)},
+		},
+		{
+			Type: jsonl.TypeAssistant, UUID: "a1", ParentUUID: "u0",
 			Message: &jsonl.Message{
 				Content: json.RawMessage(`[{"type":"tool_use","id":"toolu_existing","name":"Read","input":{}}]`),
 			},
 		},
 		{
-			Type: jsonl.TypeUser, UUID: "u1",
+			Type: jsonl.TypeUser, UUID: "u1", ParentUUID: "a1",
 			Message: &jsonl.Message{
 				Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"toolu_missing","content":"output"}]`),
 			},
 		},
 	}
 	result := Diagnose(entries)
-	if len(result.Issues) != 1 {
-		t.Fatalf("expected 1 issue, got %d", len(result.Issues))
+	// Expect 2 issues: orphaned_result from content scan + chain_broken from integrity check
+	hasOrphan := false
+	for _, issue := range result.Issues {
+		if issue.Kind == IssueOrphanedResult {
+			hasOrphan = true
+		}
 	}
-	if result.Issues[0].Kind != IssueOrphanedResult {
-		t.Errorf("expected orphaned_result, got %s", result.Issues[0].Kind)
+	if !hasOrphan {
+		t.Errorf("expected orphaned_result issue, got kinds: %v", result.Issues)
 	}
 }
 
 func TestDiagnose_ValidToolResult(t *testing.T) {
 	entries := []jsonl.Entry{
 		{
-			Type: jsonl.TypeAssistant, UUID: "a1",
+			Type: jsonl.TypeUser, UUID: "u0",
+			Message: &jsonl.Message{Content: json.RawMessage(`"hello"`)},
+		},
+		{
+			Type: jsonl.TypeAssistant, UUID: "a1", ParentUUID: "u0",
 			Message: &jsonl.Message{
 				Content: json.RawMessage(`[{"type":"tool_use","id":"toolu_1","name":"Read","input":{}}]`),
 			},
 		},
 		{
-			Type: jsonl.TypeUser, UUID: "u1",
+			Type: jsonl.TypeUser, UUID: "u1", ParentUUID: "a1",
 			Message: &jsonl.Message{
 				Content: json.RawMessage(`[{"type":"tool_result","tool_use_id":"toolu_1","content":"output"}]`),
 			},

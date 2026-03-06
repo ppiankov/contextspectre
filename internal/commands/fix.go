@@ -58,6 +58,8 @@ func runFix(cmd *cobra.Command, args []string) error {
 			prefix = "  [orphan]  "
 		case analyzer.IssueMalformed:
 			prefix = "  [broken]  "
+		case analyzer.IssueChainBroken:
+			prefix = "  [chain]   "
 		}
 		fmt.Printf("%sline %d: %s\n", prefix, entries[issue.EntryIndex].LineNumber, issue.Description)
 	}

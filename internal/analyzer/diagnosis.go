@@ -20,6 +20,7 @@ const (
 	IssueOrphanedResult    IssueKind = "orphaned_result"
 	IssueMalformed         IssueKind = "malformed"
 	IssueMediaTypeMismatch IssueKind = "media_type_mismatch"
+	IssueChainBroken       IssueKind = "chain_broken"
 )
 
 // Issue describes a single detected problem in a session.
@@ -112,6 +113,18 @@ func Diagnose(entries []jsonl.Entry) *DiagnosisResult {
 					}
 				}
 			}
+		}
+	}
+
+	// Chain integrity: detect broken parent chains in the active chain.
+	integrity := CheckIntegrity(entries)
+	if !integrity.Healthy {
+		for _, issue := range integrity.Issues {
+			result.Issues = append(result.Issues, Issue{
+				Kind:        IssueChainBroken,
+				EntryIndex:  issue.EntryIndex,
+				Description: fmt.Sprintf("[%s] %s", issue.Kind, issue.Detail),
+			})
 		}
 	}
 
