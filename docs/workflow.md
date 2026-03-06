@@ -218,6 +218,16 @@ contextspectre clean --active --all --watch --interval 30
 contextspectre clean --active --all --watch --project myproject
 ```
 
+## Reasoning effort and token budget
+
+Claude Code's reasoning effort setting controls how many thinking tokens the model uses per turn. Higher effort means deeper reasoning but also faster context fill, more frequent compactions, and higher cost per turn.
+
+**Match effort to the task.** Most coding work — flag additions, string changes, bug fixes, wiring a field through a few files — is mechanical. Medium effort handles it fine. High effort (ultrathink) is for architecture decisions, subtle multi-file refactors, or debugging where the model needs to hold many constraints in mind simultaneously.
+
+Running high effort on routine work is token bleed: you burn 3-5x more thinking tokens per turn with no quality improvement, hit compaction sooner, and lose reasoning context faster. ContextSpectre makes this visible — watch the `ctx:` indicator climb faster on high-effort sessions doing simple work.
+
+**Rule of thumb:** If you can describe the change in one sentence, medium effort is enough. Save high effort for turns where you'd want a human engineer to stop and think carefully before writing code.
+
 ## Working during cooldowns
 
 Long AI sessions can hit provider limits or cooldown periods. When this happens, the most effective workflow is to shift mechanical work away from the primary reasoning session.
