@@ -33,6 +33,8 @@ type DoctorOutput struct {
 	EntropySessions   []DoctorEntropySession `json:"entropy_sessions,omitempty"`
 	CadenceHealth     DoctorCheck            `json:"cleanup_cadence"`
 	CadenceSessions   []DoctorCadenceSession `json:"cleanup_priority,omitempty"`
+	IntegrityHealth   DoctorCheck            `json:"integrity"`
+	BrokenSessions    int                    `json:"broken_sessions,omitempty"`
 	BudgetHealth      DoctorCheck            `json:"budget"`
 	WeeklyBudgetLimit float64                `json:"weekly_budget_limit,omitempty"`
 	WeeklyBudgetSpent float64                `json:"weekly_budget_spent,omitempty"`
@@ -112,6 +114,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 
 		sidechainEntries := 0
 		sidechainSessions := 0
+		brokenSessions := 0
 		var entropySessions []DoctorEntropySession
 		var cadenceSessions []DoctorCadenceSession
 		for _, si := range sessions {
@@ -123,6 +126,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			if stats.SidechainCount > 0 {
 				sidechainEntries += stats.SidechainCount
 				sidechainSessions++
+			}
+			if stats.Integrity != nil && !stats.Integrity.Healthy {
+				brokenSessions++
 			}
 
 			dupResult := analyzer.FindDuplicateReads(entries)
@@ -228,6 +234,20 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				Message: fmt.Sprintf("cleanup priority ranked by cadence (highest: %.1f %s)", top.CadenceScore, top.CleanupStatus),
 			}
 		}
+
+		// Integrity health
+		out.BrokenSessions = brokenSessions
+		if brokenSessions == 0 {
+			out.IntegrityHealth = DoctorCheck{
+				Status:  "ok",
+				Message: "all session chains intact",
+			}
+		} else {
+			out.IntegrityHealth = DoctorCheck{
+				Status:  "error",
+				Message: fmt.Sprintf("%d sessions have broken parent chains — run: contextspectre fix <id> --apply", brokenSessions),
+			}
+		}
 	}
 
 	// Budget health, only when weekly budget is configured.
@@ -302,6 +322,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 	if out.CadenceHealth.Message != "" {
 		printCheck("Cleanup cadence", out.CadenceHealth)
+	}
+	if out.IntegrityHealth.Message != "" {
+		printCheck("Integrity", out.IntegrityHealth)
 	}
 	if out.BudgetHealth.Message != "" {
 		printCheck("Budget", out.BudgetHealth)

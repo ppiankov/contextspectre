@@ -109,6 +109,12 @@ func displayWatchLine(path string, prevTokens int, alerted *bool) int {
 	}
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
 
+	// Chain integrity
+	integrityNote := ""
+	if !stats.ChainHealthy {
+		integrityNote = "  ⚠ BROKEN"
+	}
+
 	// Compaction detection
 	compactionNote := ""
 	if prevTokens > 0 && tokens < prevTokens-10000 {
@@ -116,13 +122,14 @@ func displayWatchLine(path string, prevTokens int, alerted *bool) int {
 	}
 
 	// Build line
-	line := fmt.Sprintf("\r  %sctx:%4.1f%% [%s]%s  ~%d turns  sig:%s  $%s  %dx compact  msgs:%d%s",
+	line := fmt.Sprintf("\r  %sctx:%4.1f%% [%s]%s  ~%d turns  sig:%s  $%s  %dx compact  msgs:%d%s%s",
 		color, pct, bar, colorReset(),
 		turnsLeft, grade,
 		analyzer.FormatCost(cost),
 		stats.CompactionCount,
 		stats.LineCount,
 		compactionNote,
+		integrityNote,
 	)
 
 	// Pad to overwrite previous line

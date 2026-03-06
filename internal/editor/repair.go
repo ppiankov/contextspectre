@@ -39,6 +39,8 @@ func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
 			toDelete[issue.EntryIndex] = true
 		case analyzer.IssueMalformed:
 			toDelete[issue.EntryIndex] = true
+		case analyzer.IssueChainBroken:
+			toDelete[issue.EntryIndex] = true
 		case analyzer.IssueOversizedImage:
 			oversizedEntries[issue.EntryIndex] = true
 		case analyzer.IssueMediaTypeMismatch:

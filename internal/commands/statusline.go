@@ -51,6 +51,7 @@ type statusLineData struct {
 	Model          string  `json:"model"`
 	VectorState    string  `json:"vector_state,omitempty"`
 	VectorAction   string  `json:"vector_action,omitempty"`
+	ChainHealthy   bool    `json:"chain_healthy"`
 }
 
 // statusLineCache is the on-disk cache structure.
@@ -191,6 +192,7 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		Model:          modelShort,
 		VectorState:    vectorState,
 		VectorAction:   vectorAction,
+		ChainHealthy:   stats.ChainHealthy,
 	}, nil
 }
 
@@ -199,9 +201,13 @@ func formatStatusLine(d *statusLineData) error {
 	case "json":
 		return printJSON(d)
 	case "shell":
-		fmt.Printf("CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s\n",
+		chainOK := 1
+		if !d.ChainHealthy {
+			chainOK = 0
+		}
+		fmt.Printf("CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
 			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction)
+			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainOK)
 	case "human":
 		parts := []string{
 			fmt.Sprintf("ctx:%.0f%%", d.ContextPercent),
@@ -216,11 +222,18 @@ func formatStatusLine(d *statusLineData) error {
 		if d.VectorState != "" {
 			parts = append(parts, fmt.Sprintf("%s:%s", d.VectorState, d.VectorAction))
 		}
+		if !d.ChainHealthy {
+			parts = append(parts, "⚠")
+		}
 		fmt.Println(strings.Join(parts, " | "))
 	default: // tab
-		fmt.Printf("ctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\n",
+		chainVal := "ok"
+		if !d.ChainHealthy {
+			chainVal = "broken"
+		}
+		fmt.Printf("ctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\tchain=%s\n",
 			d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction)
+			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainVal)
 	}
 	return nil
 }

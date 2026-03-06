@@ -45,31 +45,32 @@ type SessionsOutput struct {
 
 // StatsOutput is the JSON output for the stats command.
 type StatsOutput struct {
-	SessionID          string                 `json:"session_id"`
-	Project            string                 `json:"project,omitempty"`
-	ClientType         string                 `json:"client_type,omitempty"`
-	Context            ContextJSON            `json:"context"`
-	Health             *HealthScoreJSON       `json:"health,omitempty"`
-	Entropy            *EntropyJSON           `json:"entropy,omitempty"`
-	Cadence            *CadenceJSON           `json:"cadence,omitempty"`
-	BudgetProtection   *BudgetProtectionJSON  `json:"budget_protection,omitempty"`
-	Cost               *CostJSON              `json:"cost,omitempty"`
-	CostAlertThreshold float64                `json:"cost_alert_threshold,omitempty"`
-	CostAlertTriggered bool                   `json:"cost_alert_triggered,omitempty"`
-	DecisionEconomics  *DecisionEconomicsJSON `json:"decision_economics,omitempty"`
-	VectorGauge        *VectorGaugeJSON       `json:"vector_gauge,omitempty"`
-	EpochCosts         []EpochCostJSON        `json:"epoch_costs,omitempty"`
-	Archaeology        *ArchaeologyJSON       `json:"archaeology,omitempty"`
-	Compactions        CompactionsJSON        `json:"compactions"`
-	Messages           MessagesJSON           `json:"messages"`
-	Images             ImagesJSON             `json:"images"`
-	GrowthRate         GrowthRateJSON         `json:"growth_rate"`
-	Recommendation     *RecommendationJSON    `json:"recommendation,omitempty"`
-	Sidechains         *SidechainStatsJSON    `json:"sidechains,omitempty"`
-	EpochTimeline      []EpochTimelineJSON    `json:"epoch_timeline,omitempty"`
-	ScopeDrift         *ScopeDriftJSON        `json:"scope_drift,omitempty"`
-	GhostContext       *GhostReportJSON       `json:"ghost_context,omitempty"`
-	InputPurity        *analyzer.InputPurity  `json:"input_purity,omitempty"`
+	SessionID          string                    `json:"session_id"`
+	Project            string                    `json:"project,omitempty"`
+	ClientType         string                    `json:"client_type,omitempty"`
+	Context            ContextJSON               `json:"context"`
+	Health             *HealthScoreJSON          `json:"health,omitempty"`
+	Entropy            *EntropyJSON              `json:"entropy,omitempty"`
+	Cadence            *CadenceJSON              `json:"cadence,omitempty"`
+	BudgetProtection   *BudgetProtectionJSON     `json:"budget_protection,omitempty"`
+	Cost               *CostJSON                 `json:"cost,omitempty"`
+	CostAlertThreshold float64                   `json:"cost_alert_threshold,omitempty"`
+	CostAlertTriggered bool                      `json:"cost_alert_triggered,omitempty"`
+	DecisionEconomics  *DecisionEconomicsJSON    `json:"decision_economics,omitempty"`
+	VectorGauge        *VectorGaugeJSON          `json:"vector_gauge,omitempty"`
+	EpochCosts         []EpochCostJSON           `json:"epoch_costs,omitempty"`
+	Archaeology        *ArchaeologyJSON          `json:"archaeology,omitempty"`
+	Compactions        CompactionsJSON           `json:"compactions"`
+	Messages           MessagesJSON              `json:"messages"`
+	Images             ImagesJSON                `json:"images"`
+	GrowthRate         GrowthRateJSON            `json:"growth_rate"`
+	Recommendation     *RecommendationJSON       `json:"recommendation,omitempty"`
+	Sidechains         *SidechainStatsJSON       `json:"sidechains,omitempty"`
+	EpochTimeline      []EpochTimelineJSON       `json:"epoch_timeline,omitempty"`
+	ScopeDrift         *ScopeDriftJSON           `json:"scope_drift,omitempty"`
+	GhostContext       *GhostReportJSON          `json:"ghost_context,omitempty"`
+	InputPurity        *analyzer.InputPurity     `json:"input_purity,omitempty"`
+	Integrity          *analyzer.IntegrityReport `json:"integrity,omitempty"`
 }
 
 // DecisionEconomicsJSON holds CPD/TTC/CDR for JSON output.
@@ -806,6 +807,10 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 
 	if stats.InputPurity != nil && stats.InputPurity.TotalResultTokens > 0 {
 		out.InputPurity = stats.InputPurity
+	}
+
+	if stats.Integrity != nil && !stats.Integrity.Healthy {
+		out.Integrity = stats.Integrity
 	}
 
 	return out

@@ -153,6 +153,18 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	// Chain integrity
+	if stats.Integrity != nil && !stats.Integrity.Healthy {
+		fmt.Printf("⚠ Session integrity: BROKEN\n")
+		for _, issue := range stats.Integrity.Issues {
+			fmt.Printf("  %s at entry %d: %s\n", issue.Kind, issue.EntryIndex, issue.Detail)
+		}
+		fmt.Printf("  Active chain: %d entries (break at entry %d)\n",
+			stats.Integrity.ActiveChainLen, stats.Integrity.BrokenAtIndex)
+		fmt.Println("  Run: contextspectre fix <session-id> --apply")
+		fmt.Println()
+	}
+
 	// Input purity
 	if stats.InputPurity != nil && stats.InputPurity.TotalResultTokens > 0 {
 		compressiblePct := 100 - stats.InputPurity.Score

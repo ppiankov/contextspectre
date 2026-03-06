@@ -107,8 +107,9 @@ type LightStats struct {
 	TotalCacheWriteTokens int
 	TotalCacheReadTokens  int
 	Model                 string
-	SignalPercent         int // 0-100, estimated signal/noise ratio
-	EpochAssistantCount   int // assistant turns since last compaction
+	SignalPercent         int  // 0-100, estimated signal/noise ratio
+	EpochAssistantCount   int  // assistant turns since last compaction
+	ChainHealthy          bool // false if active parent chain has missing links
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -137,6 +138,11 @@ func ScanLight(path string) (*LightStats, error) {
 	var noiseBytes int
 	var epochAssistant int
 
+	// Chain health tracking: collect UUIDs and last parent reference.
+	uuids := make(map[string]bool, 1024)
+	var lastUUID string
+	var lastParentUUID string
+
 	for scanner.Scan() {
 		stats.LineCount++
 		raw := scanner.Bytes()
@@ -149,6 +155,13 @@ func ScanLight(path string) (*LightStats, error) {
 			continue
 		}
 		stats.TypeCounts[e.Type]++
+
+		// Track UUIDs for chain health.
+		if e.UUID != "" {
+			uuids[e.UUID] = true
+			lastUUID = e.UUID
+			lastParentUUID = e.ParentUUID
+		}
 
 		if stats.Slug == "" && e.Slug != "" {
 			stats.Slug = e.Slug
@@ -201,6 +214,12 @@ func ScanLight(path string) (*LightStats, error) {
 		}
 	}
 	stats.EpochAssistantCount = epochAssistant
+
+	// Chain health: check if last entry's parent exists.
+	stats.ChainHealthy = true
+	if lastUUID != "" && lastParentUUID != "" && !uuids[lastParentUUID] {
+		stats.ChainHealthy = false
+	}
 
 	// Compute signal percent from noise bytes vs total context tokens
 	if stats.LastUsage != nil {

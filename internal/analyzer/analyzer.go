@@ -54,6 +54,7 @@ type ContextStats struct {
 	Archaeology          *CompactionReport
 	GhostReport          *GhostReport
 	InputPurity          *InputPurity
+	Integrity            *IntegrityReport
 	ClientType           string // "cli", "desktop", or "unknown"
 }
 
@@ -201,6 +202,9 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 	// Input purity
 	stats.InputPurity = ComputeInputPurity(entries)
+
+	// Chain integrity
+	stats.Integrity = CheckIntegrity(entries)
 
 	// Client type detection
 	if stats.SnapshotCount > 0 {
