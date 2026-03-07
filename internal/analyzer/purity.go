@@ -34,6 +34,14 @@ var bashCategories = []compressionCategory{
 const largeResultThreshold = 2000 // tokens
 const largeResultRatio = 0.30
 
+// nativeTools produce irreducible output — file content, matched lines, paths.
+// Their results should not be counted as compressible.
+var nativeTools = map[string]bool{
+	"Read": true, "Grep": true, "Glob": true,
+	"Write": true, "Edit": true, "MultiEdit": true, "NotebookEdit": true,
+	"WebSearch": true, "WebFetch": true,
+}
+
 // ComputeInputPurity analyzes tool results in a session and estimates
 // what fraction could have been compressed before entering context.
 func ComputeInputPurity(entries []jsonl.Entry) *InputPurity {
@@ -95,6 +103,11 @@ func ComputeInputPurity(entries []jsonl.Entry) *InputPurity {
 					ip.CompressibleTokens += compressible
 					ip.ByCategory["large_result"] += compressible
 				}
+				continue
+			}
+
+			// Native tools produce irreducible output — skip.
+			if nativeTools[ti.name] {
 				continue
 			}
 
