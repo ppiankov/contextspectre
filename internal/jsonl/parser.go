@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
 )
 
 const maxLineSize = 10 << 20 // 10MB buffer per line
@@ -107,9 +108,11 @@ type LightStats struct {
 	TotalCacheWriteTokens int
 	TotalCacheReadTokens  int
 	Model                 string
-	SignalPercent         int  // 0-100, estimated signal/noise ratio
-	EpochAssistantCount   int  // assistant turns since last compaction
-	ChainHealthy          bool // false if active parent chain has missing links
+	SignalPercent         int       // 0-100, estimated signal/noise ratio
+	EpochAssistantCount   int       // assistant turns since last compaction
+	ChainHealthy          bool      // false if active parent chain has missing links
+	FirstTimestamp        time.Time // timestamp of first entry
+	LastTimestamp         time.Time // timestamp of last entry
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -155,6 +158,14 @@ func ScanLight(path string) (*LightStats, error) {
 			continue
 		}
 		stats.TypeCounts[e.Type]++
+
+		// Capture first and last timestamps.
+		if !e.Timestamp.IsZero() {
+			if stats.FirstTimestamp.IsZero() {
+				stats.FirstTimestamp = e.Timestamp
+			}
+			stats.LastTimestamp = e.Timestamp
+		}
 
 		// Track UUIDs for chain health.
 		if e.UUID != "" {
