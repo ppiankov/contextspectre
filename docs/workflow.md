@@ -104,9 +104,9 @@ The highest-leverage operating pattern for long sessions:
 ```
 Terminal 1: Claude Code          Terminal 2: contextspectre watch
 ┌─────────────────────┐          ┌─────────────────────────────┐
-│ claude               │          │ contextspectre clean         │
-│                      │          │   --active --all --watch     │
-│ (you work here)      │          │   (runs automatically)       │
+│ claude              │          │ contextspectre clean        │
+│                     │          │   --active --all --watch    │
+│ (you work here)     │          │   (runs automatically)      │
 └─────────────────────┘          └─────────────────────────────┘
 ```
 
