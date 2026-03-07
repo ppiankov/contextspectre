@@ -185,6 +185,20 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre search <query> --all` | Search across all sessions |
 | `contextspectre conflicts --project <name>` | Detect structural decision conflicts |
 | `contextspectre graph --project <name>` | Show structural reasoning graph |
+| `contextspectre lineage <file> --cwd` | Trace file touches across sessions |
+| `contextspectre lineage --decision <label> --cwd` | Find decision labels across sessions |
+
+### Reasoning metrics
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre half-life --cwd` | Measure reasoning half-life (token decay rate) |
+| `contextspectre repo-budget --cwd` | Project-level token budget and cost aggregation |
+| `contextspectre repo-efficiency --cwd` | Reasoning-to-code yield (tokens per LOC) |
+| `contextspectre flight-recorder --cwd` | Structured reasoning event timeline |
+| `contextspectre reasoning-diff --cwd --from 0 --to 5` | Compare reasoning states between epochs |
+| `contextspectre reasoning-diff <sessionA> <sessionB>` | Cross-session reasoning comparison |
+| `contextspectre productivity --cwd` | Operator throughput metrics (cost/commit, commits/hour) |
 
 ### Project management
 
