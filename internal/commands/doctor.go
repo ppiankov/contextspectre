@@ -35,6 +35,8 @@ type DoctorOutput struct {
 	CadenceSessions   []DoctorCadenceSession `json:"cleanup_priority,omitempty"`
 	IntegrityHealth   DoctorCheck            `json:"integrity"`
 	BrokenSessions    int                    `json:"broken_sessions,omitempty"`
+	InjectionHealth   DoctorCheck            `json:"injection"`
+	InjectionSessions int                    `json:"injection_sessions,omitempty"`
 	BudgetHealth      DoctorCheck            `json:"budget"`
 	WeeklyBudgetLimit float64                `json:"weekly_budget_limit,omitempty"`
 	WeeklyBudgetSpent float64                `json:"weekly_budget_spent,omitempty"`
@@ -115,6 +117,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 		sidechainEntries := 0
 		sidechainSessions := 0
 		brokenSessions := 0
+		injectionSessions := 0
 		var entropySessions []DoctorEntropySession
 		var cadenceSessions []DoctorCadenceSession
 		for _, si := range sessions {
@@ -129,6 +132,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			}
 			if stats.Integrity != nil && !stats.Integrity.Healthy {
 				brokenSessions++
+			}
+			if stats.InjectionReport != nil && len(stats.InjectionReport.Findings) > 0 {
+				injectionSessions++
 			}
 
 			dupResult := analyzer.FindDuplicateReads(entries)
@@ -248,6 +254,20 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 				Message: fmt.Sprintf("%d sessions have broken parent chains — run: contextspectre fix <id> --apply", brokenSessions),
 			}
 		}
+
+		// Injection health
+		out.InjectionSessions = injectionSessions
+		if injectionSessions == 0 {
+			out.InjectionHealth = DoctorCheck{
+				Status:  "ok",
+				Message: "no injection patterns detected",
+			}
+		} else {
+			out.InjectionHealth = DoctorCheck{
+				Status:  "warn",
+				Message: fmt.Sprintf("%d sessions contain injection patterns — run: contextspectre injection <id>", injectionSessions),
+			}
+		}
 	}
 
 	// Budget health, only when weekly budget is configured.
@@ -328,6 +348,9 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 	if out.BudgetHealth.Message != "" {
 		printCheck("Budget", out.BudgetHealth)
+	}
+	if out.InjectionHealth.Message != "" {
+		printCheck("Injection", out.InjectionHealth)
 	}
 
 	fmt.Println()
