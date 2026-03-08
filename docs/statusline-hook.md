@@ -1,4 +1,4 @@
-# Status line hook — full reference
+# Status line hook - full reference
 
 Complete hook script for Claude Code's status line integration. See [workflow.md](workflow.md#cli-status-line-integration) for setup instructions and indicator explanations.
 
@@ -85,7 +85,7 @@ if [ -n "$ips_raw" ] && [ "$ips_raw" != "0" ]; then
   ips_seg=" ips:${ips_color}${ips_int}${reset}"
 fi
 
-# Chain integrity — red ⚠ if broken
+# Chain integrity - red ⚠ if broken
 chain_seg=""
 chain_raw=$(jq -r '.chain_healthy // true' "$cache" 2>/dev/null)
 if [ "$chain_raw" = "false" ]; then

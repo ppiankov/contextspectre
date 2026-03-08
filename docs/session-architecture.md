@@ -58,7 +58,7 @@ Not all JSONL entries are conversation messages sent to the API:
 | `progress` | No | Streaming progress indicators |
 | `file-history-snapshot` | No | File state snapshots |
 
-Only `user` and `assistant` entries consume context window tokens. The others are JSONL bookkeeping — they take disk space but zero context.
+Only `user` and `assistant` entries consume context window tokens. The others are JSONL bookkeeping - they take disk space but zero context.
 
 ## Safety implications for contextspectre
 
@@ -69,7 +69,7 @@ When contextspectre modifies a session JSONL file, **every Claude instance readi
 This is especially dangerous because:
 
 1. **You may not know another instance is using the file.** Claude for Mac's Code tab and a CLI terminal can both work on the same codebase independently.
-2. **Invalid modifications break session resume.** If a cleanup operation produces content the API rejects (e.g., malformed images), the session becomes stuck — it cannot send messages because the API rejects the conversation history.
+2. **Invalid modifications break session resume.** If a cleanup operation produces content the API rejects (e.g., malformed images), the session becomes stuck - it cannot send messages because the API rejects the conversation history.
 3. **The damage is silent.** The instance that ran the cleanup works fine. The other instance fails on next resume.
 
 ### The image replacement incident
@@ -81,7 +81,7 @@ messages.4.content.0.image.source.base64: The image was specified using
 the image/jpeg media type, but the image appears to be a image/png image
 ```
 
-The session became permanently stuck — every resume attempt hit the same error. Fixed in v0.4.8 by replacing image blocks with text blocks (`[image removed by contextspectre]`) instead of substituting image data.
+The session became permanently stuck - every resume attempt hit the same error. Fixed in v0.4.8 by replacing image blocks with text blocks (`[image removed by contextspectre]`) instead of substituting image data.
 
 ### Best practices
 

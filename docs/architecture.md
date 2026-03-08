@@ -25,17 +25,17 @@ contextspectre/
 
 **Session discovery.** Scans `~/.claude/projects/` for JSONL session files. Both Claude Code CLI and Claude for Mac store sessions in the same directory with the same schema. Reads `sessions-index.json` when available, falls back to glob.
 
-**Token estimation.** Text: `len / 4`. Images: `len(base64) / 750`. Tool use: `(name + input) / 4`. These are estimates — actual tokenization varies, but they track closely enough for relative comparison.
+**Token estimation.** Text: `len / 4`. Images: `len(base64) / 750`. Tool use: `(name + input) / 4`. These are estimates - actual tokenization varies, but they track closely enough for relative comparison.
 
-**Compaction detection.** Monitors `message.usage` fields on assistant messages. A drop of >50K tokens between consecutive assistant messages indicates compaction. The period between two compactions is a **compaction epoch** — the fundamental unit of reasoning history.
+**Compaction detection.** Monitors `message.usage` fields on assistant messages. A drop of >50K tokens between consecutive assistant messages indicates compaction. The period between two compactions is a **compaction epoch** - the fundamental unit of reasoning history.
 
 **Compaction distance.** `(165,000 - current_tokens) / avg_tokens_per_turn` = estimated turns remaining.
 
-**Cost attribution.** Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation — the data is in the JSONL.
+**Cost attribution.** Every assistant message carries `usage` fields: `input_tokens`, `output_tokens`, `cache_creation_input_tokens`, `cache_read_input_tokens`. Combined with model pricing, this produces exact dollar cost per turn, per epoch, per session. No estimation - the data is in the JSONL.
 
 **Chain repair.** When deleting message D, all entries where `parentUuid == D.uuid` get `parentUuid = D.parentUuid`. Walks up deletion chains to find the nearest surviving ancestor.
 
-**Image replacement.** Replaces `{type: "image"}` blocks with `{type: "text", text: "[image removed by contextspectre]"}`. The image data is fully removed — no placeholder images that could cause API validation errors. Context cost drops from megabytes to a few bytes.
+**Image replacement.** Replaces `{type: "image"}` blocks with `{type: "text", text: "[image removed by contextspectre]"}`. The image data is fully removed - no placeholder images that could cause API validation errors. Context cost drops from megabytes to a few bytes.
 
 **Live cleanup.** Uses mtime-based race detection: check mtime before each sub-operation, abort and restore from backup if Claude wrote to the file during cleanup. Requires 2s idle period before starting. Safe because Claude Code re-reads the JSONL between turns.
 
@@ -52,7 +52,7 @@ contextspectre/
 ## Design decisions
 
 - **Streaming parser.** JSONL files can be hundreds of megabytes. The parser uses `bufio.Scanner` with a 1MB buffer, not `ioutil.ReadAll`.
-- **Atomic writes.** File modifications write to a temp file then rename — no partial writes on crash.
+- **Atomic writes.** File modifications write to a temp file then rename - no partial writes on crash.
 - **No Claude API dependency.** Works entirely on local files. No network, no tokens consumed.
 - **Bubbletea TUI.** Keyboard-driven, no mouse required. Lipgloss for styling.
 - **Read-only by default.** The TUI shows data. Modifications require explicit selection and confirmation.

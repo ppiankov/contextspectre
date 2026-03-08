@@ -4,11 +4,11 @@
 
 Running `contextspectre` without arguments opens the interactive TUI.
 
-**Session browser** — sessions sorted by last modified with responsive columns that adapt to terminal width. Three breakpoints: wide (>160 cols), medium (120-160), narrow (<120). Columns: project, slug, session ID, branch, messages, size, context %, compaction count, signal grade, cost, modified time. Active sessions show a `●` indicator. Press `s` to cycle sort column (modified → cost → context → signal → size). Press `/` to search.
+**Session browser** - sessions sorted by last modified with responsive columns that adapt to terminal width. Three breakpoints: wide (>160 cols), medium (120-160), narrow (<120). Columns: project, slug, session ID, branch, messages, size, context %, compaction count, signal grade, cost, modified time. Active sessions show a `●` indicator. Press `s` to cycle sort column (modified → cost → context → signal → size). Press `/` to search.
 
-**Detail view** — drill into a session with four tabbed panels: Overview, Messages, Cleanup, Ghost. Switch panels with `Tab` or `1-4`. Overview shows stats, cost, compactions, decision economics, and vector gauge. Messages panel shows every entry with type, tokens, timestamp, and preview. Cleanup panel shows noise breakdown. Ghost panel shows stale compaction references.
+**Detail view** - drill into a session with four tabbed panels: Overview, Messages, Cleanup, Ghost. Switch panels with `Tab` or `1-4`. Overview shows stats, cost, compactions, decision economics, and vector gauge. Messages panel shows every entry with type, tokens, timestamp, and preview. Cleanup panel shows noise breakdown. Ghost panel shows stale compaction references.
 
-**Messages panel** — context meter at the top shows current usage, compaction history (capped at 3 with overflow hint), ghost file references (capped at 3), and estimated turns remaining. Entries are labeled by type: stale reads, failed retries, sidechains, tangents. Space to select individual messages. Bulk selectors: `x` progress, `h` snapshots, `r` stale reads, `c` sidechains, `g` tangents, `i` images, `s` separators, `t` truncate outputs, `a` all. Selected messages show live impact prediction: token savings, new context percentage, and turns gained. `d` to delete with confirmation, `u` to undo from backup.
+**Messages panel** - context meter at the top shows current usage, compaction history (capped at 3 with overflow hint), ghost file references (capped at 3), and estimated turns remaining. Entries are labeled by type: stale reads, failed retries, sidechains, tangents. Space to select individual messages. Bulk selectors: `x` progress, `h` snapshots, `r` stale reads, `c` sidechains, `g` tangents, `i` images, `s` separators, `t` truncate outputs, `a` all. Selected messages show live impact prediction: token savings, new context percentage, and turns gained. `d` to delete with confirmation, `u` to undo from backup.
 
 ## TUI keybindings
 
@@ -239,10 +239,10 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `cost-alert` | — | Session cost alert threshold (dollars) |
-| `weekly-budget` | — | Weekly spending budget |
-| `weekly-limit` | — | Weekly usage limit |
-| `billing-week-start` | — | Day the billing week starts |
+| `cost-alert` | - | Session cost alert threshold (dollars) |
+| `weekly-budget` | - | Weekly spending budget |
+| `weekly-limit` | - | Weekly usage limit |
+| `billing-week-start` | - | Day the billing week starts |
 | `expert-mode` | `false` | Enable auto-clean of safe tiers (1-3) on context pressure |
 | `health-context-warn` | `75` | Context % threshold for vector gauge warning |
 | `health-cpd-warn` | `15` | CPD threshold for warning |
@@ -281,6 +281,6 @@ When `expert-mode` is enabled (`contextspectre config set expert-mode true`), Co
 
 Most commands accept a session ID, full path, or partial match. Additionally:
 
-- `--cwd` — auto-detect the most recent session for the current working directory
-- `--auto` — find and use the most recent session across all projects
-- `--project <name>` — filter by project name, path substring, or alias
+- `--cwd` - auto-detect the most recent session for the current working directory
+- `--auto` - find and use the most recent session across all projects
+- `--project <name>` - filter by project name, path substring, or alias
