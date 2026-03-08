@@ -153,6 +153,7 @@ See [CLI & TUI Reference](docs/commands.md) for the full command list, keybindin
 | **Signal / Noise** | Signal = productive reasoning. Noise = progress, stale reads, tangents. |
 | **Reasoning contamination** | Old scaffolding persisting in context, biasing future responses. |
 | **Vector health score** | A-F grade. A = >95% signal. F = <20% signal. |
+| **Snowball effect** | Dead tokens compound — re-read on every turn. 50K stripped early avoids millions of re-reads. |
 
 Full glossary: [Concepts & Glossary](docs/concepts.md)
 
