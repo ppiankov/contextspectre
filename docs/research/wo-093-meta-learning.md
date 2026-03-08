@@ -85,7 +85,7 @@ This means:
 - A dead block introduced at turn 190 costs only 10x its size
 - **Early dead weight is catastrophically more expensive than late dead weight**
 
-The reported savings (10.2M tokens, 2720 cycles) are the *stripped* amounts — the tokens removed from the JSONL. The actual avoided waste is the stripped amount multiplied by the average remaining turns at the time of stripping. Conservative estimate: **50–100M tokens of waste avoided**, not 10.2M.
+The reported savings (47.4M tokens, ~2700 cycles) are the *stripped* amounts — the tokens removed from the JSONL. The actual avoided waste is the stripped amount multiplied by the average remaining turns at the time of stripping. Measured: average 61 remaining turns at cleanup time, giving **2.9B re-read tokens avoided**, not 47.4M.
 
 This also explains why F-grade sessions cost so much more than A-grade sessions. It's not just that they're longer — the dead content from early compactions is re-read on every subsequent API call, each re-read costing real money. The cost curve is quadratic, not linear:
 
@@ -126,25 +126,20 @@ The 7,729-message session at 97.4% signal is remarkable — a session of that le
 
 **Signature: Cleaning transforms F-grade sessions into A-grade sessions by removing dead content that the model was re-reading on every turn.**
 
-## Finding 5: Decision Economics Has Zero Adoption
+## Finding 5: Decision Economics Extraction Bug
 
-**Zero sessions in the 252-session corpus have detected commit points.** CPD, TTC, and CDR are all zero for every session.
+**The WO-093 research script reported zero commit points across 252 sessions, but the data exists.** Manual inspection shows sessions with 27 decisions and CPD of $13.84. The extraction script failed to locate the data due to a schema path mismatch — the decision economics fields exist in the JSON output but the research script was reading the wrong path.
 
 This means:
-1. No users are using the `mark` command to create explicit commit points
-2. The archaeology hint detection isn't producing extractable commit points in JSON output
-3. The most sophisticated reasoning metrics (cost per decision, time to first commit, commit-decision ratio) have no data
+1. Decision economics data IS being generated — the `stats` command reports it correctly
+2. The research script's zero-data conclusion was an extraction bug, not an adoption gap
+3. CPD, TTC, and CDR correlations remain untested — not because the data doesn't exist, but because this research didn't extract it
 
-This is not a failure of the metrics — it's a lifecycle adoption gap. The metrics are well-designed (WO-084), but the prerequisite behavior (creating commit points or writing decision-structured text) isn't happening.
-
-**Signature: Advanced metrics without upstream behavioral adoption produce zero data.**
+**Signature: Research tooling must be validated against known-good data before drawing absence conclusions.**
 
 ### Implication
 
-Decision economics needs one of:
-- **Automatic extraction**: Detect decisions from session content without explicit markers (archaeology hints exist but don't populate decision_economics in JSON output)
-- **Workflow integration**: Make `mark` easier or automatic at session boundaries
-- **Lower bar**: Count any decision-like extraction (archaeology hints) as a commit point for CPD/TTC/CDR purposes
+A follow-up pass with corrected extraction paths would unlock CPD/TTC/CDR analysis across the corpus. The decision economics infrastructure works — the research script just couldn't see it.
 
 ## Finding 6: Session Shape Bimodality
 
@@ -201,7 +196,7 @@ There is no "middle ground" shape. Sessions either finish quickly (sprint) or ru
 
 > Do breakthrough sessions have different CPD/TTC/CDR profiles than dead-end sessions?
 
-**Cannot answer — zero CPD/TTC/CDR data.** No sessions have commit points. The decision economics infrastructure exists but lacks upstream behavioral adoption.
+**Cannot answer yet — CPD/TTC/CDR data exists but the research script failed to extract it (schema path bug).** A corrective extraction pass would enable this analysis.
 
 > Is there a "session shape" (context% over time curve) that correlates with quality output?
 
@@ -226,11 +221,11 @@ There is no "middle ground" shape. Sessions either finish quickly (sprint) or ru
 **Strength of findings:** The message-count-to-signal correlation is strong and consistent across 252 sessions. The cost-to-grade correlation is dramatic ($7,794 of $9,058 total spend in F-grade sessions). The cleaned-session evidence directly validates contextspectre's core value proposition.
 
 **Limitations:**
-- No CPD/TTC/CDR data — the most sophisticated metrics couldn't be tested
+- CPD/TTC/CDR data exists but wasn't extracted — schema path bug in research script
 - No manual quality tags (breakthrough/productive/dead-end) — the WO called for manual tagging, but the automated metrics told a clear enough story without it
 - Compaction count data may undercount actual compaction events (depends on what Claude Code persists in the JSONL)
 - The corpus is a single operator — patterns may not generalize to different workflows or usage patterns
-- The snowball effect multiplier is estimated (50–100M), not precisely measured
+- The snowball effect multiplier (61x) is an average — individual sessions vary by length and cleanup timing
 
 **What would change the findings:**
 - Multi-operator corpus: Would the 100-message wall hold for different workflows?
@@ -239,13 +234,13 @@ There is no "middle ground" shape. Sessions either finish quickly (sprint) or ru
 
 ## Decision
 
-**Patterns exist. Three signatures formalized.** The meta-learning hypothesis is confirmed for session shape and cost correlation. The most interesting finding is the snowball effect — dead tokens compound quadratically, making the direct savings metric a lower bound on the actual value of cleanup.
+**Patterns exist. Three signatures formalized.** The meta-learning hypothesis is confirmed for session shape and cost correlation. The most important finding is the snowball effect — dead tokens compound multiplicatively (61x average), making the direct savings metric (47.4M) a lower bound on actual value (2.9B avoided re-reads).
 
-The decision economics gap (zero data) suggests the next move is not more research but upstream tooling: make commit points automatic or lower the bar for decision detection.
+The decision economics data exists but was missed by the research script (extraction bug). A corrective pass would unlock CPD/TTC/CDR analysis.
 
 ## Connected Work
 
-- WO-084 (complete): Decision economics — the metrics exist but have no data
+- WO-084 (complete): Decision economics — metrics work, research script had extraction bug
 - WO-083 (complete): Analytics — provides the telemetry infrastructure this research used
 - WO-060 (planned): Community example PR — these findings could inform the example
-- WO-069 (in progress): First essay — the snowball effect and session bimodality are essay-worthy findings
+- WO-069 (done): First essay — published at obstalabs.dev/blog/decision-economics, includes snowball effect
