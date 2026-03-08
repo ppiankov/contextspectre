@@ -166,6 +166,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, smart watch ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, status line telemetry ✓, expert hygiene ✓, session analytics ✓, decision economics (CPD/TTC/CDR) ✓, onboarding polish ✓, input purity score ✓, session integrity guard ✓, [Vector Control panel](https://github.com/ppiankov/vectorpad) ✓, cleanup cadence, budget protection, session timeline |
 | 5. Reasoning memory | In progress | Project reasoning graph ✓, conflict detection ✓, project memory synthesis ✓, CLAUDE.md sync ✓, decision lineage ✓, reasoning entropy |
 | 6. Reasoning metrics | In progress | Repo token budget ✓, reasoning half-life ✓, reasoning efficiency map ✓, flight recorder ✓, reasoning diff ✓, throughput metrics ✓ |
+| 7. Security | In progress | Vector injection detection ✓, cross-project bond ✓, signal-first status line ✓ |
 
 ## Known limitations
 

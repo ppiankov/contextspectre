@@ -188,6 +188,23 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre lineage <file> --cwd` | Trace file touches across sessions |
 | `contextspectre lineage --decision <label> --cwd` | Find decision labels across sessions |
 
+### Security
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre injection <id>` | Detect vector injection patterns in session content |
+| `contextspectre injection --cwd` | Scan current directory's session for injection patterns |
+| `contextspectre injection --cwd --format json` | JSON output with findings and risk score |
+
+### Cross-project
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre bond` | Show cross-project bond relationship from docs/bond.md |
+| `contextspectre bond --format json` | JSON output of bond file |
+| `contextspectre bond verify` | Verify sibling repo has matching bond file |
+| `contextspectre bond --path <file>` | Override bond file location |
+
 ### Reasoning metrics
 
 | Command | Description |
