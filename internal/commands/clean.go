@@ -131,7 +131,6 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
 		printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
-		slog.Info("Clean all complete", "tokens", result.TotalTokensSaved)
 		return nil
 	}
 
@@ -354,7 +353,6 @@ func runCleanAuto() error {
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
 	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
-	slog.Info("Clean auto complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
 	return nil
 }
 
@@ -1072,7 +1070,6 @@ func runCleanLive(path string) error {
 	fmt.Printf("Total saved: ~%d tokens, %s\n",
 		result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
 	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
-	slog.Info("Clean live complete", "tokens", result.TotalTokensSaved, "aggressive", opts.Aggressive)
 	return nil
 }
 

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log/slog"
+	"fmt"
 	"os"
 
 	"github.com/ppiankov/contextspectre/internal/commands"
@@ -15,7 +15,7 @@ var (
 
 func main() {
 	if err := commands.Execute(version, commit, date); err != nil {
-		slog.Warn("Command failed", "error", err)
+		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
 }
