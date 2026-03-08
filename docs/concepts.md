@@ -27,7 +27,7 @@
 | **Commit point** | A decision boundary. Exploration above it can be collapsed - the scaffolding served its purpose. |
 | **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. |
 | **Split surgery** | Extracting a range of entries to portable markdown. Non-destructive by default; optionally prunes from the source. |
-| **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Planned (Phase 4). |
+| **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Implemented via `split`, `export`, and branch navigation. |
 | **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. |
 | **Context distillation** | Increasing the signal-to-noise ratio - not making sessions smaller, but making what remains more useful. |
 | **Vector snapshot** | A decisions-only extract of a project's canonical constraints and architecture. A north star document. |
