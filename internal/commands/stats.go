@@ -178,6 +178,15 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Println()
 	}
 
+	// Injection risk
+	if stats.InjectionReport != nil && len(stats.InjectionReport.Findings) > 0 {
+		fmt.Printf("Injection risk:     %.0f/100 (%d findings, highest: %s)\n",
+			stats.InjectionReport.RiskScore,
+			len(stats.InjectionReport.Findings),
+			stats.InjectionReport.HighestSev)
+		fmt.Println()
+	}
+
 	// Compaction info
 	fmt.Printf("Compactions: %d\n", stats.CompactionCount)
 	if stats.CompactionCount > 0 {

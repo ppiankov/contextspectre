@@ -71,6 +71,7 @@ type StatsOutput struct {
 	GhostContext       *GhostReportJSON          `json:"ghost_context,omitempty"`
 	InputPurity        *analyzer.InputPurity     `json:"input_purity,omitempty"`
 	Integrity          *analyzer.IntegrityReport `json:"integrity,omitempty"`
+	InjectionReport    *analyzer.InjectionReport `json:"injection,omitempty"`
 }
 
 // DecisionEconomicsJSON holds CPD/TTC/CDR for JSON output.
@@ -811,6 +812,10 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 
 	if stats.Integrity != nil && !stats.Integrity.Healthy {
 		out.Integrity = stats.Integrity
+	}
+
+	if stats.InjectionReport != nil && len(stats.InjectionReport.Findings) > 0 {
+		out.InjectionReport = stats.InjectionReport
 	}
 
 	return out

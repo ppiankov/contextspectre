@@ -55,6 +55,7 @@ type ContextStats struct {
 	GhostReport          *GhostReport
 	InputPurity          *InputPurity
 	Integrity            *IntegrityReport
+	InjectionReport      *InjectionReport
 	ClientType           string // "cli", "desktop", or "unknown"
 }
 
@@ -205,6 +206,9 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 
 	// Chain integrity
 	stats.Integrity = CheckIntegrity(entries)
+
+	// Injection detection
+	stats.InjectionReport = DetectInjection(entries)
 
 	// Client type detection
 	if stats.SnapshotCount > 0 {
