@@ -4,25 +4,25 @@
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Reasoning hygiene layer for Claude Code. Not a cleanup utility — a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
+Reasoning hygiene layer for Claude Code. Not a cleanup utility - a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
 ## Before and after
 
-A real session: 14,311 lines, 36.6 MB, 15 compactions, $291 spent. Signal F — 5.9M noise tokens drowning the actual conversation. One `clean --all` later: 4,728 lines, 16.9 MB, Signal A (97.9%), 2.7K noise remaining. Same decisions, same code, no scaffolding.
+A real session: 14,311 lines, 36.6 MB, 15 compactions, $291 spent. Signal F - 5.9M noise tokens drowning the actual conversation. One `clean --all` later: 4,728 lines, 16.9 MB, Signal A (97.9%), 2.7K noise remaining. Same decisions, same code, no scaffolding.
 
-![Before cleanup — Signal F](assets/stats-before.png)
+![Before cleanup - Signal F](assets/stats-before.png)
 
-![After cleanup — Signal A](assets/stats-after.png)
+![After cleanup - Signal A](assets/stats-after.png)
 
 ## The problem
 
-Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context — you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. Not all context ages equally: **exploratory** reasoning (temporary, unstable) becomes **reasoning contamination** once a decision is made — old scaffolding biasing future responses off-vector.
+Claude Code conversations grow until automatic compaction triggers at ~165K tokens. Compaction summarizes and discards older context - you lose specificity, decisions blur, and reasoning drifts. After 10+ compactions, Claude is working from a summary of a summary of a summary. Not all context ages equally: **exploratory** reasoning (temporary, unstable) becomes **reasoning contamination** once a decision is made - old scaffolding biasing future responses off-vector.
 
-A single long session can cost hundreds of dollars. Most of that is cache reads — re-processing the same context every turn. A debugging detour that gets compacted away still cost real money. Across sessions, the **re-explanation tax** compounds: re-stating the same architecture, re-reading the same files, re-stating the same constraints because prior sessions are inaccessible.
+A single long session can cost hundreds of dollars. Most of that is cache reads - re-processing the same context every turn. A debugging detour that gets compacted away still cost real money. Across sessions, the **re-explanation tax** compounds: re-stating the same architecture, re-reading the same files, re-stating the same constraints because prior sessions are inaccessible.
 
 ## What it is
 
-ContextSpectre reads Claude Code's local JSONL session files — from both Claude Code CLI and Claude for Mac — and gives you visibility and control over what fills your context window.
+ContextSpectre reads Claude Code's local JSONL session files - from both Claude Code CLI and Claude for Mac - and gives you visibility and control over what fills your context window.
 
 **Visibility**
 - Context meter with compaction history and turn estimates
@@ -80,23 +80,23 @@ ContextSpectre reads Claude Code's local JSONL session files — from both Claud
 ## What it is NOT
 
 - Not a conversation analyzer. It does not interpret semantics or judge your prompts.
-- Not a Claude Code plugin. It reads local files independently — no API, no integration required.
+- Not a Claude Code plugin. It reads local files independently - no API, no integration required.
 - Not a general JSONL editor. It understands Claude Code's specific schema and nothing else.
 - Not a monitoring daemon. It is a point-in-time tool you run when you need visibility.
-- Not multi-vendor. It works with Claude Code's local session format (CLI and Mac). ChatGPT is server-side — there is nothing to edit.
+- Not multi-vendor. It works with Claude Code's local session format (CLI and Mac). ChatGPT is server-side - there is nothing to edit.
 - Not an AI summarizer. It extracts existing content. It does not generate new summaries.
 - Not a cost optimizer. It exposes the hidden economics of reasoning. You decide what to do about it.
-- Not a runtime hook. It does not modify Claude, intercept API calls, or alter model behavior. It reads your local session files — your data, your history.
+- Not a runtime hook. It does not modify Claude, intercept API calls, or alter model behavior. It reads your local session files - your data, your history.
 
 ## Philosophy
 
-*Principiis obsta* — resist the beginnings.
+*Principiis obsta* - resist the beginnings.
 
-**Keep conclusions, remove scaffolding.** Exploratory reasoning is valuable while exploring. After a decision is made, it becomes dead weight that biases future responses. ContextSpectre lets you collapse exploration into decisions — that's not history editing, it's reasoning hygiene.
+**Keep conclusions, remove scaffolding.** Exploratory reasoning is valuable while exploring. After a decision is made, it becomes dead weight that biases future responses. ContextSpectre lets you collapse exploration into decisions - that's not history editing, it's reasoning hygiene.
 
 **Mirrors, not oracles.** The tool presents evidence and lets you decide. It does not auto-trim, does not guess what matters, and does not modify files without your explicit confirmation and a backup.
 
-**Structural detection over semantic guessing.** Every analysis uses observable facts — token counts, file paths, compaction boundaries, parentUuid chains, usage fields. No ML, no heuristics that guess meaning, no probabilistic classification. When the tool doesn't know, it says so.
+**Structural detection over semantic guessing.** Every analysis uses observable facts - token counts, file paths, compaction boundaries, parentUuid chains, usage fields. No ML, no heuristics that guess meaning, no probabilistic classification. When the tool doesn't know, it says so.
 
 See [Workflow Patterns](docs/workflow.md) for usage philosophy and the explore-execute-collapse cycle.
 
@@ -191,7 +191,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 
 ## License
 
-MIT License — see [LICENSE](LICENSE).
+MIT License - see [LICENSE](LICENSE).
 
 ## Contributing
 
