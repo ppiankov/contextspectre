@@ -443,7 +443,7 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 		handleAllClean(0, &consecutiveClean, &lastHeartbeat)
 	}
 	acc.cycles++
-	printCumulative(acc.tokens, acc.cycles, acc.start)
+	printCumulative(acc.tokens, acc.avoided, acc.cycles, acc.start)
 
 	for {
 		select {
@@ -477,7 +477,7 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 				handleAllClean(len(active), &consecutiveClean, &lastHeartbeat)
 			}
 			acc.cycles++
-			printCumulative(acc.tokens, acc.cycles, acc.start)
+			printCumulative(acc.tokens, acc.avoided, acc.cycles, acc.start)
 		case <-done:
 			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
@@ -554,7 +554,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	}
 	acc.cycles++
 	seedMtimeMap(sinceDuration, lastMtime, lastClean)
-	printCumulative(acc.tokens, acc.cycles, acc.start)
+	printCumulative(acc.tokens, acc.avoided, acc.cycles, acc.start)
 
 	for {
 		select {
@@ -609,7 +609,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 				handleAllClean(len(changed), &consecutiveClean, &lastHeartbeat)
 			}
 			acc.cycles++
-			printCumulative(acc.tokens, acc.cycles, acc.start)
+			printCumulative(acc.tokens, acc.avoided, acc.cycles, acc.start)
 		case <-done:
 			acc.printSummary()
 			recordWatchSnapshots(sinceDuration)
@@ -656,13 +656,18 @@ func findChangedSessions(sinceDuration time.Duration, lastMtime, lastClean map[s
 }
 
 // printCumulative prints the inline cumulative stats if there are any savings.
-func printCumulative(totalTokens, cycles int, startTime time.Time) {
+func printCumulative(totalTokens, avoidedTokens, cycles int, startTime time.Time) {
 	if totalTokens <= 0 {
 		return
 	}
 	elapsed := time.Since(startTime)
-	fmt.Printf("           Cumulative: %s tokens saved (%d cycles, %s)\n",
-		formatTokens(totalTokens), cycles, formatDuration(elapsed))
+	if avoidedTokens > 0 {
+		fmt.Printf("           Cumulative: %s removed, %s re-reads avoided (%d cycles, %s)\n",
+			formatTokens(totalTokens), formatTokens(avoidedTokens), cycles, formatDuration(elapsed))
+	} else {
+		fmt.Printf("           Cumulative: %s tokens saved (%d cycles, %s)\n",
+			formatTokens(totalTokens), cycles, formatDuration(elapsed))
+	}
 }
 
 // recordWatchSnapshots records analytics snapshots for all active sessions on watch exit.
