@@ -22,10 +22,10 @@ make test
 ## Guidelines
 
 - Tests are mandatory for new code
-- Deterministic tests only — no flaky or probabilistic tests
+- Deterministic tests only - no flaky or probabilistic tests
 - Comments explain "why" not "what"
-- No magic numbers — name and document constants
-- Keep the scope surgical — this tool does one thing well
+- No magic numbers - name and document constants
+- Keep the scope surgical - this tool does one thing well
 
 ## Reporting issues
 
