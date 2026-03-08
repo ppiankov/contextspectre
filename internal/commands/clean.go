@@ -832,6 +832,7 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 // watchAccumulator tracks cumulative stats across watch cycles.
 type watchAccumulator struct {
 	tokens   int
+	avoided  int // compounded: tokens_removed × remaining_turns per cleanup
 	sessions int
 	cycles   int
 	prog     int
@@ -861,6 +862,7 @@ func (w *watchAccumulator) addResult(r *editor.CleanLiveResult, event *savings.E
 	w.sep += r.SeparatorsStripped
 	w.trunc += r.OutputsTruncated
 	if event != nil {
+		w.avoided += event.AvoidedTokens
 		w.cost += event.AvoidedCost
 	}
 }
@@ -871,9 +873,12 @@ func (w *watchAccumulator) printSummary() {
 	fmt.Printf("\nWatch summary (%s):\n", formatDuration(elapsed))
 	fmt.Printf("  Sessions cleaned:  %d\n", w.sessions)
 	fmt.Printf("  Cycles run:        %d\n", w.cycles)
-	fmt.Printf("  Total tokens saved: ~%s\n", formatTokens(w.tokens))
+	fmt.Printf("  Tokens removed:    ~%s\n", formatTokens(w.tokens))
+	if w.avoided > 0 {
+		fmt.Printf("  Re-reads avoided:  ~%s (snowball)\n", formatTokens(w.avoided))
+	}
 	if w.cost > 0 {
-		fmt.Printf("  Total cost saved:  ~%s\n", analyzer.FormatCost(w.cost))
+		fmt.Printf("  Cost avoided:      ~%s\n", analyzer.FormatCost(w.cost))
 	}
 	// Noise breakdown
 	parts := []string{}
