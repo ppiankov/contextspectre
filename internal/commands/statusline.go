@@ -43,13 +43,16 @@ func init() {
 // statusLineData holds computed telemetry for a single session.
 type statusLineData struct {
 	SessionID      string  `json:"session_id"`
+	Grade          string  `json:"grade"`
 	ContextPercent float64 `json:"context_percent"`
+	InputTokens    int     `json:"input_tokens"`
+	OutputTokens   int     `json:"output_tokens"`
+	Cost           float64 `json:"cost"`
+	Model          string  `json:"model"`
+	Project        string  `json:"project,omitempty"`
 	TurnsRemaining int     `json:"turns_remaining"`
 	NoiseTokens    int     `json:"noise_tokens"`
-	Grade          string  `json:"grade"`
-	Cost           float64 `json:"cost"`
 	SavedCost      float64 `json:"saved_cost"`
-	Model          string  `json:"model"`
 	VectorState    string  `json:"vector_state,omitempty"`
 	VectorAction   string  `json:"vector_action,omitempty"`
 	ChainHealthy   bool    `json:"chain_healthy"`
@@ -188,19 +191,46 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		shortID = shortID[:8]
 	}
 
+	// Token flow from last turn
+	inputTokens := 0
+	outputTokens := 0
+	if stats.LastUsage != nil {
+		inputTokens = stats.LastUsage.InputTokens
+		outputTokens = stats.LastUsage.OutputTokens
+	}
+
+	// Project name from session path
+	project := extractProjectFromPath(path)
+
 	return &statusLineData{
 		SessionID:      shortID,
+		Grade:          grade,
 		ContextPercent: contextPct,
+		InputTokens:    inputTokens,
+		OutputTokens:   outputTokens,
+		Cost:           cost,
+		Model:          modelShort,
+		Project:        project,
 		TurnsRemaining: turnsRemaining,
 		NoiseTokens:    noiseTokens,
-		Grade:          grade,
-		Cost:           cost,
 		SavedCost:      savedCost,
-		Model:          modelShort,
 		VectorState:    vectorState,
 		VectorAction:   vectorAction,
 		ChainHealthy:   stats.ChainHealthy,
 	}, nil
+}
+
+// extractProjectFromPath gets the project directory name from a session path.
+func extractProjectFromPath(path string) string {
+	// Path format: ~/.claude/projects/-Users-foo-bar-project/session.jsonl
+	dir := filepath.Dir(path)
+	encoded := filepath.Base(dir)
+	// Decode: replace leading dash, split by dash, take last segment
+	parts := strings.Split(encoded, "-")
+	if len(parts) > 0 {
+		return parts[len(parts)-1]
+	}
+	return ""
 }
 
 func formatStatusLine(d *statusLineData) error {
@@ -212,22 +242,24 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainOK = 0
 		}
-		fmt.Printf("SID=%s; CTX=%.1f; TURNS=%d; NOISE=%d; GRADE=%s; COST=%.2f; SAVED=%.2f; MODEL=%s; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
-			d.SessionID, d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainOK)
+		fmt.Printf("GRADE=%s; CTX=%.1f; IN=%d; OUT=%d; COST=%.2f; MODEL=%s; PROJECT=%s; SID=%s; TURNS=%d; NOISE=%d; SAVED=%.2f; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
+			d.Grade, d.ContextPercent, d.InputTokens, d.OutputTokens,
+			d.Cost, d.Model, d.Project, d.SessionID,
+			d.TurnsRemaining, d.NoiseTokens, d.SavedCost,
+			d.VectorState, d.VectorAction, chainOK)
 	case "human":
+		// Signal-first layout: [A] ctx:82% +11525/-2666 | $139.08 | Opus 4.6 | project
+		tokenFlow := fmt.Sprintf("+%d/-%d", d.InputTokens, d.OutputTokens)
 		parts := []string{
-			fmt.Sprintf("ctx:%.0f%%", d.ContextPercent),
-			fmt.Sprintf("turns:%d", d.TurnsRemaining),
-			fmt.Sprintf("noise:%s", formatTokens(d.NoiseTokens)),
-			d.Grade,
+			fmt.Sprintf("[%s]", d.Grade),
+			fmt.Sprintf("ctx:%.0f%% %s", d.ContextPercent, tokenFlow),
 			analyzer.FormatCost(d.Cost),
 		}
-		if d.SavedCost > 0 {
-			parts = append(parts, fmt.Sprintf("saved:%s", analyzer.FormatCost(d.SavedCost)))
+		if d.Model != "" {
+			parts = append(parts, d.Model)
 		}
-		if d.VectorState != "" {
-			parts = append(parts, fmt.Sprintf("%s:%s", d.VectorState, d.VectorAction))
+		if d.Project != "" {
+			parts = append(parts, d.Project)
 		}
 		if !d.ChainHealthy {
 			parts = append(parts, "⚠")
@@ -238,9 +270,11 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainVal = "broken"
 		}
-		fmt.Printf("sid=%s\tctx=%.1f\tturns=%d\tnoise=%d\tgrade=%s\tcost=%.2f\tsaved=%.2f\tmodel=%s\tvector=%s\tvaction=%s\tchain=%s\n",
-			d.SessionID, d.ContextPercent, d.TurnsRemaining, d.NoiseTokens,
-			d.Grade, d.Cost, d.SavedCost, d.Model, d.VectorState, d.VectorAction, chainVal)
+		fmt.Printf("grade=%s\tctx=%.1f\tin=%d\tout=%d\tcost=%.2f\tmodel=%s\tproject=%s\tsid=%s\tturns=%d\tnoise=%d\tsaved=%.2f\tvector=%s\tvaction=%s\tchain=%s\n",
+			d.Grade, d.ContextPercent, d.InputTokens, d.OutputTokens,
+			d.Cost, d.Model, d.Project, d.SessionID,
+			d.TurnsRemaining, d.NoiseTokens, d.SavedCost,
+			d.VectorState, d.VectorAction, chainVal)
 	}
 	return nil
 }
