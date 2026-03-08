@@ -89,10 +89,35 @@ func runStats(cmd *cobra.Command, args []string) error {
 		decEconJSON := analyzer.ComputeDecisionEconomics(stats, driftResult)
 		thresholds := loadGaugeThresholds()
 		gauge := analyzer.ComputeGauge(stats, decEconJSON, thresholds)
+		var ssMetrics *analyzer.SearchSpaceMetrics
+		if decEconJSON.HasDecisions {
+			healthJSON := analyzer.ComputeHealth(stats, rec)
+			noiseT := 0
+			if healthJSON != nil {
+				noiseT = healthJSON.NoiseTokens
+			}
+			ghostF := 0
+			if stats.GhostReport != nil {
+				ghostF = stats.GhostReport.TotalGhosts
+			}
+			ssMetrics = analyzer.ComputeSearchSpace(analyzer.SearchSpaceInput{
+				Decisions:        decEconJSON.TotalDecisions,
+				CompactionCount:  stats.CompactionCount,
+				SidechainGroups:  stats.SidechainGroups,
+				TangentEntries:   tangentResult.TotalEntries,
+				DistinctTools:    countDistinctTools(stats),
+				IntegrityBroken:  stats.Integrity != nil && !stats.Integrity.Healthy,
+				GhostFiles:       ghostF,
+				NoiseTokens:      noiseT,
+				MaxContextTokens: stats.MaxContextTokens,
+				StaleReads:       dupResult.TotalStale,
+			})
+		}
 		out := buildStatsOutput(sessionID, stats, rec, driftResult, statsOutputOpt{
 			duration:           duration,
 			costAlertThreshold: threshold,
 			decisionEconomics:  decEconJSON,
+			searchSpace:        ssMetrics,
 			vectorGauge:        gauge,
 			entropy:            &entropy,
 			cadence:            cadence,
@@ -398,6 +423,41 @@ func runStats(cmd *cobra.Command, args []string) error {
 			fmt.Println("  Warning: CDR > 35% — consider splitting session")
 		}
 		fmt.Println()
+	}
+
+	// Search space (experimental)
+	if decEcon.HasDecisions {
+		distinctTools := countDistinctTools(stats)
+		noiseTokens := 0
+		if health != nil {
+			noiseTokens = health.NoiseTokens
+		}
+		ghostFiles := 0
+		if stats.GhostReport != nil {
+			ghostFiles = stats.GhostReport.TotalGhosts
+		}
+		integrityBroken := stats.Integrity != nil && !stats.Integrity.Healthy
+		ss := analyzer.ComputeSearchSpace(analyzer.SearchSpaceInput{
+			Decisions:        decEcon.TotalDecisions,
+			CompactionCount:  stats.CompactionCount,
+			SidechainGroups:  stats.SidechainGroups,
+			TangentEntries:   tangentResult.TotalEntries,
+			DistinctTools:    distinctTools,
+			IntegrityBroken:  integrityBroken,
+			GhostFiles:       ghostFiles,
+			NoiseTokens:      noiseTokens,
+			MaxContextTokens: stats.MaxContextTokens,
+			StaleReads:       dupResult.TotalStale,
+		})
+		if ss != nil {
+			fmt.Println("Search space (experimental):")
+			fmt.Printf("  Estimated path probes:      ~%.0f\n", ss.EstimatedPathProbes)
+			fmt.Printf("  Surviving decisions:        %d\n", ss.Decisions)
+			fmt.Printf("  Exploration-to-commit:      %.1f:1\n", ss.ExplorationToCommitRatio)
+			fmt.Printf("  Branch factor:              %.1f   (%s)\n", ss.BranchFactor, ss.BranchLabel)
+			fmt.Printf("  Re-exploration multiplier:  %.1fx  (%s)\n", ss.ReexplorationMultiplier, ss.ReexplorationLabel)
+			fmt.Println()
+		}
 	}
 
 	// Session health vector
@@ -798,6 +858,19 @@ func invertDensity(density float64) int {
 		return 0
 	}
 	return int(1 / density)
+}
+
+// countDistinctTools counts unique tool names across all archaeology epochs.
+func countDistinctTools(stats *analyzer.ContextStats) int {
+	tools := map[string]struct{}{}
+	if stats.Archaeology != nil {
+		for _, event := range stats.Archaeology.Events {
+			for name := range event.Before.ToolCallCounts {
+				tools[name] = struct{}{}
+			}
+		}
+	}
+	return len(tools)
 }
 
 func init() {
