@@ -69,21 +69,51 @@ func runFix(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Apply repairs
+	// Apply repairs — loop until convergence because each fix can cascade
+	// (e.g., removing an orphan exposes an assistant chain start, removing
+	// that exposes another orphan).
 	fmt.Println()
+	const maxPasses = 20
+	totalRemoved := 0
+	totalImages := 0
+	totalChains := 0
+	totalIssues := len(diagnosis.Issues)
+
 	result, err := editor.Repair(path, diagnosis.Issues)
 	if err != nil {
 		return fmt.Errorf("repair: %w", err)
 	}
+	totalRemoved += result.EntriesRemoved
+	totalImages += result.ImagesReplaced
+	totalChains += result.ChainRepairs
+
+	for pass := 1; pass < maxPasses; pass++ {
+		entries, err = jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("reparse: %w", err)
+		}
+		diagnosis = analyzer.Diagnose(entries)
+		if len(diagnosis.Issues) == 0 {
+			break
+		}
+		totalIssues += len(diagnosis.Issues)
+		cascadeResult, err := editor.Repair(path, diagnosis.Issues)
+		if err != nil {
+			return fmt.Errorf("cascade repair: %w", err)
+		}
+		totalRemoved += cascadeResult.EntriesRemoved
+		totalImages += cascadeResult.ImagesReplaced
+		totalChains += cascadeResult.ChainRepairs
+	}
 
 	fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired\n",
-		result.EntriesRemoved, result.ImagesReplaced, result.ChainRepairs)
+		totalRemoved, totalImages, totalChains)
 	slog.Info("Session repaired",
 		"path", path,
-		"issues", len(diagnosis.Issues),
-		"removed", result.EntriesRemoved,
-		"images", result.ImagesReplaced,
-		"chains", result.ChainRepairs)
+		"issues", totalIssues,
+		"removed", totalRemoved,
+		"images", totalImages,
+		"chains", totalChains)
 
 	return nil
 }
