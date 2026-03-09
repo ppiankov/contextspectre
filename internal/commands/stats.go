@@ -651,6 +651,14 @@ func runStats(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  Overall drift: %.1f%% (%d/%d entries out of scope)\n",
 			driftResult.OverallDrift*100, driftResult.TotalOutScope,
 			driftResult.TotalInScope+driftResult.TotalOutScope)
+		// Show mixed-scope count if any epochs have mixed entries
+		totalMixed := 0
+		for _, es := range driftResult.EpochScopes {
+			totalMixed += es.MixedScope
+		}
+		if totalMixed > 0 {
+			fmt.Printf("  Mixed-scope entries: %d (proportionally attributed)\n", totalMixed)
+		}
 		fmt.Println()
 
 		// Per-epoch table
