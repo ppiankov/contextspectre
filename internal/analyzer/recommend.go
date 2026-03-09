@@ -1,30 +1,122 @@
 package analyzer
 
-import "sort"
+import (
+	"sort"
+
+	"github.com/ppiankov/contextspectre/internal/jsonl"
+)
 
 // CleanupItem represents a single category of cleanable content.
 type CleanupItem struct {
 	Category    string // "progress", "snapshots", "stale_reads", "images", "large_outputs", "failed_retries", "sidechains", "tangents"
 	Label       string // human-readable: "Progress messages"
 	Count       int    // items affected
-	TokensSaved int    // estimated tokens recoverable
+	TokensSaved int    // estimated tokens recoverable (per-category, may overlap with other categories)
 	TurnsGained int    // TokensSaved / TokenGrowthRate
 }
 
 // CleanupRecommendation aggregates all cleanable categories into a ranked list.
 type CleanupRecommendation struct {
 	Items            []CleanupItem // sorted by TokensSaved descending
-	TotalTokens      int
+	TotalTokens      int           // union-deduped total (entries counted once even if in multiple categories)
 	TotalTurnsGained int
+	OverlapTokens    int // sum(per-category) - TotalTokens; nonzero means entries were in multiple categories
 	CurrentPercent   float64
 	ProjectedPercent float64 // context usage after cleanup
 }
 
+// NoiseLedger tracks per-entry category membership for union-based deduplication.
+type NoiseLedger struct {
+	PerCategory   map[string]int // category -> sum of tokens (pre-union, for display)
+	OverlapTokens int            // sum(PerCategory) - UnionTokens
+	UnionTokens   int            // tokens counted from union(all entry indices)
+}
+
+// BuildNoiseLedger computes union-deduplicated noise totals from the four indexed
+// noise categories (stale_reads, failed_retries, tangents, sidechains).
+// An entry that appears in multiple categories is counted once in the union.
+func BuildNoiseLedger(
+	entries []jsonl.Entry,
+	dupResult *DuplicateReadResult,
+	retryResult *RetryResult,
+	tangentResult *TangentResult,
+	sidechainReport *SidechainReport,
+) *NoiseLedger {
+	ledger := &NoiseLedger{PerCategory: make(map[string]int)}
+	seenUnion := make(map[int]int) // entryIdx -> rawTokens
+
+	tag := func(idx int, cat string) {
+		if idx < 0 || idx >= len(entries) {
+			return
+		}
+		rawTokens := entries[idx].RawSize / 4
+		ledger.PerCategory[cat] += rawTokens
+		if _, ok := seenUnion[idx]; !ok {
+			seenUnion[idx] = rawTokens
+		}
+	}
+
+	if dupResult != nil {
+		for _, g := range dupResult.Groups {
+			for _, sr := range g.StaleReads {
+				tag(sr.AssistantIdx, "stale_reads")
+				if sr.ResultIdx >= 0 {
+					tag(sr.ResultIdx, "stale_reads")
+				}
+			}
+		}
+	}
+
+	if retryResult != nil {
+		for _, s := range retryResult.Sequences {
+			tag(s.FailedToolUseIdx, "failed_retries")
+			if s.FailedResultIdx >= 0 {
+				tag(s.FailedResultIdx, "failed_retries")
+			}
+		}
+	}
+
+	if tangentResult != nil {
+		for _, g := range tangentResult.Groups {
+			for _, idx := range g.EntryIndices {
+				tag(idx, "tangents")
+			}
+		}
+	}
+
+	if sidechainReport != nil {
+		for _, e := range sidechainReport.Entries {
+			tag(e.EntryIndex, "sidechains")
+		}
+	}
+
+	for _, rawTokens := range seenUnion {
+		ledger.UnionTokens += rawTokens
+	}
+
+	catSum := 0
+	for _, v := range ledger.PerCategory {
+		catSum += v
+	}
+	ledger.OverlapTokens = catSum - ledger.UnionTokens
+
+	return ledger
+}
+
 // Recommend builds a ranked cleanup recommendation from existing analysis data.
-func Recommend(stats *ContextStats, dupResult *DuplicateReadResult, retryResult *RetryResult, tangentResult *TangentResult) *CleanupRecommendation {
+// The four indexed categories (stale_reads, failed_retries, tangents, sidechains)
+// are union-deduplicated so entries counted in multiple categories don't inflate totals.
+func Recommend(
+	entries []jsonl.Entry,
+	stats *ContextStats,
+	dupResult *DuplicateReadResult,
+	retryResult *RetryResult,
+	tangentResult *TangentResult,
+	sidechainReport *SidechainReport,
+) *CleanupRecommendation {
 	var items []CleanupItem
 
-	// Progress messages
+	// Progress messages (not entry-indexed — no overlap with indexed categories)
 	if stats.ProgressCount > 0 {
 		items = append(items, CleanupItem{
 			Category:    "progress",
@@ -34,7 +126,7 @@ func Recommend(stats *ContextStats, dupResult *DuplicateReadResult, retryResult 
 		})
 	}
 
-	// File-history snapshots
+	// File-history snapshots (not entry-indexed)
 	if stats.SnapshotCount > 0 {
 		items = append(items, CleanupItem{
 			Category:    "snapshots",
@@ -54,7 +146,7 @@ func Recommend(stats *ContextStats, dupResult *DuplicateReadResult, retryResult 
 		})
 	}
 
-	// Images
+	// Images (not entry-indexed)
 	if stats.ImageCount > 0 {
 		items = append(items, CleanupItem{
 			Category:    "images",
@@ -64,7 +156,7 @@ func Recommend(stats *ContextStats, dupResult *DuplicateReadResult, retryResult 
 		})
 	}
 
-	// Large Bash outputs
+	// Large Bash outputs (not entry-indexed)
 	if stats.LargeOutputCount > 0 {
 		items = append(items, CleanupItem{
 			Category:    "large_outputs",
@@ -120,13 +212,27 @@ func Recommend(stats *ContextStats, dupResult *DuplicateReadResult, retryResult 
 		return items[i].TokensSaved > items[j].TokensSaved
 	})
 
+	// Build noise ledger for union deduplication of indexed categories.
+	ledger := BuildNoiseLedger(entries, dupResult, retryResult, tangentResult, sidechainReport)
+
+	// Non-indexed category tokens (progress, snapshots, images, large_outputs)
+	// These are different entry types and don't overlap with indexed categories.
+	nonIndexedTokens := 0
+	for _, item := range items {
+		switch item.Category {
+		case "progress", "snapshots", "images", "large_outputs":
+			nonIndexedTokens += item.TokensSaved
+		}
+	}
+
 	rec := &CleanupRecommendation{
 		Items:          items,
+		TotalTokens:    ledger.UnionTokens + nonIndexedTokens,
+		OverlapTokens:  ledger.OverlapTokens,
 		CurrentPercent: stats.UsagePercent,
 	}
 
 	for _, item := range items {
-		rec.TotalTokens += item.TokensSaved
 		rec.TotalTurnsGained += item.TurnsGained
 	}
 
