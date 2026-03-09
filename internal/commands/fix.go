@@ -73,7 +73,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	// (e.g., removing an orphan exposes an assistant chain start, removing
 	// that exposes another orphan).
 	fmt.Println()
-	const maxPasses = 20
+	const maxPasses = 50
 	totalRemoved := 0
 	totalImages := 0
 	totalChains := 0
