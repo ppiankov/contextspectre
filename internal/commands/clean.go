@@ -118,7 +118,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	if cleanAll {
-		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
+		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone || autoTombstone(path)})
 		if err != nil {
 			return fmt.Errorf("clean all: %w", err)
 		}
@@ -334,7 +334,7 @@ func runCleanAuto() error {
 		printSessionIdentity(path)
 	}
 
-	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
+	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone || autoTombstone(path)})
 	if err != nil {
 		return fmt.Errorf("clean auto: %w", err)
 	}
@@ -752,7 +752,7 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 
 	for _, s := range active {
 		path := s.FullPath
-		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
+		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone || autoTombstone(path)})
 		if err != nil {
 			slog.Warn("Failed to clean session", "session", s.SessionID, "error", err)
 			continue

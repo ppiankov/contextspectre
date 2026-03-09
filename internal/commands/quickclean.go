@@ -100,7 +100,7 @@ func runQuickClean(cmd *cobra.Command, args []string) error {
 }
 
 func runQuickCleanAll(path string, target session.Info) error {
-	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: quickCleanTombstone})
+	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: quickCleanTombstone || autoTombstone(path)})
 	if err != nil {
 		return fmt.Errorf("quick-clean: %w", err)
 	}

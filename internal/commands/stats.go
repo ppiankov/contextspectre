@@ -826,6 +826,19 @@ func resolveSessionArg(args []string, useCWD bool) (string, error) {
 	return "", fmt.Errorf("provide a session ID or use --cwd")
 }
 
+// autoTombstone returns true if the session is a Claude for Mac (desktop) session.
+// Desktop sessions preserve scroll-back, so tombstone mode should be the default.
+func autoTombstone(path string) bool {
+	stats, err := jsonl.ScanLight(path)
+	if err != nil {
+		return false
+	}
+	// Same heuristic as session.quickStatsFromLight:
+	// CLI sessions have file-history-snapshot entries, desktop sessions don't.
+	hasSnapshots := stats.TypeCounts[jsonl.TypeFileHistorySnapshot] > 0
+	return !hasSnapshots && stats.LineCount > 100
+}
+
 func formatTokens(n int) string {
 	if n >= 1000000 {
 		return fmt.Sprintf("%.1fM", float64(n)/1000000)
