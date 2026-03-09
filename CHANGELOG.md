@@ -2,6 +2,71 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.5] - 2026-03-09
+
+### Added
+
+- Tombstone mode (`--tombstone`) for fix, clean --all, and quick-clean — replaces orphaned entries with text placeholders instead of deleting, preserving scroll-back in Claude for Mac
+- Client type indicator in TUI sessions list (C for CLI, M for Mac, ? for unknown)
+- Orphan cascade in clean --all — single-pass convergence loop resolves orphaned tool_results created by tangent removal
+
+### Fixed
+
+- Chain repair infinite loop for consecutive assistant entries at chain start
+- Fix --apply convergence loop increased to 50 passes for deeply cascading sessions
+
+## [0.38.0] - 2026-03-08
+
+### Added
+
+- Noise multiplier metric in stats and status line
+- Snowball re-reads in watch cumulative line and summary
+- Estimated path probes search space metric
+- Mixed-scope drift with dynamic CWD and proportional attribution
+- State-aware rereads and input-aware retry signatures
+- Union-based noise ledger eliminates double-counting in recommendations
+
+## [0.37.0] - 2026-03-07
+
+### Added
+
+- Snowball effect in watch summary (tokens removed + re-reads avoided)
+- Search space metric (estimated path probes)
+
+## [0.36.0] - 2026-03-07
+
+### Added
+
+- Vector injection detection (`injection --cwd`) with risk scoring
+- Signal-first status line layout
+- Bond command for cross-project relationships (`bond`, `bond verify`)
+
+## [0.35.0] - 2026-03-06
+
+### Added
+
+- Productivity command for throughput metrics (cost/commit, commits/hour)
+- Reasoning diff command for epoch state comparison
+- Flight recorder command for structured reasoning event timeline
+- Repo efficiency command for reasoning-to-code yield (tokens/LOC)
+- Reasoning half-life command
+- Repo budget command for project-level token economics
+
+## [0.34.0] - 2026-03-06
+
+### Added
+
+- Decision lineage command for cross-session file and decision tracing
+- Session integrity guard with chain health detection
+- Input purity score (0-100 metric for pre-context signal cleanness)
+- Chain integrity indicator in summary and TUI
+- Status line color-coded indicators and IPS integration
+
+### Fixed
+
+- Status/summary defaults to CWD auto-detection with no args
+- Exclude native tool results from IPS compressibility
+
 ## [0.33.2] - 2026-03-05
 
 ### Fixed
