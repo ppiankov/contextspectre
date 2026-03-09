@@ -10,11 +10,12 @@ import (
 
 // TangentGroup represents a contiguous block of entries referencing external repos.
 type TangentGroup struct {
-	StartIndex      int      // first entry in the tangent
-	EndIndex        int      // last entry in the tangent (inclusive)
-	EntryIndices    []int    // all entry indices in this tangent
-	ExternalPaths   []string // unique external paths referenced
-	EstimatedTokens int      // total tokens across tangent entries
+	StartIndex        int      // first entry in the tangent
+	EndIndex          int      // last entry in the tangent (inclusive)
+	EntryIndices      []int    // all entry indices in this tangent
+	ExternalPaths     []string // unique external paths referenced
+	EstimatedTokens   int      // total tokens across tangent entries
+	MixedScopeEntries int      // entries referencing both CWD and external paths
 }
 
 // TangentResult summarizes all detected cross-repo tangents in a session.
@@ -39,34 +40,43 @@ func (r *TangentResult) AllTangentIndices() map[int]bool {
 
 // entryInfo holds path-analysis metadata for a single entry.
 type entryInfo struct {
-	externalPaths []string // paths outside CWD
-	modifiesCWD   bool     // writes/edits files inside CWD
-	refsExternal  bool     // references any external path
-	refsCWD       bool     // references any CWD path
+	externalPaths     []string // paths outside CWD
+	modifiesCWD       bool     // writes/edits files inside CWD
+	refsExternal      bool     // references any external path
+	refsCWD           bool     // references any CWD path
+	cwdPathCount      int      // number of CWD path refs
+	externalPathCount int      // number of external path refs
 }
 
 // FindTangents detects cross-repo tangent sequences in a session.
 // A tangent is a contiguous block of entries where tool_use inputs reference
 // paths outside the session's CWD AND no file modifications occur in the CWD.
-// Only flags tangents where external paths are explicitly present — no semantic analysis.
+// Mixed-scope entries (referencing both CWD and external) are included at
+// proportional token cost rather than terminating the tangent.
 func FindTangents(entries []jsonl.Entry) *TangentResult {
 	result := &TangentResult{}
 
-	cwd := DetectSessionCWD(entries)
-	if cwd == "" {
+	initialCWD := DetectSessionCWD(entries)
+	if initialCWD == "" {
 		return result
 	}
-	result.SessionCWD = cwd
+	result.SessionCWD = initialCWD
+
+	// Build dynamic CWD map
+	cwds := buildActiveCWDMap(entries, initialCWD)
 
 	infos := make([]entryInfo, len(entries))
 	for i, e := range entries {
+		cwd := cwds[i]
 		paths, tools := extractAllPaths(e)
 		for j, p := range paths {
 			if isOutsideCWD(p, cwd) {
 				infos[i].externalPaths = append(infos[i].externalPaths, p)
 				infos[i].refsExternal = true
+				infos[i].externalPathCount++
 			} else {
 				infos[i].refsCWD = true
+				infos[i].cwdPathCount++
 			}
 			// Check if this is a file-modifying tool
 			if j < len(tools) && isModifyingTool(tools[j]) && !isOutsideCWD(p, cwd) {
@@ -76,11 +86,16 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 	}
 
 	// Find contiguous blocks where entries reference external paths
-	// and do NOT modify CWD files
 	i := 0
 	for i < len(entries) {
-		// Skip entries that reference CWD or are non-conversational
-		if !infos[i].refsExternal || infos[i].refsCWD || infos[i].modifiesCWD {
+		info := infos[i]
+		// Start of tangent requires purely external entry (not mixed, not CWD-only)
+		if !info.refsExternal || info.modifiesCWD {
+			i++
+			continue
+		}
+		if info.refsCWD {
+			// Mixed at start — don't start tangent here
 			i++
 			continue
 		}
@@ -89,15 +104,34 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 		start := i
 		externalPathSet := make(map[string]bool)
 		totalTokens := 0
+		mixedCount := 0
 
 		// Expand forward: include entries that are part of this tangent block
 		for i < len(entries) {
 			e := entries[i]
 			info := infos[i]
 
-			// Stop if entry references CWD or modifies CWD
-			if info.refsCWD || info.modifiesCWD {
+			// CWD modification always terminates
+			if info.modifiesCWD {
 				break
+			}
+
+			// Pure CWD reference (no external) terminates
+			if info.refsCWD && !info.refsExternal {
+				break
+			}
+
+			// Mixed scope: include at proportional token cost
+			if info.refsCWD && info.refsExternal {
+				for _, p := range info.externalPaths {
+					externalPathSet[p] = true
+				}
+				total := info.cwdPathCount + info.externalPathCount
+				ratio := float64(info.externalPathCount) / float64(total)
+				totalTokens += int(float64(e.RawSize/4) * ratio)
+				mixedCount++
+				i++
+				continue
 			}
 
 			// Include if entry references external paths
@@ -118,8 +152,6 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 			}
 
 			// Conversational entry with no path refs: could be part of the tangent
-			// (e.g., assistant text response to external question)
-			// Include if it's between two external-referencing entries
 			if isResponseToTangent(entries, infos, i, start) {
 				totalTokens += e.RawSize / 4
 				i++
@@ -148,11 +180,12 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 			}
 
 			group := TangentGroup{
-				StartIndex:      start,
-				EndIndex:        end,
-				EntryIndices:    indices,
-				ExternalPaths:   uniquePaths,
-				EstimatedTokens: totalTokens,
+				StartIndex:        start,
+				EndIndex:          end,
+				EntryIndices:      indices,
+				ExternalPaths:     uniquePaths,
+				EstimatedTokens:   totalTokens,
+				MixedScopeEntries: mixedCount,
 			}
 
 			result.Groups = append(result.Groups, group)
@@ -161,11 +194,12 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 		}
 	}
 
-	// Count unique external root directories
+	// Count unique external root directories using per-entry CWDs
 	extDirs := make(map[string]bool)
 	for _, g := range result.Groups {
 		for _, p := range g.ExternalPaths {
-			extDirs[externalRootDir(p, cwd)] = true
+			// Use initial CWD for root dir computation (stable reference)
+			extDirs[externalRootDir(p, initialCWD)] = true
 		}
 	}
 	result.ExternalDirs = len(extDirs)

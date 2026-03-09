@@ -335,6 +335,7 @@ type EpochScopeJSON struct {
 	EpochIndex     int            `json:"epoch_index"`
 	InScope        int            `json:"in_scope"`
 	OutScope       int            `json:"out_scope"`
+	MixedScope     int            `json:"mixed_scope,omitempty"`
 	OutScopeByRepo map[string]int `json:"out_scope_by_repo,omitempty"`
 	DriftRatio     float64        `json:"drift_ratio"`
 	DriftCost      float64        `json:"drift_cost"`
@@ -787,6 +788,7 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 				EpochIndex:     es.EpochIndex,
 				InScope:        es.InScope,
 				OutScope:       es.OutScope,
+				MixedScope:     es.MixedScope,
 				OutScopeByRepo: repos,
 				DriftRatio:     es.DriftRatio,
 				DriftCost:      es.DriftCost,

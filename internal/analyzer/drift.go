@@ -1,6 +1,7 @@
 package analyzer
 
 import (
+	"math"
 	"path/filepath"
 	"sort"
 
@@ -22,6 +23,7 @@ type EpochScope struct {
 	EpochIndex     int
 	InScope        int            // entries with CWD path refs
 	OutScope       int            // entries with external path refs
+	MixedScope     int            // entries referencing both CWD and external paths
 	OutScopeByRepo map[string]int // external repo root -> count
 	DriftRatio     float64
 	DriftCost      float64 // dollar cost of out-of-scope assistant turns
@@ -40,9 +42,11 @@ type TangentSequence struct {
 
 // entryScopeInfo holds scope classification for a single entry.
 type entryScopeInfo struct {
-	hasExternal   bool
-	hasCWD        bool
-	externalRepos map[string]bool // external repo root paths
+	hasExternal       bool
+	hasCWD            bool
+	externalRepos     map[string]bool // external repo root paths
+	cwdPathCount      int
+	externalPathCount int
 }
 
 // AnalyzeScopeDrift performs per-epoch scope analysis and tangent sequence detection.
@@ -58,8 +62,11 @@ func AnalyzeScopeDrift(entries []jsonl.Entry, compactions []CompactionEvent, cwd
 	}
 	result.SessionProject = cwd
 
-	// Build per-entry scope info
-	infos := classifyEntryScopes(entries, cwd)
+	// Build dynamic CWD map — tracks CWD changes through the session
+	cwds := buildActiveCWDMap(entries, cwd)
+
+	// Build per-entry scope info using per-entry CWDs
+	infos := classifyEntryScopes(entries, cwds)
 
 	// Detect model for cost computation
 	model := detectModel(entries)
@@ -84,9 +91,33 @@ func AnalyzeScopeDrift(entries []jsonl.Entry, compactions []CompactionEvent, cwd
 	}
 
 	// Detect tangent sequences
-	result.TangentSeqs = detectTangentSequences(entries, infos, cwd, model)
+	result.TangentSeqs = detectTangentSequences(entries, infos, cwds, model)
 
 	return result
+}
+
+// buildActiveCWDMap returns a per-entry CWD slice. Each entry's active CWD
+// is the most recent non-empty CWD seen up to that point.
+func buildActiveCWDMap(entries []jsonl.Entry, initialCWD string) []string {
+	cwds := make([]string, len(entries))
+	active := initialCWD
+	for i, e := range entries {
+		if e.CWD != "" {
+			active = e.CWD
+		}
+		cwds[i] = active
+	}
+	return cwds
+}
+
+// pathMixRatio returns the fraction of external paths for a mixed-scope entry.
+// Returns 0 if the entry has no paths.
+func pathMixRatio(info entryScopeInfo) float64 {
+	total := info.cwdPathCount + info.externalPathCount
+	if total == 0 {
+		return 0
+	}
+	return float64(info.externalPathCount) / float64(total)
 }
 
 // DriftIndices returns all entry indices flagged as out-of-scope.
@@ -120,19 +151,25 @@ func (d *ScopeDrift) DriftRepoForIndex(idx int) string {
 	return ""
 }
 
-// classifyEntryScopes builds scope classification for each entry.
-func classifyEntryScopes(entries []jsonl.Entry, cwd string) []entryScopeInfo {
+// classifyEntryScopes builds scope classification for each entry using per-entry CWDs.
+func classifyEntryScopes(entries []jsonl.Entry, cwds []string) []entryScopeInfo {
 	infos := make([]entryScopeInfo, len(entries))
 	for i, e := range entries {
+		cwd := cwds[i]
+		if cwd == "" {
+			continue
+		}
 		paths, _ := extractAllPaths(e)
 		repos := make(map[string]bool)
 		for _, p := range paths {
 			if isOutsideCWD(p, cwd) {
 				infos[i].hasExternal = true
+				infos[i].externalPathCount++
 				root := externalRootDir(p, cwd)
 				repos[root] = true
 			} else {
 				infos[i].hasCWD = true
+				infos[i].cwdPathCount++
 			}
 		}
 		if len(repos) > 0 {
@@ -171,6 +208,7 @@ func computeEpochScopes(entries []jsonl.Entry, infos []entryScopeInfo, boundarie
 			OutScopeByRepo: make(map[string]int),
 		}
 		var driftCost float64
+		var inScopeAcc, outScopeAcc float64
 
 		for i := r.start; i < r.end; i++ {
 			info := infos[i]
@@ -179,15 +217,33 @@ func computeEpochScopes(entries []jsonl.Entry, infos []entryScopeInfo, boundarie
 				continue
 			}
 
-			// Mixed refs (both CWD and external) count as in-scope
-			if info.hasCWD {
-				es.InScope++
-			} else if info.hasExternal {
-				es.OutScope++
+			if info.hasCWD && info.hasExternal {
+				// Mixed scope: proportional attribution
+				ratio := pathMixRatio(info)
+				inScopeAcc += 1.0 - ratio
+				outScopeAcc += ratio
+				es.MixedScope++
 				for repo := range info.externalRepos {
 					es.OutScopeByRepo[repo]++
 				}
-				// Attribute assistant turn cost to drift
+				// Attribute proportional cost for mixed entries
+				e := entries[i]
+				if e.Type == jsonl.TypeAssistant && e.Message != nil && e.Message.Usage != nil {
+					u := e.Message.Usage
+					cost := float64(u.InputTokens)/1_000_000*pricing.InputPerMillion +
+						float64(u.OutputTokens)/1_000_000*pricing.OutputPerMillion +
+						float64(u.CacheCreationInputTokens)/1_000_000*pricing.CacheWritePerMillion +
+						float64(u.CacheReadInputTokens)/1_000_000*pricing.CacheReadPerMillion
+					driftCost += cost * ratio
+				}
+			} else if info.hasCWD {
+				inScopeAcc += 1.0
+			} else if info.hasExternal {
+				outScopeAcc += 1.0
+				for repo := range info.externalRepos {
+					es.OutScopeByRepo[repo]++
+				}
+				// Attribute full cost for purely out-of-scope entries
 				e := entries[i]
 				if e.Type == jsonl.TypeAssistant && e.Message != nil && e.Message.Usage != nil {
 					u := e.Message.Usage
@@ -199,6 +255,9 @@ func computeEpochScopes(entries []jsonl.Entry, infos []entryScopeInfo, boundarie
 				}
 			}
 		}
+
+		es.InScope = int(math.Round(inScopeAcc))
+		es.OutScope = int(math.Round(outScopeAcc))
 
 		total := es.InScope + es.OutScope
 		if total > 0 {
@@ -214,13 +273,14 @@ func computeEpochScopes(entries []jsonl.Entry, infos []entryScopeInfo, boundarie
 
 // detectTangentSequences finds contiguous blocks of entries primarily about other projects.
 // Similar to FindTangents but adds cost attribution and re-explanation file detection.
-func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwd, model string) []TangentSequence {
+// Uses per-entry CWDs for dynamic root tracking.
+func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwds []string, model string) []TangentSequence {
 	pricing := PricingForModel(model)
 
-	// Reuse the tangent detection infrastructure from tangents.go
 	// Build entryInfo for tangent detection
 	tangentInfos := make([]entryInfo, len(entries))
 	for i := range entries {
+		cwd := cwds[i]
 		if infos[i].hasExternal {
 			tangentInfos[i].refsExternal = true
 			for repo := range infos[i].externalRepos {
@@ -243,10 +303,18 @@ func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwd, 
 
 	i := 0
 	for i < len(entries) {
-		// Skip entries that reference CWD or are non-external
-		if !tangentInfos[i].refsExternal || tangentInfos[i].refsCWD || tangentInfos[i].modifiesCWD {
-			i++
-			continue
+		info := tangentInfos[i]
+		// Start of tangent requires purely external (not mixed)
+		if !info.refsExternal || (info.refsCWD && !info.refsExternal) || info.modifiesCWD {
+			if !info.refsExternal || info.modifiesCWD {
+				i++
+				continue
+			}
+			// Mixed scope at start — don't start tangent
+			if info.refsCWD {
+				i++
+				continue
+			}
 		}
 
 		// Found start of potential tangent sequence
@@ -259,8 +327,36 @@ func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwd, 
 		for i < len(entries) {
 			info := tangentInfos[i]
 
-			if info.refsCWD || info.modifiesCWD {
+			// CWD modification always breaks a tangent
+			if info.modifiesCWD {
 				break
+			}
+
+			// Pure CWD reference (no external) breaks the tangent
+			if info.refsCWD && !info.refsExternal {
+				break
+			}
+
+			// Mixed scope: include at proportional token cost
+			if info.refsCWD && info.refsExternal {
+				ratio := pathMixRatio(infos[i])
+				for repo := range infos[i].externalRepos {
+					repoCount[repo]++
+				}
+				totalTokens += int(float64(entries[i].RawSize/4) * ratio)
+				indices = append(indices, i)
+
+				e := entries[i]
+				if e.Type == jsonl.TypeAssistant && e.Message != nil && e.Message.Usage != nil {
+					u := e.Message.Usage
+					cost := float64(u.InputTokens)/1_000_000*pricing.InputPerMillion +
+						float64(u.OutputTokens)/1_000_000*pricing.OutputPerMillion +
+						float64(u.CacheCreationInputTokens)/1_000_000*pricing.CacheWritePerMillion +
+						float64(u.CacheReadInputTokens)/1_000_000*pricing.CacheReadPerMillion
+					dollarCost += cost * ratio
+				}
+				i++
+				continue
 			}
 
 			if info.refsExternal {
@@ -321,8 +417,9 @@ func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwd, 
 		// Determine dominant repo
 		targetRepo := dominantRepo(repoCount)
 
-		// Detect re-explanation files: CWD files read in first 5 entries after tangent
-		reExplFiles := detectReExplanationFiles(entries, end+1, cwd)
+		// Detect re-explanation files using the active CWD at the end of the tangent
+		activeCWD := cwds[end]
+		reExplFiles := detectReExplanationFiles(entries, end+1, activeCWD)
 
 		sequences = append(sequences, TangentSequence{
 			StartIdx:           start,
