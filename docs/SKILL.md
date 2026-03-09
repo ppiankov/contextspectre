@@ -1,6 +1,8 @@
 # contextspectre
 
-Claude Code conversation context manager. Shows context usage, predicts compaction, and enables selective cleanup to extend conversation lifespan.
+Reasoning hygiene layer for Claude Code. Shows context usage, predicts compaction, and enables selective cleanup to extend conversation lifespan.
+
+Follows the [Agent-Native CLI Convention](https://ancc.dev).
 
 ## Install
 
@@ -135,6 +137,7 @@ contextspectre clean abc123 --tangents
 - `--failed-retries` — remove failed tool attempts that were retried
 - `--sidechains` — remove sidechain entries
 - `--tangents` — remove cross-repo tangent sequences
+- `--tombstone` — replace orphaned entries with placeholders instead of deleting (preserves Claude for Mac scroll-back)
 - `--format json`
 
 **JSON schema (--all):**
@@ -160,6 +163,59 @@ contextspectre clean abc123 --tangents
 
 **Exit codes:** 0 success, 1 error, 2 session active (read-only)
 
+### `contextspectre quick-clean`
+
+Find and clean the most recent session. No session ID needed.
+
+```bash
+# Full cleanup on most recent session
+contextspectre quick-clean
+
+# Live cleanup on active session (Tier 1-3, safe between turns)
+contextspectre quick-clean --live
+
+# Aggressive live cleanup (Tier 1-5)
+contextspectre quick-clean --live --aggressive
+
+# Scoped to current directory
+contextspectre quick-clean --cwd
+
+# Tombstone mode (preserves Mac scroll-back)
+contextspectre quick-clean --tombstone
+```
+
+**Flags:**
+- `--live` — safe cleanup for active sessions (Tier 1-3)
+- `--aggressive` — include Tier 4-5 (requires --live)
+- `--cwd` — scope to current directory's project
+- `--project <name>` — scope to a specific project
+- `--tombstone` — replace orphaned entries with placeholders instead of deleting
+- `--format json`
+
+**Exit codes:** 0 success, 1 error
+
+### `contextspectre fix <session-id-or-path>`
+
+Diagnose and repair session problems (filter blocks, orphaned results, chain breaks).
+
+```bash
+# Dry run (report only)
+contextspectre fix abc123
+
+# Apply repairs
+contextspectre fix abc123 --apply
+
+# Apply with tombstone mode (replace orphans with placeholders)
+contextspectre fix abc123 --apply --tombstone
+```
+
+**Flags:**
+- `--apply` — apply repairs (default: dry-run)
+- `--cwd` — use most recent session for current directory
+- `--tombstone` — replace orphaned entries with placeholders instead of deleting
+
+**Exit codes:** 0 success (or no issues), 1 error
+
 ### `contextspectre doctor`
 
 Check tool health and environment.
@@ -181,6 +237,24 @@ Print version information.
 - Does not provide real-time monitoring — point-in-time analysis
 - Does not connect to any cloud service — fully local, no network access
 - Does not auto-clean — always shows what would change, requires explicit flags
+
+### `contextspectre stats <session-id-or-path> --health`
+
+Show vector gauge health state (stable/degrading/unstable/emergency).
+
+```bash
+contextspectre stats abc123 --health --format json
+```
+
+### `contextspectre injection --cwd`
+
+Detect vector injection patterns in session content.
+
+```bash
+contextspectre injection --cwd --format json
+```
+
+**Exit codes:** 0 clean, 1 error, 2 findings detected
 
 ## Agent Workflow Examples
 

@@ -3,6 +3,7 @@
 [![CI](https://github.com/ppiankov/contextspectre/actions/workflows/ci.yml/badge.svg)](https://github.com/ppiankov/contextspectre/actions/workflows/ci.yml)
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![ANCC](https://img.shields.io/badge/ANCC-agent--native-blue)](https://ancc.dev)
 
 Reasoning hygiene layer for Claude Code. Not a cleanup utility - a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
@@ -46,10 +47,11 @@ ContextSpectre reads Claude Code's local JSONL session files - from both Claude 
 - Live session cleanup with mtime-based race detection
 - Predictive cleanup with turn-gain estimates
 - Savings attribution with lifetime tracking and projected gains
+- Tombstone mode (`--tombstone`) for Mac-friendly cleanup that preserves scroll-back continuity
 - Mandatory backup with one-key undo
 
 **Navigation**
-- Session browser with responsive columns, sort cycling, and 3 width breakpoints
+- Session browser with responsive columns, client type indicators (CLI/Mac), sort cycling, and 3 width breakpoints
 - Tabbed detail view (Overview, Messages, Cleanup, Ghost panels)
 - Vim-style navigation (G, gg, Ctrl+d/u/f/b, Space, H/M/L) across all panels
 - In-panel search (`/`) with match cycling (n/N) and highlight
