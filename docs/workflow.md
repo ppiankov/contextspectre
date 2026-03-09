@@ -97,6 +97,24 @@ This is a known Claude Code bug ([anthropics/claude-code#31328](https://github.c
 
 **When it happens.** The corruption pattern is specific: 3+ concurrent subagents writing to the same JSONL file. The risk increases with heavy parallel tool use (e.g., multiple file reads or shell commands running simultaneously). Single-agent sessions are not affected.
 
+**Symptom: stuck in compaction.** A session that keeps triggering compaction despite low context usage often has a broken chain. The API cannot parse the malformed chain, retries, and triggers compaction again in a loop. The session appears alive but unproductive. Cleaning noise first, then repairing the chain, breaks the cycle:
+
+```
+contextspectre clean 801ae35a --all
+Cleaned: 6400 tangent, 55 stale, 13 chain, 8 retry, 5 img, 1 trunc
+Total saved: ~15.5M tokens, 59.0 MB
+
+contextspectre fix 801ae35a --apply
+Found 4 issue(s):
+  [orphan]  line 115: tool_result references missing tool_use
+  [orphan]  line 807: tool_result references missing tool_use
+  [chain]   line 1498: parent UUID not found
+  [chain]   line 1498: active chain starts with assistant message
+Repaired: 3 entries removed, 2 chains repaired
+```
+
+After clean + fix, the session stabilized. The order matters: clean first to reduce file size, then fix to repair the chain structure.
+
 ## Recommended: continuous cleanup in a side terminal
 
 The highest-leverage operating pattern for long sessions:
