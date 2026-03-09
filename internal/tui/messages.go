@@ -896,10 +896,10 @@ func (m messagesModel) cleanAll() (messagesModel, tea.Cmd) {
 		m.statusMsg = fmt.Sprintf("Error: %v", err)
 		return m, nil
 	}
-	m.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d chain, %d tang, %d retry, %d stale, %d img, %d sep, %d trunc — saved ~%d tokens",
+	m.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d chain, %d tang, %d retry, %d stale, %d orphan, %d img, %d sep, %d trunc — saved ~%d tokens",
 		result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
 		result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,
-		result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated,
+		result.OrphansRemoved, result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated,
 		result.TotalTokensSaved)
 	return m.reload(), nil
 }

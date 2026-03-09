@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 )
 
@@ -47,6 +48,78 @@ func TestCleanAll_Basic(t *testing.T) {
 		}
 		if e.Type == jsonl.TypeFileHistorySnapshot {
 			t.Error("expected no snapshot entries after clean all")
+		}
+	}
+}
+
+func TestCleanAll_OrphanCascade(t *testing.T) {
+	path := copyFixture(t, "orphan_cascade.jsonl")
+
+	result, err := CleanAll(path)
+	if err != nil {
+		t.Fatalf("clean all: %v", err)
+	}
+
+	// Tangent entries should have been removed
+	if result.TangentsRemoved == 0 {
+		t.Error("expected tangent entries to be removed")
+	}
+
+	// After clean, fix --apply should find NO issues (the core WO-113 guarantee)
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	diagnosis := analyzer.Diagnose(entries)
+	if len(diagnosis.Issues) > 0 {
+		for _, issue := range diagnosis.Issues {
+			t.Errorf("unexpected issue after clean: [%s] line %d: %s",
+				issue.Kind, entries[issue.EntryIndex].LineNumber, issue.Description)
+		}
+	}
+
+	// Chain should be healthy
+	integrity := analyzer.CheckIntegrity(entries)
+	if !integrity.Healthy {
+		t.Errorf("chain unhealthy after clean: %d issues", len(integrity.Issues))
+	}
+}
+
+func TestCleanAll_NoOrphansAfterTangentRemoval(t *testing.T) {
+	path := copyFixture(t, "tangent_session.jsonl")
+
+	_, err := CleanAll(path)
+	if err != nil {
+		t.Fatalf("clean all: %v", err)
+	}
+
+	// Verify: no orphaned tool_results remain
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+
+	// Build tool_use ID set
+	toolUseIDs := make(map[string]bool)
+	for _, e := range entries {
+		for _, id := range e.ToolUseIDs() {
+			toolUseIDs[id] = true
+		}
+	}
+
+	// Check for orphaned tool_results
+	for _, e := range entries {
+		if e.Type != jsonl.TypeUser || e.Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "tool_result" && b.ToolUseID != "" && !toolUseIDs[b.ToolUseID] {
+				t.Errorf("orphaned tool_result referencing %s in entry %s", b.ToolUseID, e.UUID)
+			}
 		}
 	}
 }

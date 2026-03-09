@@ -124,10 +124,10 @@ func runClean(cmd *cobra.Command, args []string) error {
 		if isJSON() {
 			return printJSON(cleanAllToJSON(path, result))
 		}
-		fmt.Printf("Cleaned: %d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d img, %d sep, %d trunc\n",
+		fmt.Printf("Cleaned: %d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d orphan, %d img, %d sep, %d trunc\n",
 			result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
 			result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,
-			result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
+			result.OrphansRemoved, result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
 		printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
@@ -340,7 +340,7 @@ func runCleanAuto() error {
 
 	totalOps := result.ProgressRemoved + result.SnapshotsRemoved + result.SidechainsRemoved +
 		result.TangentsRemoved + result.FailedRetries + result.StaleReadsRemoved +
-		result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+		result.OrphansRemoved + result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
 	if totalOps == 0 {
 		fmt.Printf("Session %s (%s): nothing to clean\n", target.SessionID, target.ProjectName)
 		return nil
@@ -349,7 +349,7 @@ func runCleanAuto() error {
 	fmt.Printf("Auto-cleaned session %s (%s): %d entries removed, ~%d tokens saved, %s\n",
 		target.SessionID, target.ProjectName,
 		result.ProgressRemoved+result.SnapshotsRemoved+result.SidechainsRemoved+
-			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved,
+			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved+result.OrphansRemoved,
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
 	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
@@ -753,7 +753,7 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 
 		totalOps := result.ProgressRemoved + result.SnapshotsRemoved + result.SidechainsRemoved +
 			result.TangentsRemoved + result.FailedRetries + result.StaleReadsRemoved +
-			result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+			result.OrphansRemoved + result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
 
 		shortID := s.SessionID
 		if len(shortID) > 8 {
@@ -806,6 +806,9 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 				}
 				if result.StaleReadsRemoved > 0 {
 					parts = append(parts, fmt.Sprintf("%d stale", result.StaleReadsRemoved))
+				}
+				if result.OrphansRemoved > 0 {
+					parts = append(parts, fmt.Sprintf("%d orphan", result.OrphansRemoved))
 				}
 				if result.ImagesReplaced > 0 {
 					parts = append(parts, fmt.Sprintf("%d img", result.ImagesReplaced))
