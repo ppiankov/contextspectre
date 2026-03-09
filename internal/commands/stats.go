@@ -53,7 +53,7 @@ func runStats(cmd *cobra.Command, args []string) error {
 	dupResult := analyzer.FindDuplicateReads(entries)
 	retryResult := analyzer.FindFailedRetries(entries)
 	tangentResult := analyzer.FindTangents(entries)
-	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+	rec := analyzer.Recommend(entries, stats, dupResult, retryResult, tangentResult, sidechainReport)
 
 	// Scope drift analysis
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
@@ -505,8 +505,13 @@ func runStats(cmd *cobra.Command, args []string) error {
 		if rec.TotalTurnsGained > 0 {
 			turnsStr = fmt.Sprintf(" (~%d additional turns)", rec.TotalTurnsGained)
 		}
-		fmt.Printf("  Total recoverable: %s tokens%s\n",
-			formatTokens(rec.TotalTokens), turnsStr)
+		if rec.OverlapTokens > 0 {
+			fmt.Printf("  Total recoverable: %s tokens%s (~%s overlap removed)\n",
+				formatTokens(rec.TotalTokens), turnsStr, formatTokens(rec.OverlapTokens))
+		} else {
+			fmt.Printf("  Total recoverable: %s tokens%s\n",
+				formatTokens(rec.TotalTokens), turnsStr)
+		}
 		if stats.CurrentContextTokens > 0 && rec.TotalTokens > 0 {
 			nm := float64(rec.TotalTokens) / float64(stats.CurrentContextTokens)
 			fmt.Printf("  Noise multiplier:  %.1fx\n", nm)

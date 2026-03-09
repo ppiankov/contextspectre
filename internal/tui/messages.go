@@ -76,7 +76,7 @@ func newMessagesModel(info session.Info) messagesModel {
 	tangentResult := analyzer.FindTangents(entries)
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 
-	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+	rec := analyzer.Recommend(entries, stats, dupResult, retryResult, tangentResult, nil)
 	health := analyzer.ComputeHealth(stats, rec)
 	markers, _ := editor.LoadMarkers(info.FullPath)
 
@@ -994,7 +994,7 @@ func (m messagesModel) reload() messagesModel {
 	m.tangentIndices = m.tangentResult.AllTangentIndices()
 	m.driftResult = analyzer.AnalyzeScopeDrift(entries, m.stats.Compactions, "")
 	m.driftIndices = m.driftResult.DriftIndices()
-	m.recommendation = analyzer.Recommend(m.stats, m.dupResult, m.retryResult, m.tangentResult)
+	m.recommendation = analyzer.Recommend(entries, m.stats, m.dupResult, m.retryResult, m.tangentResult, nil)
 	m.health = analyzer.ComputeHealth(m.stats, m.recommendation)
 	m.markers, _ = editor.LoadMarkers(m.session.FullPath)
 	m.selected = make(map[int]bool)

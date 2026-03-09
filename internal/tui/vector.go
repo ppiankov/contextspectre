@@ -71,7 +71,7 @@ func newVectorModel(info session.Info, claudeDir string) vectorModel {
 	tangentResult := analyzer.FindTangents(entries)
 	driftResult := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 
-	rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+	rec := analyzer.Recommend(entries, stats, dupResult, retryResult, tangentResult, nil)
 	health := analyzer.ComputeHealth(stats, rec)
 	decEcon := analyzer.ComputeDecisionEconomics(stats, driftResult)
 	gauge := analyzer.ComputeGauge(stats, decEcon, analyzer.DefaultGaugeThresholds)

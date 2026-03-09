@@ -296,6 +296,7 @@ type RecommendationJSON struct {
 	Items               []CleanupItemJSON `json:"items"`
 	TotalTokens         int               `json:"total_tokens"`
 	TotalTurnsGained    int               `json:"total_turns_gained"`
+	OverlapTokens       int               `json:"overlap_tokens,omitempty"`
 	CurrentPercent      float64           `json:"current_percent"`
 	ProjectedPercent    float64           `json:"projected_percent"`
 	NoiseMultiplier     float64           `json:"noise_multiplier,omitempty"`
@@ -725,6 +726,7 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 		rj := &RecommendationJSON{
 			TotalTokens:      rec.TotalTokens,
 			TotalTurnsGained: rec.TotalTurnsGained,
+			OverlapTokens:    rec.OverlapTokens,
 			CurrentPercent:   rec.CurrentPercent,
 			ProjectedPercent: rec.ProjectedPercent,
 		}

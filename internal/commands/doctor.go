@@ -140,7 +140,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 			dupResult := analyzer.FindDuplicateReads(entries)
 			retryResult := analyzer.FindFailedRetries(entries)
 			tangentResult := analyzer.FindTangents(entries)
-			rec := analyzer.Recommend(stats, dupResult, retryResult, tangentResult)
+			rec := analyzer.Recommend(entries, stats, dupResult, retryResult, tangentResult, nil)
 			drift := analyzer.AnalyzeScopeDrift(entries, stats.Compactions, "")
 			health := analyzer.ComputeHealth(stats, rec)
 
