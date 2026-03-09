@@ -10,21 +10,24 @@ import (
 
 // RepairResult holds the outcome of a repair operation.
 type RepairResult struct {
-	IssuesFixed    int
-	EntriesRemoved int
-	ImagesReplaced int
-	ChainRepairs   int
+	IssuesFixed       int
+	EntriesRemoved    int
+	EntriesTombstoned int
+	ImagesReplaced    int
+	ChainRepairs      int
 }
 
 // Repair applies fixes for detected issues.
-// Creates a backup before modifying. Uses dry-run via Diagnose first.
-func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
+// When tombstone is true, orphaned results are replaced with placeholders
+// instead of deleted, preserving conversation continuity for Claude for Mac.
+func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult, error) {
 	if len(issues) == 0 {
 		return &RepairResult{}, nil
 	}
 
-	// Collect entries to delete and images to replace
+	// Collect entries to delete, tombstone, and images to replace
 	toDelete := make(map[int]bool)
+	toTombstone := make(map[int]bool)
 	oversizedEntries := make(map[int]bool)
 	mismatchEntries := make(map[int]bool)
 
@@ -36,7 +39,11 @@ func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
 				toDelete[issue.RelatedIndex] = true
 			}
 		case analyzer.IssueOrphanedResult:
-			toDelete[issue.EntryIndex] = true
+			if tombstone {
+				toTombstone[issue.EntryIndex] = true
+			} else {
+				toDelete[issue.EntryIndex] = true
+			}
 		case analyzer.IssueMalformed:
 			toDelete[issue.EntryIndex] = true
 		case analyzer.IssueChainBroken:
@@ -66,6 +73,16 @@ func Repair(path string, issues []analyzer.Issue) (*RepairResult, error) {
 			return nil, fmt.Errorf("replace oversized images: %w", err)
 		}
 		result.ImagesReplaced += imgResult
+	}
+
+	// Handle tombstones (before deletions — tombstone modifies in-place,
+	// delete shifts indices)
+	if len(toTombstone) > 0 {
+		tsResult, err := Tombstone(path, toTombstone)
+		if err != nil {
+			return nil, fmt.Errorf("tombstone entries: %w", err)
+		}
+		result.EntriesTombstoned = tsResult.EntriesTombstoned
 	}
 
 	// Handle deletions

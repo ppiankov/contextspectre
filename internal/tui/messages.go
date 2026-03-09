@@ -891,7 +891,7 @@ func (m messagesModel) replaceImages() (messagesModel, tea.Cmd) {
 }
 
 func (m messagesModel) cleanAll() (messagesModel, tea.Cmd) {
-	result, err := editor.CleanAll(m.session.FullPath)
+	result, err := editor.CleanAll(m.session.FullPath, editor.CleanAllOpts{})
 	if err != nil {
 		m.statusMsg = fmt.Sprintf("Error: %v", err)
 		return m, nil

@@ -11,8 +11,9 @@ import (
 )
 
 var (
-	fixApply bool
-	fixCWD   bool
+	fixApply     bool
+	fixCWD       bool
+	fixTombstone bool
 )
 
 var fixCmd = &cobra.Command{
@@ -22,7 +23,10 @@ var fixCmd = &cobra.Command{
 orphaned tool results) and optionally repair them.
 
 By default runs in dry-run mode (report only). Use --apply to fix detected issues.
-Always creates a backup before any modification.`,
+Always creates a backup before any modification.
+
+Use --tombstone to replace orphaned entries with placeholders instead of deleting
+them. This preserves conversation continuity in Claude for Mac's scroll-back.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runFix,
 }
@@ -75,15 +79,17 @@ func runFix(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	const maxPasses = 50
 	totalRemoved := 0
+	totalTombstoned := 0
 	totalImages := 0
 	totalChains := 0
 	totalIssues := len(diagnosis.Issues)
 
-	result, err := editor.Repair(path, diagnosis.Issues)
+	result, err := editor.Repair(path, diagnosis.Issues, fixTombstone)
 	if err != nil {
 		return fmt.Errorf("repair: %w", err)
 	}
 	totalRemoved += result.EntriesRemoved
+	totalTombstoned += result.EntriesTombstoned
 	totalImages += result.ImagesReplaced
 	totalChains += result.ChainRepairs
 
@@ -97,21 +103,28 @@ func runFix(cmd *cobra.Command, args []string) error {
 			break
 		}
 		totalIssues += len(diagnosis.Issues)
-		cascadeResult, err := editor.Repair(path, diagnosis.Issues)
+		cascadeResult, err := editor.Repair(path, diagnosis.Issues, fixTombstone)
 		if err != nil {
 			return fmt.Errorf("cascade repair: %w", err)
 		}
 		totalRemoved += cascadeResult.EntriesRemoved
+		totalTombstoned += cascadeResult.EntriesTombstoned
 		totalImages += cascadeResult.ImagesReplaced
 		totalChains += cascadeResult.ChainRepairs
 	}
 
-	fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired\n",
-		totalRemoved, totalImages, totalChains)
+	if totalTombstoned > 0 {
+		fmt.Printf("Repaired: %d entries removed, %d tombstoned, %d images replaced, %d chains repaired\n",
+			totalRemoved, totalTombstoned, totalImages, totalChains)
+	} else {
+		fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired\n",
+			totalRemoved, totalImages, totalChains)
+	}
 	slog.Info("Session repaired",
 		"path", path,
 		"issues", totalIssues,
 		"removed", totalRemoved,
+		"tombstoned", totalTombstoned,
 		"images", totalImages,
 		"chains", totalChains)
 
@@ -121,5 +134,6 @@ func runFix(cmd *cobra.Command, args []string) error {
 func init() {
 	fixCmd.Flags().BoolVar(&fixApply, "apply", false, "Apply repairs (default: dry-run)")
 	fixCmd.Flags().BoolVar(&fixCWD, "cwd", false, "Use most recent session for current directory")
+	fixCmd.Flags().BoolVar(&fixTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	rootCmd.AddCommand(fixCmd)
 }

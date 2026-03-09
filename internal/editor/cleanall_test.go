@@ -11,7 +11,7 @@ import (
 func TestCleanAll_Basic(t *testing.T) {
 	path := copyFixture(t, "small_session.jsonl")
 
-	result, err := CleanAll(path)
+	result, err := CleanAll(path, CleanAllOpts{})
 	if err != nil {
 		t.Fatalf("clean all: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestCleanAll_Basic(t *testing.T) {
 func TestCleanAll_OrphanCascade(t *testing.T) {
 	path := copyFixture(t, "orphan_cascade.jsonl")
 
-	result, err := CleanAll(path)
+	result, err := CleanAll(path, CleanAllOpts{})
 	if err != nil {
 		t.Fatalf("clean all: %v", err)
 	}
@@ -88,7 +88,7 @@ func TestCleanAll_OrphanCascade(t *testing.T) {
 func TestCleanAll_NoOrphansAfterTangentRemoval(t *testing.T) {
 	path := copyFixture(t, "tangent_session.jsonl")
 
-	_, err := CleanAll(path)
+	_, err := CleanAll(path, CleanAllOpts{})
 	if err != nil {
 		t.Fatalf("clean all: %v", err)
 	}
@@ -131,7 +131,7 @@ func TestCleanAll_UndoRestoresOriginal(t *testing.T) {
 	origEntries, _ := jsonl.Parse(path)
 	origCount := len(origEntries)
 
-	_, err := CleanAll(path)
+	_, err := CleanAll(path, CleanAllOpts{})
 	if err != nil {
 		t.Fatalf("clean all: %v", err)
 	}
@@ -151,5 +151,49 @@ func TestCleanAll_UndoRestoresOriginal(t *testing.T) {
 	restored, _ := jsonl.Parse(path)
 	if len(restored) != origCount {
 		t.Errorf("expected %d entries after undo, got %d", origCount, len(restored))
+	}
+}
+
+func TestCleanAll_Tombstone(t *testing.T) {
+	path := copyFixture(t, "orphan_cascade.jsonl")
+
+	// Count entries before
+	beforeEntries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	beforeCount := len(beforeEntries)
+
+	result, err := CleanAll(path, CleanAllOpts{Tombstone: true})
+	if err != nil {
+		t.Fatalf("clean all tombstone: %v", err)
+	}
+
+	// With tombstone mode, orphans should be tombstoned not deleted
+	if result.TangentsRemoved == 0 {
+		t.Error("expected tangent entries to be removed")
+	}
+
+	// After clean with tombstone, should have no issues
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	diagnosis := analyzer.Diagnose(entries)
+	if len(diagnosis.Issues) > 0 {
+		for _, issue := range diagnosis.Issues {
+			t.Errorf("unexpected issue after tombstone clean: [%s] line %d: %s",
+				issue.Kind, entries[issue.EntryIndex].LineNumber, issue.Description)
+		}
+	}
+
+	// Tombstone mode preserves entry count better than delete mode
+	// (orphans are replaced, not removed)
+	afterCount := len(entries)
+	if result.OrphansTombstoned > 0 {
+		// With tombstone, fewer entries should be removed overall
+		// compared to what would have been removed without tombstone
+		t.Logf("tombstoned=%d, orphans_removed=%d, before=%d, after=%d",
+			result.OrphansTombstoned, result.OrphansRemoved, beforeCount, afterCount)
 	}
 }
