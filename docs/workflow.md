@@ -126,6 +126,8 @@ This cleanup avoids ~165.1M cache-read tokens (~$123.81) assuming ~13 turns rema
 
 90% of a 65.5 MB session was noise. The 6400 tangents were not mistakes - they were the exploration. But once the decisions landed, carrying 59 MB of scaffolding into future cache reads costs real money. Cleaning after exploration recovers the tokens; watch mode prevents the smaller categories (stale reads, retries, progress messages) from compounding while the exploration is still running.
 
+**Bridging Mac and CLI.** Claude for Mac does not expose session IDs in its interface. To clean a Mac session, use the TUI (`contextspectre`) or `contextspectre sessions` to find the session ID, then run `clean` from the CLI. ContextSpectre reads the same JSONL files regardless of which interface created them - Mac sessions, CLI sessions, and API sessions all live in the same session store.
+
 ```bash
 # Default: smart mtime-based polling (5s check, 30s cooldown)
 contextspectre clean --active --all --watch
