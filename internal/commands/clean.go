@@ -39,6 +39,7 @@ var (
 	cleanActiveSince   string
 	cleanWatch         bool
 	cleanWatchInterval int
+	cleanTombstone     bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -117,17 +118,23 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	if cleanAll {
-		result, err := editor.CleanAll(path)
+		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
 		if err != nil {
 			return fmt.Errorf("clean all: %w", err)
 		}
 		if isJSON() {
 			return printJSON(cleanAllToJSON(path, result))
 		}
-		fmt.Printf("Cleaned: %d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d orphan, %d img, %d sep, %d trunc\n",
+		parts := fmt.Sprintf("%d prog, %d snap, %d chain, %d tangent, %d retry, %d stale, %d orphan",
 			result.ProgressRemoved, result.SnapshotsRemoved, result.SidechainsRemoved,
 			result.TangentsRemoved, result.FailedRetries, result.StaleReadsRemoved,
-			result.OrphansRemoved, result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
+			result.OrphansRemoved)
+		if result.OrphansTombstoned > 0 {
+			parts += fmt.Sprintf(", %d tombstoned", result.OrphansTombstoned)
+		}
+		parts += fmt.Sprintf(", %d img, %d sep, %d trunc",
+			result.ImagesReplaced, result.SeparatorsStripped, result.OutputsTruncated)
+		fmt.Printf("Cleaned: %s\n", parts)
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
 		printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
@@ -327,7 +334,7 @@ func runCleanAuto() error {
 		printSessionIdentity(path)
 	}
 
-	result, err := editor.CleanAll(path)
+	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
 	if err != nil {
 		return fmt.Errorf("clean auto: %w", err)
 	}
@@ -745,7 +752,7 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 
 	for _, s := range active {
 		path := s.FullPath
-		result, err := editor.CleanAll(path)
+		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone})
 		if err != nil {
 			slog.Warn("Failed to clean session", "session", s.SessionID, "error", err)
 			continue
@@ -809,6 +816,9 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 				}
 				if result.OrphansRemoved > 0 {
 					parts = append(parts, fmt.Sprintf("%d orphan", result.OrphansRemoved))
+				}
+				if result.OrphansTombstoned > 0 {
+					parts = append(parts, fmt.Sprintf("%d tombstoned", result.OrphansTombstoned))
 				}
 				if result.ImagesReplaced > 0 {
 					parts = append(parts, fmt.Sprintf("%d img", result.ImagesReplaced))
@@ -1251,5 +1261,6 @@ func init() {
 	cleanCmd.Flags().StringVar(&cleanActiveSince, "since", "10m", "Activity window for --active (e.g. 10m, 1h)")
 	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active; use --live/--aggressive for tiers)")
 	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
+	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	rootCmd.AddCommand(cleanCmd)
 }

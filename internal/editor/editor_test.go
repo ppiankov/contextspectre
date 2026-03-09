@@ -222,3 +222,62 @@ func TestResolveParent_Cycle(t *testing.T) {
 		t.Errorf("expected empty string for cycle, got %s", got)
 	}
 }
+
+func TestTombstone_Basic(t *testing.T) {
+	path := copyFixture(t, "small_session.jsonl")
+
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	beforeCount := len(entries)
+
+	// Tombstone the first user entry (index 0)
+	result, err := Tombstone(path, map[int]bool{0: true})
+	if err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+	if result.EntriesTombstoned != 1 {
+		t.Errorf("expected 1 tombstoned, got %d", result.EntriesTombstoned)
+	}
+
+	// Entry count should be preserved (tombstone replaces content, doesn't delete)
+	entries, err = jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("re-parse: %v", err)
+	}
+	if len(entries) != beforeCount {
+		t.Errorf("expected %d entries (preserved), got %d", beforeCount, len(entries))
+	}
+
+	// The tombstoned entry should have placeholder text
+	blocks, err := jsonl.ParseContentBlocks(entries[0].Message.Content)
+	if err != nil {
+		t.Fatalf("parse content: %v", err)
+	}
+	found := false
+	for _, b := range blocks {
+		if b.Type == "text" && b.Text == "[removed by contextspectre: orphaned tool result]" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("expected tombstone placeholder text in entry content")
+	}
+
+	// Backup should exist
+	if _, err := os.Stat(path + ".bak"); os.IsNotExist(err) {
+		t.Error("expected backup file after tombstone")
+	}
+}
+
+func TestTombstone_Empty(t *testing.T) {
+	path := copyFixture(t, "small_session.jsonl")
+	result, err := Tombstone(path, nil)
+	if err != nil {
+		t.Fatalf("tombstone: %v", err)
+	}
+	if result.EntriesTombstoned != 0 {
+		t.Errorf("expected 0 tombstoned, got %d", result.EntriesTombstoned)
+	}
+}

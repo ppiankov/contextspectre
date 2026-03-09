@@ -859,6 +859,7 @@ func cleanAllToJSON(path string, r *editor.CleanAllResult) *CleanOutput {
 	addOp("failed_retry_removal", r.FailedRetries)
 	addOp("stale_read_removal", r.StaleReadsRemoved)
 	addOp("orphan_removal", r.OrphansRemoved)
+	addOp("orphan_tombstone", r.OrphansTombstoned)
 	addOp("image_replacement", r.ImagesReplaced)
 	addOp("separator_stripping", r.SeparatorsStripped)
 	addOp("output_truncation", r.OutputsTruncated)

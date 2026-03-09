@@ -18,6 +18,7 @@ type CleanAllResult struct {
 	FailedRetries      int
 	StaleReadsRemoved  int
 	OrphansRemoved     int
+	OrphansTombstoned  int
 	ImagesReplaced     int
 	SeparatorsStripped int
 	OutputsTruncated   int
@@ -27,9 +28,14 @@ type CleanAllResult struct {
 	BytesAfter         int64
 }
 
+// CleanAllOpts configures a CleanAll run.
+type CleanAllOpts struct {
+	Tombstone bool // replace orphans with placeholders instead of deleting
+}
+
 // CleanAll runs all cleanup operations in optimal order with a single backup.
 // Order: entry deletions first, then content surgery.
-func CleanAll(path string) (*CleanAllResult, error) {
+func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	result := &CleanAllResult{}
 
 	// Load markers to respect KEEP entries
@@ -207,6 +213,8 @@ func CleanAll(path string) (*CleanAllResult, error) {
 	// 1g. Orphan cascade — resolve orphaned tool_results and chain breaks
 	// created by prior deletions (especially tangent removal in 1d).
 	// Loop until convergence, same pattern as fix --apply.
+	// When tombstone mode is enabled, orphaned results are replaced with
+	// placeholders instead of deleted (preserves Mac scroll-back).
 	const maxCascadePasses = 50
 	for pass := 0; pass < maxCascadePasses; pass++ {
 		entries, err = jsonl.Parse(path)
@@ -218,24 +226,44 @@ func CleanAll(path string) (*CleanAllResult, error) {
 		// Only handle orphans and chain breaks — other issue types
 		// (filter blocks, images) belong to Phase 2 or fix.
 		toDelete = make(map[int]bool)
+		toTombstone := make(map[int]bool)
 		for _, issue := range diagnosis.Issues {
 			switch issue.Kind {
-			case analyzer.IssueOrphanedResult, analyzer.IssueChainBroken:
+			case analyzer.IssueOrphanedResult:
+				if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
+					if opts.Tombstone {
+						toTombstone[issue.EntryIndex] = true
+					} else {
+						toDelete[issue.EntryIndex] = true
+					}
+				}
+			case analyzer.IssueChainBroken:
 				if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
 					toDelete[issue.EntryIndex] = true
 				}
 			}
 		}
-		if len(toDelete) == 0 {
+		if len(toDelete) == 0 && len(toTombstone) == 0 {
 			break
 		}
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("cascade: %w", err)
+		if len(toTombstone) > 0 {
+			tsResult, err := Tombstone(path, toTombstone)
+			if err != nil {
+				_ = restoreOriginal(path, origBak)
+				return nil, fmt.Errorf("cascade tombstone: %w", err)
+			}
+			result.OrphansTombstoned += tsResult.EntriesTombstoned
+			cleanIntermediate()
 		}
-		result.OrphansRemoved += dr.EntriesRemoved
-		cleanIntermediate()
+		if len(toDelete) > 0 {
+			dr, err := Delete(path, toDelete)
+			if err != nil {
+				_ = restoreOriginal(path, origBak)
+				return nil, fmt.Errorf("cascade: %w", err)
+			}
+			result.OrphansRemoved += dr.EntriesRemoved
+			cleanIntermediate()
+		}
 	}
 
 	// Phase 2: Content surgery
