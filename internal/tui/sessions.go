@@ -479,7 +479,7 @@ func (m sessionsModel) View() string {
 	// Column header with sort indicator
 	sortInd := " \u25bc" // ▼ descending indicator
 	var hdr strings.Builder
-	hdr.WriteString("    ") // prefix: active char + selector + space
+	hdr.WriteString("     ") // prefix: active char + client type + selector + space
 	fmt.Fprintf(&hdr, "%-*s ", cols.projW, "Project")
 	fmt.Fprintf(&hdr, "%-*s ", cols.slugW, "Slug")
 	fmt.Fprintf(&hdr, "%-*s ", cols.idW, "ID")
@@ -551,7 +551,8 @@ func (m sessionsModel) View() string {
 		if isSelected {
 			selector = "\u25b8 "
 		}
-		prefix := " " + activeChar + selector
+		clientChar := clientTypeChar(s)
+		prefix := " " + activeChar + clientChar + selector
 
 		project := truncateStr(s.ProjectName, cols.projW)
 
@@ -726,8 +727,8 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		costW: 8,
 	}
 
-	// Fixed overhead: prefix (4) + spaces between columns
-	const prefixW = 4
+	// Fixed overhead: prefix (5) + spaces between columns
+	const prefixW = 5
 
 	const compactW = 5 // fixed compaction count column (4 chars + space)
 
@@ -847,5 +848,19 @@ func entropyShort(level string) string {
 		return "C"
 	default:
 		return "\u2014"
+	}
+}
+
+func clientTypeChar(s session.Info) string {
+	if s.ContextStats == nil {
+		return styleMuted.Render("?")
+	}
+	switch s.ContextStats.ClientType {
+	case "cli":
+		return styleMuted.Render("C")
+	case "desktop":
+		return styleMuted.Render("M")
+	default:
+		return styleMuted.Render("?")
 	}
 }
