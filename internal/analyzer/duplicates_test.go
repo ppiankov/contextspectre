@@ -227,6 +227,71 @@ func TestDuplicateReadResult_AllStaleIndices(t *testing.T) {
 	}
 }
 
+func makeWriteEntry(filePath string) jsonl.Entry {
+	input, _ := json.Marshal(map[string]string{"file_path": filePath})
+	content, _ := json.Marshal([]jsonl.ContentBlock{
+		{Type: "tool_use", ID: "w1", Name: "Edit", Input: input},
+	})
+	return jsonl.Entry{
+		Type:    jsonl.TypeAssistant,
+		Message: &jsonl.Message{Content: content},
+		RawSize: 200,
+	}
+}
+
+func TestFindDuplicateReads_ReadWriteRead_NotStale(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeReadEntry(0, "t1", "/path/a.go"),
+		makeToolResult("t1"),
+		makeWriteEntry("/path/a.go"), // write invalidates
+		makeToolResult("w1"),
+		makeReadEntry(4, "t2", "/path/a.go"), // fresh — file was modified
+		makeToolResult("t2"),
+	}
+	result := FindDuplicateReads(entries)
+	if result.TotalStale != 0 {
+		t.Errorf("expected 0 stale after write, got %d", result.TotalStale)
+	}
+}
+
+func TestFindDuplicateReads_ReadReadWriteReadRead(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeReadEntry(0, "t1", "/path/a.go"), // stale (group 1)
+		makeToolResult("t1"),
+		makeReadEntry(2, "t2", "/path/a.go"), // fresh at write time
+		makeToolResult("t2"),
+		makeWriteEntry("/path/a.go"), // write resets
+		makeToolResult("w1"),
+		makeReadEntry(6, "t3", "/path/a.go"), // stale (group 2)
+		makeToolResult("t3"),
+		makeReadEntry(8, "t4", "/path/a.go"), // fresh
+		makeToolResult("t4"),
+	}
+	result := FindDuplicateReads(entries)
+	if result.TotalStale != 2 {
+		t.Errorf("expected 2 stale reads, got %d", result.TotalStale)
+	}
+}
+
+func TestFindDuplicateReads_PathNormalization(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeReadEntry(0, "t1", "/a/../b.go"), // stale — same as /b.go
+		makeToolResult("t1"),
+		makeReadEntry(2, "t2", "/b.go"), // fresh
+		makeToolResult("t2"),
+	}
+	result := FindDuplicateReads(entries)
+	if result.TotalStale != 1 {
+		t.Errorf("expected 1 stale (normalized paths), got %d", result.TotalStale)
+	}
+	if len(result.Groups) != 1 {
+		t.Fatalf("expected 1 group, got %d", len(result.Groups))
+	}
+	if result.Groups[0].FilePath != "/b.go" {
+		t.Errorf("expected normalized path /b.go, got %s", result.Groups[0].FilePath)
+	}
+}
+
 func TestIsFileReadTool(t *testing.T) {
 	tests := []struct {
 		name string
