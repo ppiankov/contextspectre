@@ -107,14 +107,18 @@ func CheckIntegrity(entries []jsonl.Entry) *IntegrityReport {
 
 	// Check 1: Active chain starts with the right message type.
 	// API requires first message to be system or user, not assistant.
-	if len(chain) > 0 {
-		first := entries[chain[0]]
-		if first.Type == jsonl.TypeAssistant {
-			report.Healthy = false
+	// Report ALL consecutive assistant entries at the start so they are
+	// removed in a single repair pass (prevents infinite peel-one-at-a-time loop).
+	if len(chain) > 0 && entries[chain[0]].Type == jsonl.TypeAssistant {
+		report.Healthy = false
+		for k := 0; k < len(chain); k++ {
+			if entries[chain[k]].Type != jsonl.TypeAssistant {
+				break
+			}
 			report.Issues = append(report.Issues, IntegrityIssue{
 				Kind:       IntegrityBadChainStart,
-				EntryIndex: chain[0],
-				LineNumber: first.LineNumber,
+				EntryIndex: chain[k],
+				LineNumber: entries[chain[k]].LineNumber,
 				Detail:     "active chain starts with assistant message (API requires user or system first)",
 			})
 		}
