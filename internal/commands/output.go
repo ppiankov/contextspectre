@@ -298,6 +298,7 @@ type RecommendationJSON struct {
 	TotalTurnsGained    int               `json:"total_turns_gained"`
 	CurrentPercent      float64           `json:"current_percent"`
 	ProjectedPercent    float64           `json:"projected_percent"`
+	NoiseMultiplier     float64           `json:"noise_multiplier,omitempty"`
 	ProjectedSavedCost  float64           `json:"projected_saved_cost,omitempty"`
 	ProjectedSavedToken int               `json:"projected_saved_tokens,omitempty"`
 }
@@ -735,6 +736,10 @@ func buildStatsOutput(sessionID string, stats *analyzer.ContextStats, rec *analy
 				TokensSaved: item.TokensSaved,
 				TurnsGained: item.TurnsGained,
 			})
+		}
+		// Noise multiplier
+		if stats.CurrentContextTokens > 0 && rec.TotalTokens > 0 {
+			rj.NoiseMultiplier = float64(rec.TotalTokens) / float64(stats.CurrentContextTokens)
 		}
 		// Projected savings if cleaned now
 		if rec.TotalTokens > 0 && stats.EstimatedTurnsLeft > 0 {

@@ -42,20 +42,21 @@ func init() {
 
 // statusLineData holds computed telemetry for a single session.
 type statusLineData struct {
-	SessionID      string  `json:"session_id"`
-	Grade          string  `json:"grade"`
-	ContextPercent float64 `json:"context_percent"`
-	InputTokens    int     `json:"input_tokens"`
-	OutputTokens   int     `json:"output_tokens"`
-	Cost           float64 `json:"cost"`
-	Model          string  `json:"model"`
-	Project        string  `json:"project,omitempty"`
-	TurnsRemaining int     `json:"turns_remaining"`
-	NoiseTokens    int     `json:"noise_tokens"`
-	SavedCost      float64 `json:"saved_cost"`
-	VectorState    string  `json:"vector_state,omitempty"`
-	VectorAction   string  `json:"vector_action,omitempty"`
-	ChainHealthy   bool    `json:"chain_healthy"`
+	SessionID       string  `json:"session_id"`
+	Grade           string  `json:"grade"`
+	ContextPercent  float64 `json:"context_percent"`
+	InputTokens     int     `json:"input_tokens"`
+	OutputTokens    int     `json:"output_tokens"`
+	Cost            float64 `json:"cost"`
+	Model           string  `json:"model"`
+	Project         string  `json:"project,omitempty"`
+	TurnsRemaining  int     `json:"turns_remaining"`
+	NoiseTokens     int     `json:"noise_tokens"`
+	NoiseMultiplier float64 `json:"noise_multiplier"`
+	SavedCost       float64 `json:"saved_cost"`
+	VectorState     string  `json:"vector_state,omitempty"`
+	VectorAction    string  `json:"vector_action,omitempty"`
+	ChainHealthy    bool    `json:"chain_healthy"`
 }
 
 // statusLineCache is the on-disk cache structure.
@@ -138,8 +139,12 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 	grade := analyzer.GradeFromSignalPercent(stats.SignalPercent)
 
 	noiseTokens := 0
+	noiseMultiplier := 0.0
 	if currentTokens > 0 && stats.SignalPercent < 100 {
 		noiseTokens = currentTokens * (100 - stats.SignalPercent) / 100
+		if currentTokens > 0 {
+			noiseMultiplier = float64(noiseTokens) / float64(currentTokens)
+		}
 	}
 
 	// Turns remaining — epoch growth rate.
@@ -203,20 +208,21 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 	project := extractProjectFromPath(path)
 
 	return &statusLineData{
-		SessionID:      shortID,
-		Grade:          grade,
-		ContextPercent: contextPct,
-		InputTokens:    inputTokens,
-		OutputTokens:   outputTokens,
-		Cost:           cost,
-		Model:          modelShort,
-		Project:        project,
-		TurnsRemaining: turnsRemaining,
-		NoiseTokens:    noiseTokens,
-		SavedCost:      savedCost,
-		VectorState:    vectorState,
-		VectorAction:   vectorAction,
-		ChainHealthy:   stats.ChainHealthy,
+		SessionID:       shortID,
+		Grade:           grade,
+		ContextPercent:  contextPct,
+		InputTokens:     inputTokens,
+		OutputTokens:    outputTokens,
+		Cost:            cost,
+		Model:           modelShort,
+		Project:         project,
+		TurnsRemaining:  turnsRemaining,
+		NoiseTokens:     noiseTokens,
+		NoiseMultiplier: noiseMultiplier,
+		SavedCost:       savedCost,
+		VectorState:     vectorState,
+		VectorAction:    vectorAction,
+		ChainHealthy:    stats.ChainHealthy,
 	}, nil
 }
 
@@ -242,10 +248,10 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainOK = 0
 		}
-		fmt.Printf("GRADE=%s; CTX=%.1f; IN=%d; OUT=%d; COST=%.2f; MODEL=%s; PROJECT=%s; SID=%s; TURNS=%d; NOISE=%d; SAVED=%.2f; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
+		fmt.Printf("GRADE=%s; CTX=%.1f; IN=%d; OUT=%d; COST=%.2f; MODEL=%s; PROJECT=%s; SID=%s; TURNS=%d; NOISE=%d; NM=%.2f; SAVED=%.2f; VECTOR=%s; VACTION=%s; CHAIN=%d\n",
 			d.Grade, d.ContextPercent, d.InputTokens, d.OutputTokens,
 			d.Cost, d.Model, d.Project, d.SessionID,
-			d.TurnsRemaining, d.NoiseTokens, d.SavedCost,
+			d.TurnsRemaining, d.NoiseTokens, d.NoiseMultiplier, d.SavedCost,
 			d.VectorState, d.VectorAction, chainOK)
 	case "human":
 		// Signal-first layout: [A] ctx:82% +11525/-2666 | $139.08 | Opus 4.6 | project
@@ -270,10 +276,10 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainVal = "broken"
 		}
-		fmt.Printf("grade=%s\tctx=%.1f\tin=%d\tout=%d\tcost=%.2f\tmodel=%s\tproject=%s\tsid=%s\tturns=%d\tnoise=%d\tsaved=%.2f\tvector=%s\tvaction=%s\tchain=%s\n",
+		fmt.Printf("grade=%s\tctx=%.1f\tin=%d\tout=%d\tcost=%.2f\tmodel=%s\tproject=%s\tsid=%s\tturns=%d\tnoise=%d\tnm=%.2f\tsaved=%.2f\tvector=%s\tvaction=%s\tchain=%s\n",
 			d.Grade, d.ContextPercent, d.InputTokens, d.OutputTokens,
 			d.Cost, d.Model, d.Project, d.SessionID,
-			d.TurnsRemaining, d.NoiseTokens, d.SavedCost,
+			d.TurnsRemaining, d.NoiseTokens, d.NoiseMultiplier, d.SavedCost,
 			d.VectorState, d.VectorAction, chainVal)
 	}
 	return nil
