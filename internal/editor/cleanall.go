@@ -17,6 +17,7 @@ type CleanAllResult struct {
 	TangentsRemoved    int
 	FailedRetries      int
 	StaleReadsRemoved  int
+	OrphansRemoved     int
 	ImagesReplaced     int
 	SeparatorsStripped int
 	OutputsTruncated   int
@@ -201,6 +202,40 @@ func CleanAll(path string) (*CleanAllResult, error) {
 			result.StaleReadsRemoved = dr.StaleReadsRemoved
 			cleanIntermediate()
 		}
+	}
+
+	// 1g. Orphan cascade — resolve orphaned tool_results and chain breaks
+	// created by prior deletions (especially tangent removal in 1d).
+	// Loop until convergence, same pattern as fix --apply.
+	const maxCascadePasses = 50
+	for pass := 0; pass < maxCascadePasses; pass++ {
+		entries, err = jsonl.Parse(path)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("cascade parse: %w", err)
+		}
+		diagnosis := analyzer.Diagnose(entries)
+		// Only handle orphans and chain breaks — other issue types
+		// (filter blocks, images) belong to Phase 2 or fix.
+		toDelete = make(map[int]bool)
+		for _, issue := range diagnosis.Issues {
+			switch issue.Kind {
+			case analyzer.IssueOrphanedResult, analyzer.IssueChainBroken:
+				if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
+					toDelete[issue.EntryIndex] = true
+				}
+			}
+		}
+		if len(toDelete) == 0 {
+			break
+		}
+		dr, err := Delete(path, toDelete)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("cascade: %w", err)
+		}
+		result.OrphansRemoved += dr.EntriesRemoved
+		cleanIntermediate()
 	}
 
 	// Phase 2: Content surgery

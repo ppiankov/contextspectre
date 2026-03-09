@@ -540,9 +540,9 @@ func (m vectorModel) runClean() tea.Cmd {
 		if tokensSaved < 0 {
 			tokensSaved = 0
 		}
-		msg := fmt.Sprintf("Cleaned (full): %d prog, %d snap, %d stale, %d tangent \u2014 %s tokens saved",
+		msg := fmt.Sprintf("Cleaned (full): %d prog, %d snap, %d stale, %d tangent, %d orphan \u2014 %s tokens saved",
 			result.ProgressRemoved, result.SnapshotsRemoved,
-			result.StaleReadsRemoved, result.TangentsRemoved,
+			result.StaleReadsRemoved, result.TangentsRemoved, result.OrphansRemoved,
 			formatTokensShort(tokensSaved))
 		return vectorCleanDoneMsg{result: msg}
 	}

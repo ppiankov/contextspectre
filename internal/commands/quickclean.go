@@ -112,7 +112,7 @@ func runQuickCleanAll(path string, target session.Info) error {
 
 	totalOps := result.ProgressRemoved + result.SnapshotsRemoved + result.SidechainsRemoved +
 		result.TangentsRemoved + result.FailedRetries + result.StaleReadsRemoved +
-		result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
+		result.OrphansRemoved + result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
 	if totalOps == 0 {
 		fmt.Printf("Session %s (%s): nothing to clean\n", target.SessionID, target.ProjectName)
 		return nil
@@ -121,7 +121,7 @@ func runQuickCleanAll(path string, target session.Info) error {
 	fmt.Printf("Cleaned session %s (%s): %d entries removed, ~%d tokens saved, %s\n",
 		target.SessionID, target.ProjectName,
 		result.ProgressRemoved+result.SnapshotsRemoved+result.SidechainsRemoved+
-			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved,
+			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved+result.OrphansRemoved,
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
 	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))

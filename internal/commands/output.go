@@ -858,12 +858,13 @@ func cleanAllToJSON(path string, r *editor.CleanAllResult) *CleanOutput {
 	addOp("tangent_removal", r.TangentsRemoved)
 	addOp("failed_retry_removal", r.FailedRetries)
 	addOp("stale_read_removal", r.StaleReadsRemoved)
+	addOp("orphan_removal", r.OrphansRemoved)
 	addOp("image_replacement", r.ImagesReplaced)
 	addOp("separator_stripping", r.SeparatorsStripped)
 	addOp("output_truncation", r.OutputsTruncated)
 
 	totalEntries := r.ProgressRemoved + r.SnapshotsRemoved + r.SidechainsRemoved +
-		r.TangentsRemoved + r.FailedRetries + r.StaleReadsRemoved
+		r.TangentsRemoved + r.FailedRetries + r.StaleReadsRemoved + r.OrphansRemoved
 	totalModified := r.ImagesReplaced + r.SeparatorsStripped + r.OutputsTruncated
 
 	out.Summary = CleanSummaryJSON{
