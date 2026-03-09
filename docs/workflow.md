@@ -114,7 +114,7 @@ Watch mode polls active sessions, detects idle gaps between Claude's turns, and 
 
 Noise compounds with every turn. Without cleanup, compaction triggers sooner and reasoning quality drops. Continuous watch keeps the session clean so compaction happens later (or never), and when it does happen, there's less noise to compress into the summary.
 
-**What noise looks like at scale.** A massive exploration session - 8034 messages, deep investigation across multiple subsystems - accumulates tangents as a natural byproduct of broad reasoning:
+**What noise looks like at scale.** A massive exploration session in Claude for Mac - 8034 messages, deep investigation across multiple subsystems - accumulates tangents as a natural byproduct of broad reasoning. Claude for Mac is well-suited for exploration because it preserves the full conversation text across compactions, unlike the CLI which resets the visible thread:
 
 ```
 contextspectre clean 801ae35a --all
