@@ -145,6 +145,129 @@ func TestRetryResult_AllFailedIndices(t *testing.T) {
 	}
 }
 
+func makeBashToolUseCmd(id, command string) jsonl.Entry {
+	content, _ := json.Marshal([]jsonl.ContentBlock{
+		{Type: "tool_use", ID: id, Name: "Bash", Input: json.RawMessage(`{"command":"` + command + `"}`)},
+	})
+	return jsonl.Entry{
+		Type:    jsonl.TypeAssistant,
+		Message: &jsonl.Message{Content: content},
+		RawSize: 200,
+	}
+}
+
+func makeReadToolUse(id, filePath string) jsonl.Entry {
+	input, _ := json.Marshal(map[string]string{"file_path": filePath})
+	content, _ := json.Marshal([]jsonl.ContentBlock{
+		{Type: "tool_use", ID: id, Name: "Read", Input: input},
+	})
+	return jsonl.Entry{
+		Type:    jsonl.TypeAssistant,
+		Message: &jsonl.Message{Content: content},
+		RawSize: 200,
+	}
+}
+
+func TestFindFailedRetries_DifferentBashCommand_NotRetry(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeBashToolUseCmd("t1", "ls /tmp"), // 0: failed
+		makeErrorResult("t1"),               // 1: error
+		makeBashToolUseCmd("t2", "go test"), // 2: different command — not a retry
+		makeSuccessResult("t2"),             // 3
+	}
+	result := FindFailedRetries(entries)
+	if len(result.Sequences) != 0 {
+		t.Errorf("expected 0 sequences for different Bash commands, got %d", len(result.Sequences))
+	}
+}
+
+func TestFindFailedRetries_SameBashCommand_IsRetry(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeBashToolUseCmd("t1", "go test ./..."), // 0: failed
+		makeErrorResult("t1"),                     // 1: error
+		makeBashToolUseCmd("t2", "go test ./..."), // 2: same command — retry
+		makeSuccessResult("t2"),                   // 3
+	}
+	result := FindFailedRetries(entries)
+	if len(result.Sequences) != 1 {
+		t.Fatalf("expected 1 sequence for same Bash command, got %d", len(result.Sequences))
+	}
+	if result.Sequences[0].ToolName != "Bash" {
+		t.Errorf("expected Bash, got %s", result.Sequences[0].ToolName)
+	}
+}
+
+func TestFindFailedRetries_SameReadDifferentFile_NotRetry(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeReadToolUse("t1", "/path/a.go"), // 0: failed read
+		makeErrorResult("t1"),               // 1: error
+		makeReadToolUse("t2", "/path/b.go"), // 2: different file — not a retry
+		makeSuccessResult("t2"),             // 3
+	}
+	result := FindFailedRetries(entries)
+	if len(result.Sequences) != 0 {
+		t.Errorf("expected 0 sequences for Read of different files, got %d", len(result.Sequences))
+	}
+}
+
+func TestFindFailedRetries_SameReadSameFile_IsRetry(t *testing.T) {
+	entries := []jsonl.Entry{
+		makeReadToolUse("t1", "/path/a.go"), // 0: failed
+		makeErrorResult("t1"),               // 1: error
+		makeReadToolUse("t2", "/path/a.go"), // 2: same file — retry
+		makeSuccessResult("t2"),             // 3
+	}
+	result := FindFailedRetries(entries)
+	if len(result.Sequences) != 1 {
+		t.Fatalf("expected 1 sequence for same Read file, got %d", len(result.Sequences))
+	}
+	if result.Sequences[0].ToolName != "Read" {
+		t.Errorf("expected Read, got %s", result.Sequences[0].ToolName)
+	}
+}
+
+func TestRetrySignature(t *testing.T) {
+	tests := []struct {
+		name  string
+		tool  string
+		input string
+		want  string
+	}{
+		{"read file", "Read", `{"file_path":"/a/b.go"}`, "Read:/a/b.go"},
+		{"read with dots", "Read", `{"file_path":"/a/../b.go"}`, "Read:/b.go"},
+		{"bash command", "Bash", `{"command":"go test ./..."}`, "Bash:go test ./..."},
+		{"grep pattern", "Grep", `{"pattern":"foo","path":"/src"}`, "Grep:foo:/src"},
+		{"unknown tool", "Agent", `{"prompt":"do stuff"}`, "Agent"},
+		{"write file", "Edit", `{"file_path":"/a/b.go"}`, "Edit:/a/b.go"},
+	}
+	for _, tt := range tests {
+		got := retrySignature(tt.tool, json.RawMessage(tt.input))
+		if got != tt.want {
+			t.Errorf("retrySignature(%s) = %q, want %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestIsGrepLikeTool(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{"Grep", true},
+		{"Glob", true},
+		{"grep", true},
+		{"search", true},
+		{"Read", false},
+		{"Bash", false},
+	}
+	for _, tt := range tests {
+		got := isGrepLikeTool(tt.name)
+		if got != tt.want {
+			t.Errorf("isGrepLikeTool(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
 func TestContainsErrorIndicator(t *testing.T) {
 	tests := []struct {
 		text string

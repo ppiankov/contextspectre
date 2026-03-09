@@ -53,15 +53,19 @@ func (r *DuplicateReadResult) AllStaleIndices() map[int]bool {
 	return m
 }
 
-// FindDuplicateReads scans entries for files read more than once.
-// Returns groups of duplicate reads with stale indices marked.
+// fileEvent is a read or write to a specific file, in entry order.
+type fileEvent struct {
+	entryIdx  int
+	toolUseID string // non-empty for reads
+	isWrite   bool
+}
+
+// FindDuplicateReads scans entries for files read more than once without
+// intervening writes. A read after a write to the same file is fresh (the file
+// may have changed), not stale.
 func FindDuplicateReads(entries []jsonl.Entry) *DuplicateReadResult {
-	// Map: file_path -> list of (assistant entry index, tool_use_id)
-	type readInfo struct {
-		assistantIdx int
-		toolUseID    string
-	}
-	fileReads := make(map[string][]readInfo)
+	// Collect all file events (reads and writes) per normalized path.
+	fileEvents := make(map[string][]fileEvent)
 
 	for i, e := range entries {
 		if e.Type != jsonl.TypeAssistant || e.Message == nil {
@@ -75,46 +79,65 @@ func FindDuplicateReads(entries []jsonl.Entry) *DuplicateReadResult {
 			if b.Type != "tool_use" {
 				continue
 			}
-			if !isFileReadTool(b.Name) {
-				continue
-			}
-			path := extractFilePath(b.Input)
+			path := NormalizePath(extractFilePath(b.Input))
 			if path == "" {
 				continue
 			}
-			fileReads[path] = append(fileReads[path], readInfo{
-				assistantIdx: i,
-				toolUseID:    b.ID,
-			})
+			if isFileReadTool(b.Name) {
+				fileEvents[path] = append(fileEvents[path], fileEvent{
+					entryIdx:  i,
+					toolUseID: b.ID,
+				})
+			} else if isFileWriteTool(b.Name) {
+				fileEvents[path] = append(fileEvents[path], fileEvent{
+					entryIdx: i,
+					isWrite:  true,
+				})
+			}
 		}
 	}
 
 	result := &DuplicateReadResult{}
 
-	for filePath, reads := range fileReads {
-		if len(reads) < 2 {
+	for filePath, events := range fileEvents {
+		// Scan left-to-right: write clears lastRead, read with lastRead set → lastRead is stale.
+		var staleReads []StaleRead
+		var readIndices []int
+		var lastRead *fileEvent
+		latestReadIdx := -1
+
+		for i := range events {
+			ev := &events[i]
+			if ev.isWrite {
+				lastRead = nil
+				continue
+			}
+			// It's a read
+			readIndices = append(readIndices, ev.entryIdx)
+			if lastRead != nil {
+				sr := StaleRead{
+					AssistantIdx: lastRead.entryIdx,
+					ToolUseID:    lastRead.toolUseID,
+					ResultIdx:    findToolResult(entries, lastRead.entryIdx, lastRead.toolUseID),
+				}
+				staleReads = append(staleReads, sr)
+			}
+			lastRead = ev
+			latestReadIdx = ev.entryIdx
+		}
+
+		if len(staleReads) == 0 {
 			continue
 		}
 
 		group := DuplicateGroup{
 			FilePath:    filePath,
-			LatestIndex: reads[len(reads)-1].assistantIdx,
+			ReadIndices: readIndices,
+			LatestIndex: latestReadIdx,
+			StaleReads:  staleReads,
 		}
 
-		for _, r := range reads {
-			group.ReadIndices = append(group.ReadIndices, r.assistantIdx)
-		}
-
-		// All but the last are stale
-		for _, r := range reads[:len(reads)-1] {
-			sr := StaleRead{
-				AssistantIdx: r.assistantIdx,
-				ToolUseID:    r.toolUseID,
-				ResultIdx:    findToolResult(entries, r.assistantIdx, r.toolUseID),
-			}
-			group.StaleReads = append(group.StaleReads, sr)
-
-			// Estimate tokens
+		for _, sr := range staleReads {
 			if sr.ResultIdx >= 0 {
 				group.EstimatedTokens += entries[sr.ResultIdx].RawSize / 4
 			}
@@ -122,7 +145,7 @@ func FindDuplicateReads(entries []jsonl.Entry) *DuplicateReadResult {
 		}
 
 		result.Groups = append(result.Groups, group)
-		result.TotalStale += len(reads) - 1
+		result.TotalStale += len(staleReads)
 		result.TotalTokens += group.EstimatedTokens
 		result.UniqueFiles++
 	}
