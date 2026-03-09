@@ -25,8 +25,9 @@ orphaned tool results) and optionally repair them.
 By default runs in dry-run mode (report only). Use --apply to fix detected issues.
 Always creates a backup before any modification.
 
-Use --tombstone to replace orphaned entries with placeholders instead of deleting
-them. This preserves conversation continuity in Claude for Mac's scroll-back.`,
+For Claude for Mac sessions, tombstone mode is enabled automatically (orphaned entries
+are replaced with placeholders instead of deleted, preserving scroll-back). Use
+--tombstone to force this on CLI sessions too.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: runFix,
 }
@@ -84,7 +85,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	totalChains := 0
 	totalIssues := len(diagnosis.Issues)
 
-	result, err := editor.Repair(path, diagnosis.Issues, fixTombstone)
+	result, err := editor.Repair(path, diagnosis.Issues, fixTombstone || autoTombstone(path))
 	if err != nil {
 		return fmt.Errorf("repair: %w", err)
 	}
@@ -103,7 +104,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 			break
 		}
 		totalIssues += len(diagnosis.Issues)
-		cascadeResult, err := editor.Repair(path, diagnosis.Issues, fixTombstone)
+		cascadeResult, err := editor.Repair(path, diagnosis.Issues, fixTombstone || autoTombstone(path))
 		if err != nil {
 			return fmt.Errorf("cascade repair: %w", err)
 		}
