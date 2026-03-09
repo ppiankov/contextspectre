@@ -114,7 +114,7 @@ Watch mode polls active sessions, detects idle gaps between Claude's turns, and 
 
 Noise compounds with every turn. Without cleanup, compaction triggers sooner and reasoning quality drops. Continuous watch keeps the session clean so compaction happens later (or never), and when it does happen, there's less noise to compress into the summary.
 
-**What happens without watch mode.** A long session left uncleaned accumulates noise silently. By the time you notice, most of the session is waste:
+**What noise looks like at scale.** A massive exploration session - 8034 messages, deep investigation across multiple subsystems - accumulates tangents as a natural byproduct of broad reasoning:
 
 ```
 contextspectre clean 801ae35a --all
@@ -124,7 +124,7 @@ Total saved: ~15.5M tokens, 59.0 MB
 This cleanup avoids ~165.1M cache-read tokens (~$123.81) assuming ~13 turns remaining.
 ```
 
-90% of a 65.5 MB session was noise - 6400 tangents alone. With watch mode running continuously, those tangents would have been removed as they formed, keeping context clean for the entire session instead of recovering it at the end when most of the damage (compaction, degraded reasoning) has already happened.
+90% of a 65.5 MB session was noise. The 6400 tangents were not mistakes - they were the exploration. But once the decisions landed, carrying 59 MB of scaffolding into future cache reads costs real money. Cleaning after exploration recovers the tokens; watch mode prevents the smaller categories (stale reads, retries, progress messages) from compounding while the exploration is still running.
 
 ```bash
 # Default: smart mtime-based polling (5s check, 30s cooldown)
