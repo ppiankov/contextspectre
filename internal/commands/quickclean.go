@@ -18,6 +18,7 @@ var (
 	quickCleanLive       bool
 	quickCleanAggressive bool
 	quickCleanCWD        bool
+	quickCleanTombstone  bool
 )
 
 var quickCleanCmd = &cobra.Command{
@@ -99,7 +100,7 @@ func runQuickClean(cmd *cobra.Command, args []string) error {
 }
 
 func runQuickCleanAll(path string, target session.Info) error {
-	result, err := editor.CleanAll(path)
+	result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: quickCleanTombstone})
 	if err != nil {
 		return fmt.Errorf("quick-clean: %w", err)
 	}
@@ -170,5 +171,6 @@ func init() {
 	quickCleanCmd.Flags().BoolVar(&quickCleanLive, "live", false, "Live cleanup for active sessions (Tier 1-3)")
 	quickCleanCmd.Flags().BoolVar(&quickCleanAggressive, "aggressive", false, "Include Tier 4-5 operations (use with --live)")
 	quickCleanCmd.Flags().BoolVar(&quickCleanCWD, "cwd", false, "Scope to current directory's project (auto-detected inside Claude Code)")
+	quickCleanCmd.Flags().BoolVar(&quickCleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	rootCmd.AddCommand(quickCleanCmd)
 }

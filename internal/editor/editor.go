@@ -193,6 +193,70 @@ func ReplaceImages(path string) (*ReplaceImagesResult, error) {
 	return result, nil
 }
 
+// TombstoneResult holds the result of a tombstone operation.
+type TombstoneResult struct {
+	EntriesTombstoned int
+	BytesBefore       int64
+	BytesAfter        int64
+}
+
+// Tombstone replaces the content of selected entries with a text placeholder,
+// preserving the entry's uuid and parentUuid chain position.
+// Used instead of Delete when entry removal would create visible gaps (Claude for Mac).
+func Tombstone(path string, toTombstone map[int]bool) (*TombstoneResult, error) {
+	if len(toTombstone) == 0 {
+		return &TombstoneResult{}, nil
+	}
+
+	_, rawLines, err := jsonl.ParseRaw(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+
+	if err := safecopy.CreateIfMissing(path); err != nil {
+		return nil, fmt.Errorf("backup: %w", err)
+	}
+
+	result := &TombstoneResult{}
+	for _, raw := range rawLines {
+		result.BytesBefore += int64(len(raw))
+	}
+
+	modified := false
+	for i := range rawLines {
+		if !toTombstone[i] || i >= len(rawLines) {
+			continue
+		}
+
+		placeholder := []jsonl.ContentBlock{{
+			Type: "text",
+			Text: "[removed by contextspectre: orphaned tool result]",
+		}}
+		updated, err := reserializeContent(rawLines[i], placeholder)
+		if err != nil {
+			continue
+		}
+		rawLines[i] = updated
+		result.EntriesTombstoned++
+		modified = true
+	}
+
+	if !modified {
+		return result, nil
+	}
+
+	for _, raw := range rawLines {
+		result.BytesAfter += int64(len(raw))
+	}
+
+	if err := jsonl.WriteLines(path, rawLines); err != nil {
+		_ = safecopy.Restore(path)
+		return nil, fmt.Errorf("write: %w", err)
+	}
+
+	return result, nil
+}
+
 // RemoveProgress removes all progress messages from a JSONL file.
 // Always creates a backup before modifying.
 func RemoveProgress(path string) (*DeleteResult, error) {

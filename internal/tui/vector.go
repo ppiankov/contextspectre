@@ -532,7 +532,7 @@ func (m vectorModel) runClean() tea.Cmd {
 			return vectorCleanDoneMsg{result: msg}
 		}
 
-		result, err := editor.CleanAll(path)
+		result, err := editor.CleanAll(path, editor.CleanAllOpts{})
 		if err != nil {
 			return vectorCleanDoneMsg{err: err}
 		}
