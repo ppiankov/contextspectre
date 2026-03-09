@@ -113,7 +113,7 @@ Found 4 issue(s):
 Repaired: 3 entries removed, 2 chains repaired
 ```
 
-After clean + fix, the session stabilized. The order matters: clean first to reduce file size, then fix to repair the chain structure.
+After clean + fix, the session stabilized. The order matters: clean first, then fix. Cleaning removes tangent entries that can mask orphaned tool_results deeper in the file. Running fix on an uncleaned session may require multiple passes as each repair exposes new orphans. Clean first, fix once, verify with a second fix — if it reports "No issues found," the chain is healthy.
 
 ## Recommended: continuous cleanup in a side terminal
 
