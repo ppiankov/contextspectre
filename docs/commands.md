@@ -134,6 +134,8 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre quick-clean --live` | Live cleanup on most recent session |
 | `contextspectre quick-clean --project <name>` | Scoped to a specific project |
 | `contextspectre quick-clean --cwd` | Scoped to current directory |
+| `contextspectre clean <id> --all --tombstone` | Replace orphaned entries with placeholders instead of deleting |
+| `contextspectre quick-clean --tombstone` | Tombstone mode for quick-clean |
 
 ### Surgery
 
@@ -144,6 +146,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre split <id> --from N --to M --output file.md --clean` | Export and remove entries |
 | `contextspectre collapse <id> --commit-point <uuid>` | Collapse exploration above a commit point |
 | `contextspectre fix <id>` | Diagnose and repair session problems |
+| `contextspectre fix <id> --apply --tombstone` | Repair with tombstone mode (preserves Mac scroll-back) |
 | `contextspectre repair <id>` | Repair or prune orphaned sidechains |
 | `contextspectre sidechains <id>` | Report structural sidechains |
 
