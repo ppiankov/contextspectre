@@ -100,11 +100,11 @@ This is a known Claude Code bug ([anthropics/claude-code#31328](https://github.c
 **Symptom: stuck in compaction.** A session that keeps triggering compaction despite low context usage often has a broken chain. The API cannot parse the malformed chain, retries, and triggers compaction again in a loop. The session appears alive but unproductive. Cleaning noise first, then repairing the chain, breaks the cycle:
 
 ```
-contextspectre clean 801ae35a --all
+contextspectre clean a1b2c3d4 --all
 Cleaned: 6400 tangent, 55 stale, 13 chain, 8 retry, 5 img, 1 trunc
 Total saved: ~15.5M tokens, 59.0 MB
 
-contextspectre fix 801ae35a --apply
+contextspectre fix a1b2c3d4 --apply
 Found 4 issue(s):
   [orphan]  line 115: tool_result references missing tool_use
   [orphan]  line 807: tool_result references missing tool_use
@@ -135,8 +135,8 @@ Noise compounds with every turn. Without cleanup, compaction triggers sooner and
 **What noise looks like at scale.** A massive exploration session in Claude for Mac - 8034 messages, deep investigation across multiple subsystems - accumulates tangents as a natural byproduct of broad reasoning. Claude for Mac is well-suited for exploration because it preserves the full conversation text across compactions, unlike the CLI which resets the visible thread:
 
 ```
-contextspectre clean 801ae35a --all
-Cleaning: sequential-percolating-pudding (801ae35a) | 8034 msgs | 65.5 MB
+contextspectre clean a1b2c3d4 --all
+Cleaning: spinning-copper-wheel (a1b2c3d4) | 8034 msgs | 65.5 MB
 Cleaned: 6400 tangent, 55 stale, 13 chain, 8 retry, 5 img, 1 trunc
 Total saved: ~15.5M tokens, 59.0 MB
 This cleanup avoids ~165.1M cache-read tokens (~$123.81) assuming ~13 turns remaining.
