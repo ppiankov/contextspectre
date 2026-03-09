@@ -507,6 +507,10 @@ func runStats(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("  Total recoverable: %s tokens%s\n",
 			formatTokens(rec.TotalTokens), turnsStr)
+		if stats.CurrentContextTokens > 0 && rec.TotalTokens > 0 {
+			nm := float64(rec.TotalTokens) / float64(stats.CurrentContextTokens)
+			fmt.Printf("  Noise multiplier:  %.1fx\n", nm)
+		}
 		fmt.Printf("  Projected: %.1f%% → %.1f%%\n",
 			rec.CurrentPercent, rec.ProjectedPercent)
 
