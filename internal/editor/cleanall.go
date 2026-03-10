@@ -2,7 +2,6 @@ package editor
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -20,7 +19,6 @@ type CleanAllResult struct {
 	StaleReadsRemoved  int
 	OrphansRemoved     int
 	OrphansTombstoned  int
-	CascadeConverged   bool
 	ImagesReplaced     int
 	SeparatorsStripped int
 	OutputsTruncated   int
@@ -214,66 +212,51 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 
 	// 1g. Orphan cascade — resolve orphaned tool_results and chain breaks
 	// created by prior deletions (especially tangent removal in 1d).
-	// Loop until convergence, same pattern as fix --apply.
-	// When tombstone mode is enabled, orphaned results are replaced with
-	// placeholders instead of deleted (preserves Mac scroll-back).
-	const maxCascadePasses = 50
-	cascadeConverged := true
-	for pass := 0; pass < maxCascadePasses; pass++ {
-		entries, err = jsonl.Parse(path)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("cascade parse: %w", err)
-		}
-		diagnosis := analyzer.Diagnose(entries)
-		// Only handle orphans and chain breaks — other issue types
-		// (filter blocks, images) belong to Phase 2 or fix.
-		toDelete = make(map[int]bool)
-		toTombstone := make(map[int]bool)
-		for _, issue := range diagnosis.Issues {
-			switch issue.Kind {
-			case analyzer.IssueOrphanedResult:
-				if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
-					if opts.Tombstone {
-						toTombstone[issue.EntryIndex] = true
-					} else {
-						toDelete[issue.EntryIndex] = true
-					}
-				}
-			case analyzer.IssueChainBroken:
-				if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
+	// Pre-computes the full transitive closure in memory via BFS graph
+	// traversal, then executes a single Delete() call.
+	entries, err = jsonl.Parse(path)
+	if err != nil {
+		_ = restoreOriginal(path, origBak)
+		return nil, fmt.Errorf("cascade parse: %w", err)
+	}
+	diagnosis := analyzer.Diagnose(entries)
+	toDelete = make(map[int]bool)
+	toTombstone := make(map[int]bool)
+	for _, issue := range diagnosis.Issues {
+		switch issue.Kind {
+		case analyzer.IssueOrphanedResult:
+			if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
+				if opts.Tombstone {
+					toTombstone[issue.EntryIndex] = true
+				} else {
 					toDelete[issue.EntryIndex] = true
 				}
 			}
-		}
-		if len(toDelete) == 0 && len(toTombstone) == 0 {
-			break
-		}
-		if pass == maxCascadePasses-1 {
-			cascadeConverged = false
-		}
-		if len(toTombstone) > 0 {
-			tsResult, err := Tombstone(path, toTombstone)
-			if err != nil {
-				_ = restoreOriginal(path, origBak)
-				return nil, fmt.Errorf("cascade tombstone: %w", err)
+		case analyzer.IssueChainBroken:
+			if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
+				toDelete[issue.EntryIndex] = true
 			}
-			result.OrphansTombstoned += tsResult.EntriesTombstoned
-			cleanIntermediate()
-		}
-		if len(toDelete) > 0 {
-			dr, err := Delete(path, toDelete)
-			if err != nil {
-				_ = restoreOriginal(path, origBak)
-				return nil, fmt.Errorf("cascade: %w", err)
-			}
-			result.OrphansRemoved += dr.EntriesRemoved
-			cleanIntermediate()
 		}
 	}
-	result.CascadeConverged = cascadeConverged
-	if !cascadeConverged {
-		slog.Warn("Orphan cascade did not converge", "maxPasses", maxCascadePasses)
+	// Expand delete set to full transitive closure (orphan + chain cascades).
+	toDelete = analyzer.CascadeDeleteSet(entries, toDelete, isKept)
+	if len(toTombstone) > 0 {
+		tsResult, err := Tombstone(path, toTombstone)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("cascade tombstone: %w", err)
+		}
+		result.OrphansTombstoned += tsResult.EntriesTombstoned
+		cleanIntermediate()
+	}
+	if len(toDelete) > 0 {
+		dr, err := Delete(path, toDelete)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("cascade: %w", err)
+		}
+		result.OrphansRemoved += dr.EntriesRemoved
+		cleanIntermediate()
 	}
 
 	// Phase 2: Content surgery
