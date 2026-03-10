@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.7] - 2026-03-10
+
+### Fixed
+
+- Client type misclassification: cleaned CLI sessions no longer detected as desktop
+- Convergence warning when orphan cascade hits 50-pass limit
+
 ## [0.38.5] - 2026-03-09
 
 ### Added
