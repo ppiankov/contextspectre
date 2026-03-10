@@ -74,53 +74,60 @@ func runFix(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Apply repairs — loop until convergence because each fix can cascade
-	// (e.g., removing an orphan exposes an assistant chain start, removing
-	// that exposes another orphan).
+	// Apply repairs: first pass handles non-cascade issues (filter blocks,
+	// images), then CascadeDeleteSet pre-computes all orphan/chain cascades
+	// in memory for a single Delete() call.
 	fmt.Println()
-	const maxPasses = 50
-	totalRemoved := 0
-	totalTombstoned := 0
-	totalImages := 0
-	totalChains := 0
-	totalIssues := len(diagnosis.Issues)
+	tombstone := fixTombstone || autoTombstone(path)
 
-	result, err := editor.Repair(path, diagnosis.Issues, fixTombstone || autoTombstone(path))
+	result, err := editor.Repair(path, diagnosis.Issues, tombstone)
 	if err != nil {
 		return fmt.Errorf("repair: %w", err)
 	}
-	totalRemoved += result.EntriesRemoved
-	totalTombstoned += result.EntriesTombstoned
-	totalImages += result.ImagesReplaced
-	totalChains += result.ChainRepairs
+	totalRemoved := result.EntriesRemoved
+	totalTombstoned := result.EntriesTombstoned
+	totalImages := result.ImagesReplaced
+	totalChains := result.ChainRepairs
+	totalIssues := len(diagnosis.Issues)
 
-	converged := true
-	for pass := 1; pass < maxPasses; pass++ {
-		entries, err = jsonl.Parse(path)
-		if err != nil {
-			return fmt.Errorf("reparse: %w", err)
-		}
-		diagnosis = analyzer.Diagnose(entries)
-		if len(diagnosis.Issues) == 0 {
-			break
-		}
-		if pass == maxPasses-1 {
-			converged = false
-		}
-		totalIssues += len(diagnosis.Issues)
-		cascadeResult, err := editor.Repair(path, diagnosis.Issues, fixTombstone || autoTombstone(path))
-		if err != nil {
-			return fmt.Errorf("cascade repair: %w", err)
-		}
-		totalRemoved += cascadeResult.EntriesRemoved
-		totalTombstoned += cascadeResult.EntriesTombstoned
-		totalImages += cascadeResult.ImagesReplaced
-		totalChains += cascadeResult.ChainRepairs
+	// Cascade: re-parse after initial repair, expand remaining orphans/chains.
+	entries, err = jsonl.Parse(path)
+	if err != nil {
+		return fmt.Errorf("reparse: %w", err)
 	}
-
-	if !converged {
-		fmt.Printf("Warning: repair did not fully converge after %d passes — run fix again\n", maxPasses)
-		slog.Warn("Repair did not converge", "maxPasses", maxPasses)
+	diagnosis = analyzer.Diagnose(entries)
+	if len(diagnosis.Issues) > 0 {
+		totalIssues += len(diagnosis.Issues)
+		toDelete := make(map[int]bool)
+		toTombstone := make(map[int]bool)
+		for _, issue := range diagnosis.Issues {
+			switch issue.Kind {
+			case analyzer.IssueOrphanedResult:
+				if tombstone {
+					toTombstone[issue.EntryIndex] = true
+				} else {
+					toDelete[issue.EntryIndex] = true
+				}
+			case analyzer.IssueChainBroken:
+				toDelete[issue.EntryIndex] = true
+			}
+		}
+		toDelete = analyzer.CascadeDeleteSet(entries, toDelete, func(string) bool { return false })
+		if len(toTombstone) > 0 {
+			tsResult, err := editor.Tombstone(path, toTombstone)
+			if err != nil {
+				return fmt.Errorf("cascade tombstone: %w", err)
+			}
+			totalTombstoned += tsResult.EntriesTombstoned
+		}
+		if len(toDelete) > 0 {
+			dr, err := editor.Delete(path, toDelete)
+			if err != nil {
+				return fmt.Errorf("cascade: %w", err)
+			}
+			totalRemoved += dr.EntriesRemoved
+			totalChains += dr.EntriesRemoved // chain repairs from cascade
+		}
 	}
 
 	if totalTombstoned > 0 {
