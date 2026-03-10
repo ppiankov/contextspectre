@@ -125,6 +125,9 @@ func runQuickCleanAll(path string, target session.Info) error {
 			result.TangentsRemoved+result.FailedRetries+result.StaleReadsRemoved+result.OrphansRemoved,
 		result.TotalTokensSaved,
 		formatBytes(result.BytesBefore-result.BytesAfter))
+	if !result.CascadeConverged {
+		fmt.Println("Warning: orphan cascade did not fully converge — run again")
+	}
 	printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 	slog.Info("Quick-clean complete", "session", target.SessionID, "project", target.ProjectName, "tokens", result.TotalTokensSaved)
 	return nil

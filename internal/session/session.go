@@ -69,8 +69,10 @@ func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
 	snapshotCount := stats.TypeCounts[jsonl.TypeFileHistorySnapshot]
 	if snapshotCount > 0 {
 		clientType = "cli"
-	} else if stats.LineCount > 100 {
+	} else if stats.StartsWithQueueOp {
 		clientType = "desktop"
+	} else if stats.LineCount > 100 {
+		clientType = "cli" // cleaned CLI session (snapshots removed)
 	}
 	return &QuickStats{
 		ImageCount:           stats.ImageCount,
