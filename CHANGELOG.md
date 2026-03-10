@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.8] - 2026-03-10
+
+### Added
+
+- Single-pass cascade convergence via CascadeDeleteSet BFS graph traversal
+- Guaranteed convergence for orphan/chain cascades in clean --all and fix --apply
+- ~50x I/O reduction on large sessions (80MB vs 4GB for 40MB sessions)
+
 ## [0.38.7] - 2026-03-10
 
 ### Fixed
