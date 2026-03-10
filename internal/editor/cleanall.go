@@ -2,6 +2,7 @@ package editor
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -19,6 +20,7 @@ type CleanAllResult struct {
 	StaleReadsRemoved  int
 	OrphansRemoved     int
 	OrphansTombstoned  int
+	CascadeConverged   bool
 	ImagesReplaced     int
 	SeparatorsStripped int
 	OutputsTruncated   int
@@ -216,6 +218,7 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	// When tombstone mode is enabled, orphaned results are replaced with
 	// placeholders instead of deleted (preserves Mac scroll-back).
 	const maxCascadePasses = 50
+	cascadeConverged := true
 	for pass := 0; pass < maxCascadePasses; pass++ {
 		entries, err = jsonl.Parse(path)
 		if err != nil {
@@ -246,6 +249,9 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 		if len(toDelete) == 0 && len(toTombstone) == 0 {
 			break
 		}
+		if pass == maxCascadePasses-1 {
+			cascadeConverged = false
+		}
 		if len(toTombstone) > 0 {
 			tsResult, err := Tombstone(path, toTombstone)
 			if err != nil {
@@ -264,6 +270,10 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			result.OrphansRemoved += dr.EntriesRemoved
 			cleanIntermediate()
 		}
+	}
+	result.CascadeConverged = cascadeConverged
+	if !cascadeConverged {
+		slog.Warn("Orphan cascade did not converge", "maxPasses", maxCascadePasses)
 	}
 
 	// Phase 2: Content surgery

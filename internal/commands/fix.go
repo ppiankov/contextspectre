@@ -94,6 +94,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	totalImages += result.ImagesReplaced
 	totalChains += result.ChainRepairs
 
+	converged := true
 	for pass := 1; pass < maxPasses; pass++ {
 		entries, err = jsonl.Parse(path)
 		if err != nil {
@@ -102,6 +103,9 @@ func runFix(cmd *cobra.Command, args []string) error {
 		diagnosis = analyzer.Diagnose(entries)
 		if len(diagnosis.Issues) == 0 {
 			break
+		}
+		if pass == maxPasses-1 {
+			converged = false
 		}
 		totalIssues += len(diagnosis.Issues)
 		cascadeResult, err := editor.Repair(path, diagnosis.Issues, fixTombstone || autoTombstone(path))
@@ -112,6 +116,11 @@ func runFix(cmd *cobra.Command, args []string) error {
 		totalTombstoned += cascadeResult.EntriesTombstoned
 		totalImages += cascadeResult.ImagesReplaced
 		totalChains += cascadeResult.ChainRepairs
+	}
+
+	if !converged {
+		fmt.Printf("Warning: repair did not fully converge after %d passes — run fix again\n", maxPasses)
+		slog.Warn("Repair did not converge", "maxPasses", maxPasses)
 	}
 
 	if totalTombstoned > 0 {

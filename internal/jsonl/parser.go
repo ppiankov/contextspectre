@@ -111,6 +111,7 @@ type LightStats struct {
 	SignalPercent         int       // 0-100, estimated signal/noise ratio
 	EpochAssistantCount   int       // assistant turns since last compaction
 	ChainHealthy          bool      // false if active parent chain has missing links
+	StartsWithQueueOp     bool      // true if first entry is queue-operation (Mac/desktop indicator)
 	FirstTimestamp        time.Time // timestamp of first entry
 	LastTimestamp         time.Time // timestamp of last entry
 }
@@ -158,6 +159,11 @@ func ScanLight(path string) (*LightStats, error) {
 			continue
 		}
 		stats.TypeCounts[e.Type]++
+
+		// Detect Mac/desktop session: first entry is queue-operation.
+		if stats.LineCount == 1 && e.Type == TypeQueueOperation {
+			stats.StartsWithQueueOp = true
+		}
 
 		// Capture first and last timestamps.
 		if !e.Timestamp.IsZero() {
