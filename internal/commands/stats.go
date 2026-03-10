@@ -833,10 +833,9 @@ func autoTombstone(path string) bool {
 	if err != nil {
 		return false
 	}
-	// Same heuristic as session.quickStatsFromLight:
-	// CLI sessions have file-history-snapshot entries, desktop sessions don't.
-	hasSnapshots := stats.TypeCounts[jsonl.TypeFileHistorySnapshot] > 0
-	return !hasSnapshots && stats.LineCount > 100
+	// Mac/desktop sessions start with queue-operation entries.
+	// CLI sessions (even after cleaning removes snapshots) do not.
+	return stats.StartsWithQueueOp
 }
 
 func formatTokens(n int) string {

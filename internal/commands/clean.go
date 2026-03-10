@@ -137,6 +137,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Cleaned: %s\n", parts)
 		fmt.Printf("Total saved: ~%d tokens, %s\n",
 			result.TotalTokensSaved, formatBytes(result.BytesBefore-result.BytesAfter))
+		if !result.CascadeConverged {
+			fmt.Println("Warning: orphan cascade did not fully converge — run clean --all again")
+		}
 		printSavingsLine(recordCleanupSavings(path, result.TotalTokensSaved))
 		return nil
 	}

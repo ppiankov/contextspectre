@@ -210,11 +210,14 @@ func Analyze(entries []jsonl.Entry) *ContextStats {
 	// Injection detection
 	stats.InjectionReport = DetectInjection(entries)
 
-	// Client type detection
+	// Client type detection: snapshots → CLI, queue-operation first entry → desktop,
+	// large session without snapshots → cleaned CLI, otherwise unknown.
 	if stats.SnapshotCount > 0 {
 		stats.ClientType = "cli"
-	} else if stats.TotalLines > 100 {
+	} else if len(entries) > 0 && entries[0].Type == "queue-operation" {
 		stats.ClientType = "desktop"
+	} else if stats.TotalLines > 100 {
+		stats.ClientType = "cli" // cleaned CLI session (snapshots removed)
 	} else {
 		stats.ClientType = "unknown"
 	}
