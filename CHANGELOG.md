@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.38.9] - 2026-03-11
+
+### Added
+
+- `id` command: resolve short session ID to full UUID, client type (cli/desktop), and project
+
 ## [0.38.8] - 2026-03-10
 
 ### Added
