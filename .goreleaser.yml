@@ -32,6 +32,8 @@ brews:
     homepage: "https://github.com/ppiankov/contextspectre"
     description: "Claude Code conversation context manager"
     license: "MIT"
+    extra_install: |
+      bin.install_symlink "contextspectre" => "cs"
     test: |
       system "#{bin}/contextspectre", "version"
 
