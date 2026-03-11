@@ -14,6 +14,7 @@ var (
 	fixApply     bool
 	fixCWD       bool
 	fixTombstone bool
+	fixPreserve  bool
 )
 
 var fixCmd = &cobra.Command{
@@ -72,6 +73,22 @@ func runFix(cmd *cobra.Command, args []string) error {
 	if !fixApply {
 		fmt.Println("\nDry run — no changes made. Use --apply to fix.")
 		return nil
+	}
+
+	// Preserve decisions/findings from entries about to be deleted
+	if fixPreserve {
+		toDelete := make(map[int]bool)
+		for _, issue := range diagnosis.Issues {
+			toDelete[issue.EntryIndex] = true
+		}
+		expanded := analyzer.CascadeDeleteSet(entries, toDelete, func(string) bool { return false })
+		result, err := editor.Preserve(path, entries, expanded)
+		if err != nil {
+			slog.Warn("Preserve failed", "err", err)
+		} else if result.Decisions > 0 || result.Findings > 0 {
+			fmt.Printf("Preserved: %d decisions, %d findings → %s\n",
+				result.Decisions, result.Findings, result.OutputPath)
+		}
 	}
 
 	// Apply repairs: first pass handles non-cascade issues (filter blocks,
@@ -167,5 +184,6 @@ func init() {
 	fixCmd.Flags().BoolVar(&fixApply, "apply", false, "Apply repairs (default: dry-run)")
 	fixCmd.Flags().BoolVar(&fixCWD, "cwd", false, "Use most recent session for current directory")
 	fixCmd.Flags().BoolVar(&fixTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
+	fixCmd.Flags().BoolVar(&fixPreserve, "preserve", false, "Extract decisions and findings before repair (writes .preserved.md sidecar)")
 	rootCmd.AddCommand(fixCmd)
 }
