@@ -863,9 +863,10 @@ func cleanAllToJSON(path string, r *editor.CleanAllResult) *CleanOutput {
 	addOp("image_replacement", r.ImagesReplaced)
 	addOp("separator_stripping", r.SeparatorsStripped)
 	addOp("output_truncation", r.OutputsTruncated)
+	addOp("coalesce", r.CoalesceMerged)
 
 	totalEntries := r.ProgressRemoved + r.SnapshotsRemoved + r.SidechainsRemoved +
-		r.TangentsRemoved + r.FailedRetries + r.StaleReadsRemoved + r.OrphansRemoved
+		r.TangentsRemoved + r.FailedRetries + r.StaleReadsRemoved + r.OrphansRemoved + r.CoalesceMerged
 	totalModified := r.ImagesReplaced + r.SeparatorsStripped + r.OutputsTruncated
 
 	out.Summary = CleanSummaryJSON{

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.2] - 2026-03-11
+
+### Added
+
+- Coalesce integrated into `clean --all` and `fix --apply` pipelines
+  - Runs automatically after other cleanup operations
+  - No manual `coalesce` step needed for routine cleanup
+
 ## [0.39.1] - 2026-03-11
 
 ### Added
