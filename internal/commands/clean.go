@@ -40,6 +40,7 @@ var (
 	cleanWatch         bool
 	cleanWatchInterval int
 	cleanTombstone     bool
+	cleanPreserve      bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -118,6 +119,9 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	if cleanAll {
+		if cleanPreserve {
+			preserveBeforeClean(path)
+		}
 		result, err := editor.CleanAll(path, editor.CleanAllOpts{Tombstone: cleanTombstone || autoTombstone(path)})
 		if err != nil {
 			return fmt.Errorf("clean all: %w", err)
@@ -1241,6 +1245,86 @@ func printSavingsLine(event *savings.Event) {
 		event.TurnsRemaining)
 }
 
+// preserveBeforeClean extracts decisions and findings from all entries that
+// would be deleted by a full clean, and writes them to a sidecar file.
+func preserveBeforeClean(path string) {
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		slog.Warn("Preserve: failed to parse session", "error", err)
+		return
+	}
+
+	// Build the union of all entries that CleanAll would delete
+	markers, _ := editor.LoadMarkers(path)
+
+	toDelete := make(map[int]bool)
+
+	// Progress entries
+	for i, e := range entries {
+		if e.Type == jsonl.TypeProgress {
+			toDelete[i] = true
+		}
+	}
+
+	// Snapshots
+	for i, e := range entries {
+		if e.Type == jsonl.TypeFileHistorySnapshot {
+			toDelete[i] = true
+		}
+	}
+
+	// Sidechains
+	sidechains := analyzer.DetectSidechains(entries)
+	for idx := range analyzer.SidechainIndexSet(sidechains) {
+		toDelete[idx] = true
+	}
+
+	// Tangents
+	tangents := analyzer.FindTangents(entries)
+	if tangents != nil {
+		for idx := range tangents.AllTangentIndices() {
+			toDelete[idx] = true
+		}
+	}
+
+	// Failed retries
+	retries := analyzer.FindFailedRetries(entries)
+	for _, seq := range retries.Sequences {
+		toDelete[seq.FailedToolUseIdx] = true
+		toDelete[seq.FailedResultIdx] = true
+	}
+
+	// Stale reads
+	dupes := analyzer.FindDuplicateReads(entries)
+	for _, g := range dupes.Groups {
+		for _, idx := range g.StaleIndices() {
+			toDelete[idx] = true
+		}
+	}
+
+	// Respect KEEP markers
+	for idx := range toDelete {
+		if idx < len(entries) && markers.IsKeep(entries[idx].UUID) {
+			delete(toDelete, idx)
+		}
+	}
+
+	// Expand with cascade
+	isKept := func(uuid string) bool { return markers.IsKeep(uuid) }
+	toDelete = analyzer.CascadeDeleteSet(entries, toDelete, isKept)
+
+	result, err := editor.Preserve(path, entries, toDelete)
+	if err != nil {
+		slog.Warn("Preserve failed", "error", err)
+		return
+	}
+
+	if result.Decisions > 0 || result.Findings > 0 {
+		fmt.Printf("Preserved: %d decisions, %d findings → %s\n",
+			result.Decisions, result.Findings, result.OutputPath)
+	}
+}
+
 func init() {
 	cleanCmd.Flags().BoolVar(&cleanImages, "images", false, "Replace base64 images with placeholders")
 	cleanCmd.Flags().BoolVar(&cleanProgress, "progress", false, "Remove all progress messages")
@@ -1262,5 +1346,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active; use --live/--aggressive for tiers)")
 	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
 	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
+	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", false, "Extract decisions and findings before cleaning (writes .preserved.md sidecar)")
 	rootCmd.AddCommand(cleanCmd)
 }
