@@ -245,6 +245,32 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre analytics` | Show aggregated session analytics |
 | `contextspectre savings` | Show lifetime cleanup savings |
 
+### Session repair
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre coalesce <id>` | Dry-run: show adjacent same-role merge groups |
+| `contextspectre coalesce <id> --apply` | Merge adjacent same-role entries + strip orphaned tool_results |
+| `contextspectre coalesce --cwd` | Auto-detect session from current directory |
+
+### Session lookup
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre id <short-id>` | Resolve short ID to full UUID, client type, project |
+| `contextspectre id <short-id> --format json` | JSON output |
+
+### Session pruning
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre prune` | Dry-run: show sessions exceeding per-project cap (default: keep 10) |
+| `contextspectre prune --keep 5` | Keep 5 most recent per project |
+| `contextspectre prune --min-age 7` | Only prune sessions older than 7 days |
+| `contextspectre prune --project <name>` | Filter to a single project |
+| `contextspectre prune --apply` | Actually delete pruned sessions |
+| `contextspectre prune --apply --archive` | Move to ~/.claude/archive/ instead of deleting |
+
 ### Maintenance
 
 | Command | Description |
