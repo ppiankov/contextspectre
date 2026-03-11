@@ -150,9 +150,11 @@ func Coalesce(path string) (*CoalesceResult, error) {
 }
 
 // isTransparent returns true for entries that should not break a merge group.
-// System and queue-operation entries are structural metadata, not conversation turns.
+// System, queue-operation, and progress entries are structural metadata or noise,
+// not conversation turns. Progress entries between assistant/user entries must not
+// prevent merging — otherwise tool_result blocks become orphaned.
 func isTransparent(e jsonl.Entry) bool {
-	return e.Type == jsonl.TypeSystem || e.Type == jsonl.TypeQueueOperation
+	return e.Type == jsonl.TypeSystem || e.Type == jsonl.TypeQueueOperation || e.Type == jsonl.TypeProgress
 }
 
 // entryRole returns the message role for mergeable entry types, or "" for non-mergeable.
@@ -305,10 +307,31 @@ func stripOrphanedToolResults(lines [][]byte) ([][]byte, int) {
 
 		if role == "assistant" {
 			prevAssistantToolUses = map[string]bool{}
+			var cleanBlocks []json.RawMessage
+			hasStrayToolResult := false
 			for _, b := range blocks {
 				var bi blockInfo
-				if err := json.Unmarshal(b, &bi); err == nil && bi.Type == "tool_use" && bi.ID != "" {
-					prevAssistantToolUses[bi.ID] = true
+				if err := json.Unmarshal(b, &bi); err == nil {
+					if bi.Type == "tool_use" && bi.ID != "" {
+						prevAssistantToolUses[bi.ID] = true
+					}
+					// Strip tool_result blocks from assistant messages — they're invalid.
+					if bi.Type == "tool_result" {
+						hasStrayToolResult = true
+						stripped++
+						continue
+					}
+				}
+				cleanBlocks = append(cleanBlocks, b)
+			}
+			if hasStrayToolResult && len(cleanBlocks) > 0 {
+				newContent, _ := json.Marshal(cleanBlocks)
+				msg["content"] = newContent
+				newMsg, _ := json.Marshal(msg)
+				entry["message"] = newMsg
+				updated, err := json.Marshal(entry)
+				if err == nil {
+					lines[i] = updated
 				}
 			}
 			continue
