@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.0] - 2026-03-11
+
+### Added
+
+- `prune` command: reduce sessions per project to a manageable count with inspection
+  - Groups sessions by project, keeps N most recent (default 10)
+  - Inspects candidates for worthy content: compactions, commit points, bookmarks, cost
+  - Assigns verdicts: empty, throwaway, has-content, substantive
+  - Warns before pruning sessions with content
+  - Supports --apply, --archive, --min-age, --project filters
+
 ## [0.38.9] - 2026-03-11
 
 ### Added
