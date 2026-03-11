@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.39.1] - 2026-03-11
+
+### Added
+
+- `coalesce` command: merge adjacent same-role entries to fix Mac session API errors
+  - Combines content blocks from split multi-tool calls into single entries
+  - Strips orphaned tool_result blocks that reference deleted tool_use entries
+  - System/queue-operation entries treated as transparent (don't break groups)
+  - Preserves all discussion content while fixing structural issues
+
 ## [0.39.0] - 2026-03-11
 
 ### Added
