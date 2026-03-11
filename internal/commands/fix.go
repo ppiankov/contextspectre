@@ -130,20 +130,35 @@ func runFix(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Post-repair: coalesce adjacent same-role entries.
+	cr, err := editor.Coalesce(path)
+	if err != nil {
+		slog.Warn("coalesce failed", "err", err)
+	}
+	coalesced := 0
+	if cr != nil {
+		coalesced = cr.EntriesRemoved
+	}
+
 	if totalTombstoned > 0 {
-		fmt.Printf("Repaired: %d entries removed, %d tombstoned, %d images replaced, %d chains repaired\n",
+		fmt.Printf("Repaired: %d entries removed, %d tombstoned, %d images replaced, %d chains repaired",
 			totalRemoved, totalTombstoned, totalImages, totalChains)
 	} else {
-		fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired\n",
+		fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired",
 			totalRemoved, totalImages, totalChains)
 	}
+	if coalesced > 0 {
+		fmt.Printf(", %d coalesced", coalesced)
+	}
+	fmt.Println()
 	slog.Info("Session repaired",
 		"path", path,
 		"issues", totalIssues,
 		"removed", totalRemoved,
 		"tombstoned", totalTombstoned,
 		"images", totalImages,
-		"chains", totalChains)
+		"chains", totalChains,
+		"coalesced", coalesced)
 
 	return nil
 }

@@ -22,6 +22,8 @@ type CleanAllResult struct {
 	ImagesReplaced     int
 	SeparatorsStripped int
 	OutputsTruncated   int
+	CoalesceMerged     int
+	CoalesceOrphans    int
 	TotalTokensSaved   int
 	KeepSkipped        int
 	BytesBefore        int64
@@ -291,6 +293,18 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	}
 	result.OutputsTruncated = tr.OutputsTruncated
 	if tr.OutputsTruncated > 0 {
+		cleanIntermediate()
+	}
+
+	// 2d. Coalesce adjacent same-role entries (fixes Mac session API errors).
+	cr, err := Coalesce(path)
+	if err != nil {
+		_ = restoreOriginal(path, origBak)
+		return nil, fmt.Errorf("coalesce: %w", err)
+	}
+	result.CoalesceMerged = cr.EntriesRemoved
+	result.CoalesceOrphans = cr.OrphansStripped
+	if cr.EntriesRemoved > 0 {
 		cleanIntermediate()
 	}
 
