@@ -92,6 +92,7 @@ func runStatusLine(_ *cobra.Command, _ []string) error {
 	}
 
 	tryExpertClean(path)
+	tryAutoCheckpoint(path)
 
 	return formatStatusLine(data)
 }
