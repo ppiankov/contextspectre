@@ -114,6 +114,7 @@ type LightStats struct {
 	StartsWithQueueOp     bool      // true if first entry is queue-operation (Mac/desktop indicator)
 	FirstTimestamp        time.Time // timestamp of first entry
 	LastTimestamp         time.Time // timestamp of last entry
+	CWD                   string    // first non-empty CWD from entries
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -182,6 +183,10 @@ func ScanLight(path string) (*LightStats, error) {
 
 		if stats.Slug == "" && e.Slug != "" {
 			stats.Slug = e.Slug
+		}
+
+		if stats.CWD == "" && e.CWD != "" {
+			stats.CWD = e.CWD
 		}
 
 		// Track noise entries (progress, snapshots) for signal percent
