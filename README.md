@@ -191,6 +191,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | [Computation Methodology](docs/methodology.md) | Formula-level specification with source references |
 | [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
 | [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
+| [How-To Guide](docs/howto.md) | Rename folders, auto-checkpoint, preserve decisions, fix Mac errors |
 | [Session Architecture](docs/session-architecture.md) | Session storage, multi-instance safety |
 
 ## License
