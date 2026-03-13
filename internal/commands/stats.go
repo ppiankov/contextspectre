@@ -136,6 +136,20 @@ func runStats(cmd *cobra.Command, args []string) error {
 	if stats.ClientType != "" && stats.ClientType != "unknown" {
 		fmt.Printf("Client: %s\n", stats.ClientType)
 	}
+
+	// Zombie detection
+	fileSizeBytes := int64(0)
+	if fi != nil {
+		fileSizeBytes = fi.Size()
+	}
+	zombie := analyzer.DetectZombieFromFull(stats, fileSizeBytes)
+	if zombie.IsZombie {
+		fmt.Println()
+		fmt.Printf("WARNING: %s.\n", zombie.Reason)
+		fmt.Println("This session is unlikely to work for active conversation.")
+		fmt.Println("Data is still accessible via: contextspectre search, export, checkpoint")
+	}
+
 	fmt.Println()
 
 	// Message counts

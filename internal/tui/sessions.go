@@ -542,9 +542,12 @@ func (m sessionsModel) View() string {
 		s := src[row.sessionIdx]
 		isSelected := i == m.cursor
 
-		// Active indicator: single char prefix
+		// Active/zombie indicator: single char prefix
+		isZombie := isSessionZombie(s)
 		activeChar := " "
-		if s.IsActive() {
+		if isZombie {
+			activeChar = lipgloss.NewStyle().Foreground(colorRed).Render("\u2717")
+		} else if s.IsActive() {
 			activeChar = lipgloss.NewStyle().Foreground(colorYellow).Render("\u25cf")
 		}
 		selector := "  "
@@ -635,6 +638,8 @@ func (m sessionsModel) View() string {
 		lineStr := line.String()
 		if isSelected {
 			b.WriteString(styleSelected.Render(lineStr))
+		} else if isZombie {
+			b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("240")).Render(lineStr))
 		} else if s.IsActive() {
 			b.WriteString(styleActive.Render(lineStr))
 		} else {
@@ -863,4 +868,26 @@ func clientTypeChar(s session.Info) string {
 	default:
 		return styleMuted.Render("?")
 	}
+}
+
+// isSessionZombie checks if a session is in an unusable zombie state
+// using the same thresholds as analyzer.DetectZombie but from QuickStats.
+func isSessionZombie(s session.Info) bool {
+	fileSizeBytes := int64(s.FileSizeMB * 1024 * 1024)
+	if fileSizeBytes <= int64(analyzer.ZombieFileSizeThreshold) {
+		return false
+	}
+
+	signals := 1 // file size already exceeds threshold
+
+	if s.ContextStats != nil {
+		if s.ContextStats.ContextTokens == 0 && s.MessageCount > 20 {
+			signals++
+		}
+		if s.ContextStats.CompactionCount > analyzer.ZombieCompactionThreshold {
+			signals++
+		}
+	}
+
+	return signals >= 2
 }
