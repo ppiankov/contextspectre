@@ -35,6 +35,8 @@ type SessionJSON struct {
 	CleanupStatus  string    `json:"cleanup_status,omitempty"`
 	CadenceScore   *float64  `json:"cadence_score,omitempty"`
 	ClientType     string    `json:"client_type,omitempty"`
+	Zombie         bool      `json:"zombie,omitempty"`
+	ZombieReason   string    `json:"zombie_reason,omitempty"`
 }
 
 // SessionsOutput is the JSON output for the sessions command.
