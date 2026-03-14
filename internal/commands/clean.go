@@ -932,7 +932,7 @@ func (w *watchAccumulator) printSummary() {
 		fmt.Printf("  Noise removed:     %s\n", strings.Join(parts, ", "))
 	}
 	if w.tangents > 0 {
-		fmt.Printf("  Tangents detected: %d (advisory only)\n", w.tangents)
+		fmt.Printf("  Tangent groups:    %d (advisory only)\n", w.tangents)
 	}
 }
 
@@ -1061,10 +1061,10 @@ func detectTangentAdvisory(path, proj, shortID string, acc *watchAccumulator) {
 	if tangentResult == nil || len(tangentResult.Groups) == 0 {
 		return
 	}
-	acc.tangents += tangentResult.TotalEntries
+	acc.tangents += len(tangentResult.Groups)
 	if !isJSON() {
-		fmt.Printf("  %s (%s): tangent detected (%d entries, ~%s tokens) — consider: contextspectre split\n",
-			proj, shortID, tangentResult.TotalEntries, formatTokens(tangentResult.TotalTokens))
+		fmt.Printf("  %s (%s): %d tangent groups (%d entries, ~%s tokens) — consider: contextspectre split\n",
+			proj, shortID, len(tangentResult.Groups), tangentResult.TotalEntries, formatTokens(tangentResult.TotalTokens))
 	}
 }
 
