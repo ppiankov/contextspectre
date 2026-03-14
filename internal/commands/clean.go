@@ -936,7 +936,20 @@ func (w *watchAccumulator) printSummary() {
 	}
 }
 
+// maxWatchWorkers is the maximum number of concurrent session cleaners in watch mode.
+const maxWatchWorkers = 4
+
+// watchCleanResult holds the result of a single session clean for collection.
+type watchCleanResult struct {
+	info    session.Info
+	result  *editor.CleanLiveResult
+	err     error
+	shortID string
+	proj    string
+}
+
 // cleanActiveSessionsWatch cleans sessions using CleanLive (tier-gated, race-safe).
+// Sessions are cleaned in parallel (up to maxWatchWorkers).
 // Tangents are detected but NOT removed — advisory only.
 func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int, int) {
 	opts := editor.CleanLiveOpts{
@@ -944,42 +957,61 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int
 		Aggressive: cleanAggressive,
 	}
 
+	// Clean sessions in parallel
+	ch := make(chan watchCleanResult, len(active))
+	sem := make(chan struct{}, maxWatchWorkers)
+
+	for _, s := range active {
+		go func(s session.Info) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			shortID := s.SessionID
+			if len(shortID) > 8 {
+				shortID = shortID[:8]
+			}
+			result, err := editor.CleanLive(s.FullPath, opts)
+			ch <- watchCleanResult{
+				info:    s,
+				result:  result,
+				err:     err,
+				shortID: shortID,
+				proj:    s.ProjectName,
+			}
+		}(s)
+	}
+
 	totalTokens := 0
 	cleaned := 0
 
-	for _, s := range active {
-		result, err := editor.CleanLive(s.FullPath, opts)
-		if err != nil {
-			if errors.Is(err, editor.ErrSessionNotIdle) || errors.Is(err, editor.ErrRaceDetected) {
-				// Session busy — will catch next cycle
+	// Collect results (output is serialized here for consistent ordering)
+	for range active {
+		cr := <-ch
+
+		if cr.err != nil {
+			if errors.Is(cr.err, editor.ErrSessionNotIdle) || errors.Is(cr.err, editor.ErrRaceDetected) {
 				continue
 			}
-			slog.Warn("Failed to clean session", "session", s.SessionID, "error", err)
+			slog.Warn("Failed to clean session", "session", cr.info.SessionID, "error", cr.err)
 			continue
 		}
 
-		shortID := s.SessionID
-		if len(shortID) > 8 {
-			shortID = shortID[:8]
-		}
-		proj := s.ProjectName
-
+		result := cr.result
 		totalOps := result.ProgressRemoved + result.SnapshotsRemoved +
+			result.CoalesceMerged +
 			result.StaleReadsRemoved + result.FailedRetries +
 			result.ImagesReplaced + result.SeparatorsStripped + result.OutputsTruncated
 
-		// Clamp negative savings for display
 		tokensSaved := result.TotalTokensSaved
 		if tokensSaved < 0 {
 			tokensSaved = 0
 		}
 
-		savingsEvent := recordCleanupSavings(s.FullPath, tokensSaved)
+		savingsEvent := recordCleanupSavings(cr.info.FullPath, tokensSaved)
 		acc.addResult(result, savingsEvent)
 
 		if totalOps == 0 {
 			if !isJSON() {
-				fmt.Printf("  %s (%s): clean\n", proj, shortID)
+				fmt.Printf("  %s (%s): clean\n", cr.proj, cr.shortID)
 			}
 		} else {
 			cleaned++
@@ -992,6 +1024,9 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int
 				}
 				if result.SnapshotsRemoved > 0 {
 					parts = append(parts, fmt.Sprintf("%d snap", result.SnapshotsRemoved))
+				}
+				if result.CoalesceMerged > 0 {
+					parts = append(parts, fmt.Sprintf("%d coal", result.CoalesceMerged))
 				}
 				if result.StaleReadsRemoved > 0 {
 					parts = append(parts, fmt.Sprintf("%d stale", result.StaleReadsRemoved))
@@ -1013,13 +1048,13 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int
 					costStr = fmt.Sprintf(" (~%s)", analyzer.FormatCost(savingsEvent.AvoidedCost))
 				}
 				fmt.Printf("  %s (%s): %s → %s tokens saved%s\n",
-					proj, shortID, strings.Join(parts, ", "),
+					cr.proj, cr.shortID, strings.Join(parts, ", "),
 					formatTokens(tokensSaved), costStr)
 			}
 		}
 
 		// Tangent detection — advisory only, never auto-delete
-		detectTangentAdvisory(s.FullPath, proj, shortID, acc)
+		detectTangentAdvisory(cr.info.FullPath, cr.proj, cr.shortID, acc)
 	}
 
 	return totalTokens, cleaned

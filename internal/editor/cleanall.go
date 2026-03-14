@@ -167,7 +167,7 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 		cleanIntermediate()
 	}
 
-	// 1e. Remove failed retries (content surgery — needs its own parse)
+	// 1e+1f. Content surgery: retries + stale reads in single ParseRaw pass
 	entries, _ = jsonl.Parse(path)
 	retryResult := analyzer.FindFailedRetries(entries)
 	if len(retryResult.Sequences) > 0 {
@@ -182,19 +182,8 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			filteredSeqs = append(filteredSeqs, seq)
 		}
 		retryResult.Sequences = filteredSeqs
-		if len(retryResult.Sequences) > 0 {
-			rr, err := RemoveFailedRetries(path, retryResult)
-			if err != nil {
-				_ = restoreOriginal(path, origBak)
-				return nil, fmt.Errorf("retries: %w", err)
-			}
-			result.FailedRetries = rr.FailedRemoved
-			cleanIntermediate()
-		}
 	}
 
-	// 1f. Remove stale reads (content surgery — needs its own parse)
-	entries, _ = jsonl.Parse(path)
 	dupResult := analyzer.FindDuplicateReads(entries)
 	if len(dupResult.Groups) > 0 {
 		var filteredGroups []analyzer.DuplicateGroup
@@ -215,13 +204,17 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			}
 		}
 		dupResult.Groups = filteredGroups
-		if len(dupResult.Groups) > 0 {
-			dr, err := DeduplicateReads(path, dupResult)
-			if err != nil {
-				_ = restoreOriginal(path, origBak)
-				return nil, fmt.Errorf("dedup: %w", err)
-			}
-			result.StaleReadsRemoved = dr.StaleReadsRemoved
+	}
+
+	if len(retryResult.Sequences) > 0 || len(dupResult.Groups) > 0 {
+		sr, err := ContentSurgery(path, retryResult, dupResult)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("surgery: %w", err)
+		}
+		result.FailedRetries = sr.FailedRetries
+		result.StaleReadsRemoved = sr.StaleReadsRemoved
+		if sr.BlocksRemoved > 0 || sr.EntriesRemoved > 0 {
 			cleanIntermediate()
 		}
 	}
