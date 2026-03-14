@@ -7,8 +7,6 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/ppiankov/contextspectre/internal/analyzer"
-	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/ppiankov/contextspectre/internal/project"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
@@ -89,17 +87,9 @@ func runSessions(cmd *cobra.Command, args []string) error {
 					sj.CadenceScore = &cs
 				}
 			}
-			// Check zombie for JSON output
-			if sj.FileSizeBytes > int64(analyzer.ZombieFileSizeThreshold) {
-				light, scanErr := jsonl.ScanLight(s.FullPath)
-				if scanErr == nil {
-					zombie := analyzer.DetectZombie(light)
-					if zombie.IsZombie {
-						sj.Zombie = true
-						sj.ZombieReason = zombie.Reason
-					}
-				}
-			}
+			// Zombie state cached from discovery
+			sj.Zombie = s.Zombie
+			sj.ZombieReason = s.ZombieReason
 			out.Sessions = append(out.Sessions, sj)
 		}
 		return printJSON(out)
@@ -114,15 +104,8 @@ func runSessions(cmd *cobra.Command, args []string) error {
 		if s.IsActive() {
 			prefix = "[ACTIVE] "
 		}
-		// Check for zombie state on large sessions
-		if s.FileSizeMB > float64(analyzer.ZombieFileSizeThreshold)/1024/1024 {
-			light, scanErr := jsonl.ScanLight(s.FullPath)
-			if scanErr == nil {
-				zombie := analyzer.DetectZombie(light)
-				if zombie.IsZombie {
-					prefix = "[ZOMBIE] "
-				}
-			}
+		if s.Zombie {
+			prefix = "[ZOMBIE] "
 		}
 
 		contextStr := "—"

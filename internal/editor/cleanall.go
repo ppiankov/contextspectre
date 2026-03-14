@@ -70,92 +70,107 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	}
 
 	// Phase 1: Entry-level deletions
-	// These use editor.Delete which creates .bak
+	// Single parse for phases 1a-1d + 1g (whole-entry deletions).
+	// Phases 1e-1f need separate passes (content surgery within entries).
 
-	// 1a. Remove progress entries
 	entries, err := jsonl.Parse(path)
 	if err != nil {
 		_ = restoreOriginal(path, origBak)
 		return nil, fmt.Errorf("parse: %w", err)
 	}
 
+	// 1a-1d: Build merged delete set (no I/O)
 	toDelete := make(map[int]bool)
+
+	// 1a. Progress entries
 	for i, e := range entries {
 		if e.Type == jsonl.TypeProgress && !isKept(e.UUID) {
 			toDelete[i] = true
+			result.ProgressRemoved++
 		}
-	}
-	if len(toDelete) > 0 {
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("progress: %w", err)
-		}
-		result.ProgressRemoved = dr.EntriesRemoved
-		cleanIntermediate()
 	}
 
-	// 1b. Remove snapshot entries
-	entries, _ = jsonl.Parse(path)
-	toDelete = make(map[int]bool)
+	// 1b. Snapshot entries
 	for i, e := range entries {
 		if e.Type == jsonl.TypeFileHistorySnapshot && !isKept(e.UUID) {
 			toDelete[i] = true
+			result.SnapshotsRemoved++
 		}
-	}
-	if len(toDelete) > 0 {
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("snapshots: %w", err)
-		}
-		result.SnapshotsRemoved = dr.EntriesRemoved
-		cleanIntermediate()
 	}
 
-	// 1c. Remove sidechain entries
-	entries, _ = jsonl.Parse(path)
+	// 1c. Sidechain entries
 	sidechains := analyzer.DetectSidechains(entries)
-	toDelete = analyzer.SidechainIndexSet(sidechains)
-	for idx := range toDelete {
-		if idx < len(entries) && isKept(entries[idx].UUID) {
-			delete(toDelete, idx)
+	for idx := range analyzer.SidechainIndexSet(sidechains) {
+		if idx < len(entries) && !isKept(entries[idx].UUID) {
+			toDelete[idx] = true
+			result.SidechainsRemoved++
 		}
-	}
-	if len(toDelete) > 0 {
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("sidechains: %w", err)
-		}
-		result.SidechainsRemoved = dr.EntriesRemoved
-		cleanIntermediate()
 	}
 
-	// 1d. Remove cross-repo tangents
-	entries, _ = jsonl.Parse(path)
+	// 1d. Cross-repo tangents
 	tangentResult := analyzer.FindTangents(entries)
 	if len(tangentResult.Groups) > 0 {
-		toDelete = tangentResult.AllTangentIndices()
-		for idx := range toDelete {
-			if idx < len(entries) && isKept(entries[idx].UUID) {
-				delete(toDelete, idx)
+		for idx := range tangentResult.AllTangentIndices() {
+			if idx < len(entries) && !isKept(entries[idx].UUID) {
+				toDelete[idx] = true
+				result.TangentsRemoved++
 			}
 		}
-		dr, err := Delete(path, toDelete)
+	}
+
+	// 1g. Orphan cascade — diagnose excluding 1a-1d delete set so orphans
+	// created by those deletions are detected in this same pass.
+	diagnosis := analyzer.DiagnoseExcluding(entries, toDelete)
+	toTombstone := make(map[int]bool)
+	cascadeInitial := make(map[int]bool)
+	for _, issue := range diagnosis.Issues {
+		idx := issue.EntryIndex
+		if idx >= len(entries) || isKept(entries[idx].UUID) || toDelete[idx] {
+			continue
+		}
+		switch issue.Kind {
+		case analyzer.IssueOrphanedResult:
+			if opts.Tombstone {
+				toTombstone[idx] = true
+			} else {
+				cascadeInitial[idx] = true
+			}
+		case analyzer.IssueChainBroken:
+			cascadeInitial[idx] = true
+		}
+	}
+	// Expand cascade from orphan/chain-break initial set
+	cascadeSet := analyzer.CascadeDeleteSet(entries, cascadeInitial, isKept)
+	for idx := range cascadeSet {
+		if !toDelete[idx] {
+			toDelete[idx] = true
+			result.OrphansRemoved++
+		}
+	}
+
+	// Execute: tombstone first (in-place, preserves UUIDs), then single delete
+	if len(toTombstone) > 0 {
+		tsResult, err := Tombstone(path, toTombstone)
 		if err != nil {
 			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("tangents: %w", err)
+			return nil, fmt.Errorf("cascade tombstone: %w", err)
 		}
-		result.TangentsRemoved = dr.EntriesRemoved
+		result.OrphansTombstoned += tsResult.EntriesTombstoned
+		cleanIntermediate()
+	}
+	if len(toDelete) > 0 {
+		_, err := Delete(path, toDelete)
+		if err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("delete: %w", err)
+		}
 		cleanIntermediate()
 	}
 
-	// 1e. Remove failed retries
+	// 1e. Remove failed retries (content surgery — needs its own parse)
 	entries, _ = jsonl.Parse(path)
 	retryResult := analyzer.FindFailedRetries(entries)
 	if len(retryResult.Sequences) > 0 {
-		// Filter out sequences where either entry is KEEP-marked
 		var filteredSeqs []analyzer.RetrySequence
 		for _, seq := range retryResult.Sequences {
 			if seq.FailedToolUseIdx < len(entries) && isKept(entries[seq.FailedToolUseIdx].UUID) {
@@ -178,11 +193,10 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 		}
 	}
 
-	// 1f. Remove stale reads
+	// 1f. Remove stale reads (content surgery — needs its own parse)
 	entries, _ = jsonl.Parse(path)
 	dupResult := analyzer.FindDuplicateReads(entries)
 	if len(dupResult.Groups) > 0 {
-		// Filter out stale reads where either entry is KEEP-marked
 		var filteredGroups []analyzer.DuplicateGroup
 		for _, g := range dupResult.Groups {
 			var filteredReads []analyzer.StaleRead
@@ -210,55 +224,6 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			result.StaleReadsRemoved = dr.StaleReadsRemoved
 			cleanIntermediate()
 		}
-	}
-
-	// 1g. Orphan cascade — resolve orphaned tool_results and chain breaks
-	// created by prior deletions (especially tangent removal in 1d).
-	// Pre-computes the full transitive closure in memory via BFS graph
-	// traversal, then executes a single Delete() call.
-	entries, err = jsonl.Parse(path)
-	if err != nil {
-		_ = restoreOriginal(path, origBak)
-		return nil, fmt.Errorf("cascade parse: %w", err)
-	}
-	diagnosis := analyzer.Diagnose(entries)
-	toDelete = make(map[int]bool)
-	toTombstone := make(map[int]bool)
-	for _, issue := range diagnosis.Issues {
-		switch issue.Kind {
-		case analyzer.IssueOrphanedResult:
-			if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
-				if opts.Tombstone {
-					toTombstone[issue.EntryIndex] = true
-				} else {
-					toDelete[issue.EntryIndex] = true
-				}
-			}
-		case analyzer.IssueChainBroken:
-			if issue.EntryIndex < len(entries) && !isKept(entries[issue.EntryIndex].UUID) {
-				toDelete[issue.EntryIndex] = true
-			}
-		}
-	}
-	// Expand delete set to full transitive closure (orphan + chain cascades).
-	toDelete = analyzer.CascadeDeleteSet(entries, toDelete, isKept)
-	if len(toTombstone) > 0 {
-		tsResult, err := Tombstone(path, toTombstone)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("cascade tombstone: %w", err)
-		}
-		result.OrphansTombstoned += tsResult.EntriesTombstoned
-		cleanIntermediate()
-	}
-	if len(toDelete) > 0 {
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			_ = restoreOriginal(path, origBak)
-			return nil, fmt.Errorf("cascade: %w", err)
-		}
-		result.OrphansRemoved += dr.EntriesRemoved
-		cleanIntermediate()
 	}
 
 	// Phase 2: Content surgery

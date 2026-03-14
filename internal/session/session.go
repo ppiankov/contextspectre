@@ -28,6 +28,8 @@ type Info struct {
 	FileSizeMB   float64
 	IsSidechain  bool
 	ContextStats *QuickStats
+	Zombie       bool
+	ZombieReason string
 }
 
 // ShortID returns the first 8 characters of the session ID.
@@ -225,6 +227,9 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 				stats.TotalCacheWriteTokens, stats.TotalCacheReadTokens,
 				stats.Model,
 			)
+			zombie := analyzer.DetectZombie(stats)
+			info.Zombie = zombie.IsZombie
+			info.ZombieReason = zombie.Reason
 		}
 
 		sessions = append(sessions, info)
@@ -273,6 +278,9 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 				stats.TotalCacheWriteTokens, stats.TotalCacheReadTokens,
 				stats.Model,
 			)
+			zombie := analyzer.DetectZombie(stats)
+			info.Zombie = zombie.IsZombie
+			info.ZombieReason = zombie.Reason
 		}
 
 		sessions = append(sessions, info)
