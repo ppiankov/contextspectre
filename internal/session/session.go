@@ -110,6 +110,21 @@ type indexEntry struct {
 	GitBranch    string  `json:"gitBranch"`
 	ProjectPath  string  `json:"projectPath"`
 	IsSidechain  bool    `json:"isSidechain"`
+
+	// Cached stats (populated by contextspectre, skips ScanLight when mtime matches)
+	CachedSlug          string  `json:"cachedSlug,omitempty"`
+	CachedContextTokens int     `json:"cachedContextTokens,omitempty"`
+	CachedContextPct    float64 `json:"cachedContextPct,omitempty"`
+	CachedImageCount    int     `json:"cachedImageCount,omitempty"`
+	CachedCompactions   int     `json:"cachedCompactions,omitempty"`
+	CachedModel         string  `json:"cachedModel,omitempty"`
+	CachedSignalPct     int     `json:"cachedSignalPct,omitempty"`
+	CachedClientType    string  `json:"cachedClientType,omitempty"`
+	CachedCost          float64 `json:"cachedCost,omitempty"`
+	CachedIsZombie      bool    `json:"cachedIsZombie,omitempty"`
+	CachedZombieReason  string  `json:"cachedZombieReason,omitempty"`
+	CachedLineCount     int     `json:"cachedLineCount,omitempty"`
+	CachedFileSizeMB    float64 `json:"cachedFileSizeMB,omitempty"`
 }
 
 // Discoverer finds sessions across Claude project directories.
@@ -191,7 +206,8 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 	projectName := ProjectNameFromDir(projectDir)
 
 	var sessions []Info
-	for _, e := range idx.Entries {
+	needsRewrite := false
+	for i, e := range idx.Entries {
 		created, _ := time.Parse(time.RFC3339Nano, e.Created)
 		modified, _ := time.Parse(time.RFC3339Nano, e.Modified)
 
@@ -208,14 +224,40 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 			IsSidechain:  e.IsSidechain,
 		}
 
-		// Get file size
-		if fi, err := os.Stat(e.FullPath); err == nil {
-			info.FileSizeMB = float64(fi.Size()) / 1024 / 1024
+		// Check file existence and mtime
+		fi, err := os.Stat(e.FullPath)
+		if err != nil {
+			continue // file gone
+		}
+		info.FileSizeMB = float64(fi.Size()) / 1024 / 1024
+
+		// Cache hit: mtime matches and we have cached stats
+		currentMtime := float64(fi.ModTime().UnixMilli())
+		if currentMtime == e.FileMtime && e.CachedClientType != "" {
+			info.Slug = e.CachedSlug
+			info.MessageCount = e.CachedLineCount
+			info.Zombie = e.CachedIsZombie
+			info.ZombieReason = e.CachedZombieReason
+			info.FileSizeMB = e.CachedFileSizeMB
+			info.ContextStats = &QuickStats{
+				ContextTokens:   e.CachedContextTokens,
+				ContextPct:      e.CachedContextPct,
+				ImageCount:      e.CachedImageCount,
+				CompactionCount: e.CachedCompactions,
+				Model:           e.CachedModel,
+				SignalPercent:   e.CachedSignalPct,
+				ClientType:      e.CachedClientType,
+				EstimatedCost:   e.CachedCost,
+			}
+			applyEntropyQuickStats(info.ContextStats)
+			sessions = append(sessions, info)
+			continue
 		}
 
-		// Quick context stats
+		// Cache miss: ScanLight and update index entry
 		if stats, err := jsonl.ScanLight(e.FullPath); err == nil {
 			info.Slug = stats.Slug
+			info.MessageCount = stats.LineCount
 			info.ContextStats = quickStatsFromLight(stats)
 			if stats.LastUsage != nil {
 				info.ContextStats.ContextTokens = stats.LastUsage.TotalContextTokens()
@@ -230,10 +272,33 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 			zombie := analyzer.DetectZombie(stats)
 			info.Zombie = zombie.IsZombie
 			info.ZombieReason = zombie.Reason
+
+			// Update cache fields in index entry
+			idx.Entries[i].FileMtime = currentMtime
+			idx.Entries[i].CachedSlug = info.Slug
+			idx.Entries[i].CachedContextTokens = info.ContextStats.ContextTokens
+			idx.Entries[i].CachedContextPct = info.ContextStats.ContextPct
+			idx.Entries[i].CachedImageCount = info.ContextStats.ImageCount
+			idx.Entries[i].CachedCompactions = info.ContextStats.CompactionCount
+			idx.Entries[i].CachedModel = info.ContextStats.Model
+			idx.Entries[i].CachedSignalPct = info.ContextStats.SignalPercent
+			idx.Entries[i].CachedClientType = info.ContextStats.ClientType
+			idx.Entries[i].CachedCost = info.ContextStats.EstimatedCost
+			idx.Entries[i].CachedIsZombie = info.Zombie
+			idx.Entries[i].CachedZombieReason = info.ZombieReason
+			idx.Entries[i].CachedLineCount = stats.LineCount
+			idx.Entries[i].CachedFileSizeMB = info.FileSizeMB
+			needsRewrite = true
 		}
 
 		sessions = append(sessions, info)
 	}
+
+	// Persist updated cache
+	if needsRewrite {
+		_ = writeSessionsIndex(indexPath, &idx)
+	}
+
 	return sessions, nil
 }
 
@@ -286,6 +351,20 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 		sessions = append(sessions, info)
 	}
 	return sessions, nil
+}
+
+// writeSessionsIndex atomically writes the sessions index with cached stats.
+func writeSessionsIndex(indexPath string, idx *sessionsIndex) error {
+	data, err := json.MarshalIndent(idx, "", "  ")
+	if err != nil {
+		return err
+	}
+	// Atomic write: temp + rename
+	tmpPath := indexPath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmpPath, indexPath)
 }
 
 // ProjectNameFromDir extracts a human-readable project name from a Claude project directory path.

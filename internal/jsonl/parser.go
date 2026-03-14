@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -281,4 +282,53 @@ func containsImage(raw []byte) bool {
 	// Look for the image source marker in raw bytes
 	return json.Valid(raw) && bytes.Contains(raw, []byte(`"type":"image"`)) ||
 		bytes.Contains(raw, []byte(`"type": "image"`))
+}
+
+// ScanCache provides mtime-based caching for ScanLight results.
+// Safe for concurrent use.
+type ScanCache struct {
+	mu    sync.Mutex
+	items map[string]*scanCacheItem
+}
+
+type scanCacheItem struct {
+	mtime int64
+	size  int64
+	stats *LightStats
+}
+
+// NewScanCache creates a new ScanLight cache.
+func NewScanCache() *ScanCache {
+	return &ScanCache{items: make(map[string]*scanCacheItem)}
+}
+
+// Get returns cached stats if the file hasn't changed, or scans fresh.
+func (c *ScanCache) Get(path string) (*LightStats, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", path, err)
+	}
+
+	mtime := fi.ModTime().UnixNano()
+	size := fi.Size()
+
+	c.mu.Lock()
+	if item, ok := c.items[path]; ok && item.mtime == mtime && item.size == size {
+		stats := item.stats
+		c.mu.Unlock()
+		return stats, nil
+	}
+	c.mu.Unlock()
+
+	// Cache miss — scan fresh
+	stats, err := ScanLight(path)
+	if err != nil {
+		return nil, err
+	}
+
+	c.mu.Lock()
+	c.items[path] = &scanCacheItem{mtime: mtime, size: size, stats: stats}
+	c.mu.Unlock()
+
+	return stats, nil
 }
