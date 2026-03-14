@@ -857,6 +857,7 @@ type watchAccumulator struct {
 	cycles   int
 	prog     int
 	snap     int
+	coal     int // coalesce merged entries
 	stale    int
 	retry    int
 	img      int
@@ -876,6 +877,7 @@ func (w *watchAccumulator) addResult(r *editor.CleanLiveResult, event *savings.E
 	w.tokens += tokens
 	w.prog += r.ProgressRemoved
 	w.snap += r.SnapshotsRemoved
+	w.coal += r.CoalesceMerged
 	w.stale += r.StaleReadsRemoved
 	w.retry += r.FailedRetries
 	w.img += r.ImagesReplaced
@@ -907,6 +909,9 @@ func (w *watchAccumulator) printSummary() {
 	}
 	if w.snap > 0 {
 		parts = append(parts, fmt.Sprintf("%d snap", w.snap))
+	}
+	if w.coal > 0 {
+		parts = append(parts, fmt.Sprintf("%d coal", w.coal))
 	}
 	if w.stale > 0 {
 		parts = append(parts, fmt.Sprintf("%d stale", w.stale))
@@ -1346,6 +1351,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanWatch, "watch", false, "Continuous cleanup loop (requires --active; use --live/--aggressive for tiers)")
 	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
 	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
-	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", false, "Extract decisions and findings before cleaning (writes .preserved.md sidecar)")
+	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", true, "Extract decisions and findings before cleaning (use --no-preserve to skip)")
 	rootCmd.AddCommand(cleanCmd)
 }
