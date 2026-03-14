@@ -33,6 +33,8 @@ type CleanLiveOpts struct {
 type CleanLiveResult struct {
 	ProgressRemoved    int
 	SnapshotsRemoved   int
+	CoalesceMerged     int // Tier 2.5, always runs
+	CoalesceOrphans    int // Tier 2.5, always runs
 	StaleReadsRemoved  int // Tier 3, only with Tier3
 	FailedRetries      int // Tier 3, only with Tier3
 	ImagesReplaced     int // Tier 4, only with Aggressive
@@ -78,8 +80,9 @@ func recordMtime(path string) (time.Time, error) {
 
 // CleanLive runs safe cleanup operations on a potentially active session.
 //
-// Tier 1: progress removal
-// Tier 2: snapshot removal
+// Tier 1: progress removal (streaming)
+// Tier 2: snapshot removal (streaming)
+// Tier 2.5: coalesce adjacent same-role entries
 // With Aggressive:
 // Tier 4: image replacement, separator stripping
 // Tier 5: bash output truncation
@@ -161,52 +164,39 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 		return nil
 	}
 
-	// --- Tier 1: Remove progress entries ---
+	// --- Tier 1: Remove progress entries (streaming, no JSON parse) ---
 	if err := runStep("progress", func() (bool, error) {
-		entries, err := jsonl.Parse(path)
+		sr, err := StreamStripType(path, "progress")
 		if err != nil {
 			return false, err
 		}
-		toDelete := make(map[int]bool)
-		for i, e := range entries {
-			if e.Type == jsonl.TypeProgress {
-				toDelete[i] = true
-			}
-		}
-		if len(toDelete) == 0 {
-			return false, nil
-		}
-		dr, err := Delete(path, toDelete)
-		if err != nil {
-			return false, err
-		}
-		result.ProgressRemoved = dr.EntriesRemoved
-		return true, nil
+		result.ProgressRemoved = sr.LinesRemoved
+		return sr.LinesRemoved > 0, nil
 	}); err != nil {
 		return nil, err
 	}
 
-	// --- Tier 2: Remove snapshot entries ---
+	// --- Tier 2: Remove snapshot entries (streaming, no JSON parse) ---
 	if err := runStep("snapshots", func() (bool, error) {
-		entries, err := jsonl.Parse(path)
+		sr, err := StreamStripType(path, "file-history-snapshot")
 		if err != nil {
 			return false, err
 		}
-		toDelete := make(map[int]bool)
-		for i, e := range entries {
-			if e.Type == jsonl.TypeFileHistorySnapshot {
-				toDelete[i] = true
-			}
-		}
-		if len(toDelete) == 0 {
-			return false, nil
-		}
-		dr, err := Delete(path, toDelete)
+		result.SnapshotsRemoved = sr.LinesRemoved
+		return sr.LinesRemoved > 0, nil
+	}); err != nil {
+		return nil, err
+	}
+
+	// --- Tier 2.5: Coalesce adjacent same-role entries (fixes Mac API errors) ---
+	if err := runStep("coalesce", func() (bool, error) {
+		cr, err := Coalesce(path)
 		if err != nil {
 			return false, err
 		}
-		result.SnapshotsRemoved = dr.EntriesRemoved
-		return true, nil
+		result.CoalesceMerged = cr.EntriesRemoved
+		result.CoalesceOrphans = cr.OrphansStripped
+		return cr.EntriesRemoved > 0 || cr.OrphansStripped > 0, nil
 	}); err != nil {
 		return nil, err
 	}

@@ -141,6 +141,12 @@ func Coalesce(path string) (*CoalesceResult, error) {
 		result.BytesAfter += int64(len(raw))
 	}
 
+	// Skip write if nothing changed (no merges, no orphan strips).
+	if result.EntriesRemoved == 0 && result.OrphansStripped == 0 {
+		_ = safecopy.Clean(path) // remove backup we didn't need
+		return result, nil
+	}
+
 	if err := jsonl.WriteLines(path, outLines); err != nil {
 		_ = safecopy.Restore(path)
 		return nil, fmt.Errorf("write: %w", err)
