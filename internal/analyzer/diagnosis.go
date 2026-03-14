@@ -39,17 +39,30 @@ type DiagnosisResult struct {
 
 // Diagnose scans session entries for common problems.
 func Diagnose(entries []jsonl.Entry) *DiagnosisResult {
+	return DiagnoseExcluding(entries, nil)
+}
+
+// DiagnoseExcluding is like Diagnose but skips excluded indices when building
+// the toolUseIDs set. This allows detecting orphaned tool_results that would
+// be created by a pending delete set (e.g., from phases 1a-1d of CleanAll).
+func DiagnoseExcluding(entries []jsonl.Entry, excluded map[int]bool) *DiagnosisResult {
 	result := &DiagnosisResult{}
 
-	// Build tool_use ID set from assistant messages
+	// Build tool_use ID set from assistant messages, excluding pending deletes
 	toolUseIDs := make(map[string]bool)
-	for _, e := range entries {
+	for i, e := range entries {
+		if excluded[i] {
+			continue
+		}
 		for _, id := range e.ToolUseIDs() {
 			toolUseIDs[id] = true
 		}
 	}
 
 	for i, e := range entries {
+		if excluded[i] {
+			continue
+		}
 		// Content filter blocks: assistant with empty/error content after a user message
 		if e.Type == jsonl.TypeAssistant && e.Message != nil {
 			if isEmptyContent(e.Message.Content) {

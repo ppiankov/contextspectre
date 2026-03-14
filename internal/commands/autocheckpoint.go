@@ -16,11 +16,18 @@ import (
 const checkpointContextThreshold = 70.0
 
 // tryAutoCheckpoint fires a checkpoint when context pressure crosses 70%.
-// Throttled: only fires once per compaction count (epoch). Writes the brief
-// to docs/context.txt in the session's project directory.
+// Silently returns if conditions not met.
 func tryAutoCheckpoint(path string) {
 	stats, err := jsonl.ScanLight(path)
-	if err != nil || stats.LastUsage == nil {
+	if err != nil {
+		return
+	}
+	tryAutoCheckpointWithStats(path, stats)
+}
+
+// tryAutoCheckpointWithStats is like tryAutoCheckpoint but accepts pre-computed ScanLight stats.
+func tryAutoCheckpointWithStats(path string, stats *jsonl.LightStats) {
+	if stats.LastUsage == nil {
 		return
 	}
 
@@ -41,8 +48,8 @@ func tryAutoCheckpoint(path string) {
 		return
 	}
 
-	// Detect project CWD from session entries (need a lightweight scan).
-	projectDir := detectProjectDir(path)
+	// Use CWD from pre-computed stats (avoids extra ScanLight call).
+	projectDir := stats.CWD
 	if projectDir == "" {
 		slog.Debug("Auto-checkpoint: no project dir detected")
 		return
@@ -119,15 +126,6 @@ func tryAutoCheckpoint(path string) {
 	markCheckpointed(epochKey)
 	fmt.Printf("[Checkpoint] ctx:%.0f%% — %d decisions, %d findings → %s\n",
 		contextPct, len(output.Decisions), len(output.Findings), outputPath)
-}
-
-// detectProjectDir extracts the CWD from the session's queue-operation or first user entry.
-func detectProjectDir(path string) string {
-	stats, err := jsonl.ScanLight(path)
-	if err != nil {
-		return ""
-	}
-	return stats.CWD
 }
 
 // Checkpoint throttle: simple file-based marker in /tmp.
