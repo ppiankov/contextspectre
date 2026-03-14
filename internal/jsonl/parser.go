@@ -2,6 +2,7 @@ package jsonl
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -18,10 +19,16 @@ func Parse(path string) ([]Entry, error) {
 	}
 	defer func() { _ = f.Close() }()
 
+	fi, _ := f.Stat()
+	estimatedEntries := 256
+	if fi != nil && fi.Size() > 0 {
+		estimatedEntries = int(fi.Size() / 500)
+	}
+
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
 
-	var entries []Entry
+	entries := make([]Entry, 0, estimatedEntries)
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -54,11 +61,17 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 	}
 	defer func() { _ = f.Close() }()
 
+	fi, _ := f.Stat()
+	estimatedEntries := 256
+	if fi != nil && fi.Size() > 0 {
+		estimatedEntries = int(fi.Size() / 500)
+	}
+
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, maxLineSize), maxLineSize)
 
-	var entries []Entry
-	var rawLines [][]byte
+	entries := make([]Entry, 0, estimatedEntries)
+	rawLines := make([][]byte, 0, estimatedEntries)
 	lineNum := 0
 	for scanner.Scan() {
 		lineNum++
@@ -266,26 +279,6 @@ func ScanLight(path string) (*LightStats, error) {
 // containsImage is a fast heuristic check for base64 image content.
 func containsImage(raw []byte) bool {
 	// Look for the image source marker in raw bytes
-	return json.Valid(raw) && bytesContains(raw, []byte(`"type":"image"`)) ||
-		bytesContains(raw, []byte(`"type": "image"`))
-}
-
-func bytesContains(haystack, needle []byte) bool {
-	return len(haystack) >= len(needle) && bytesIndex(haystack, needle) >= 0
-}
-
-func bytesIndex(haystack, needle []byte) int {
-	for i := 0; i <= len(haystack)-len(needle); i++ {
-		match := true
-		for j := 0; j < len(needle); j++ {
-			if haystack[i+j] != needle[j] {
-				match = false
-				break
-			}
-		}
-		if match {
-			return i
-		}
-	}
-	return -1
+	return json.Valid(raw) && bytes.Contains(raw, []byte(`"type":"image"`)) ||
+		bytes.Contains(raw, []byte(`"type": "image"`))
 }

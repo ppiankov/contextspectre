@@ -13,13 +13,21 @@ import (
 // tryExpertClean checks config and conditions, runs tiers 1-3 if warranted.
 // Silently returns if expert mode is off, conditions not met, or nothing to clean.
 func tryExpertClean(path string) {
+	stats, err := jsonl.ScanLight(path)
+	if err != nil {
+		return
+	}
+	tryExpertCleanWithStats(path, stats)
+}
+
+// tryExpertCleanWithStats is like tryExpertClean but accepts pre-computed ScanLight stats.
+func tryExpertCleanWithStats(path string, stats *jsonl.LightStats) {
 	cfg, err := project.Load(resolveClaudeDir())
 	if err != nil || !cfg.ExpertMode {
 		return
 	}
 
-	stats, err := jsonl.ScanLight(path)
-	if err != nil || stats.LastUsage == nil {
+	if stats.LastUsage == nil {
 		return
 	}
 

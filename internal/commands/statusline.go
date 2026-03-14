@@ -79,9 +79,10 @@ func runStatusLine(_ *cobra.Command, _ []string) error {
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 
 	// Check cache.
+	var lightStats *jsonl.LightStats
 	data, cached := loadStatusLineCache(sessionID, info.ModTime().UnixNano())
 	if !cached {
-		data, err = computeStatusLine(path, sessionID)
+		data, lightStats, err = computeStatusLine(path, sessionID)
 		if err != nil {
 			return err
 		}
@@ -91,8 +92,14 @@ func runStatusLine(_ *cobra.Command, _ []string) error {
 		return err
 	}
 
-	tryExpertClean(path)
-	tryAutoCheckpoint(path)
+	// Reuse ScanLight stats for expert clean and auto-checkpoint (avoids 2 extra scans)
+	if lightStats != nil {
+		tryExpertCleanWithStats(path, lightStats)
+		tryAutoCheckpointWithStats(path, lightStats)
+	} else {
+		tryExpertClean(path)
+		tryAutoCheckpoint(path)
+	}
 
 	return formatStatusLine(data)
 }
@@ -121,10 +128,10 @@ func resolveStatusLinePath() (string, error) {
 	return statusLinePath, nil
 }
 
-func computeStatusLine(path, sessionID string) (*statusLineData, error) {
+func computeStatusLine(path, sessionID string) (*statusLineData, *jsonl.LightStats, error) {
 	stats, err := jsonl.ScanLight(path)
 	if err != nil {
-		return nil, fmt.Errorf("scan: %w", err)
+		return nil, nil, fmt.Errorf("scan: %w", err)
 	}
 
 	currentTokens := 0
@@ -224,7 +231,7 @@ func computeStatusLine(path, sessionID string) (*statusLineData, error) {
 		VectorState:     vectorState,
 		VectorAction:    vectorAction,
 		ChainHealthy:    stats.ChainHealthy,
-	}, nil
+	}, stats, nil
 }
 
 // extractProjectFromPath gets the project directory name from a session path.
