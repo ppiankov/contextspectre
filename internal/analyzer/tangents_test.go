@@ -82,9 +82,10 @@ func TestFindTangents_TangentWithResponse(t *testing.T) {
 	}
 
 	g := result.Groups[0]
-	// Should include the external read, tool_result, and assistant response
-	if len(g.EntryIndices) < 3 {
-		t.Errorf("expected at least 3 entries in tangent (read + result + response), got %d", len(g.EntryIndices))
+	// Should include the external read and tool_result (assistant text response
+	// is excluded because the preceding tool_result has no external path refs)
+	if len(g.EntryIndices) < 2 {
+		t.Errorf("expected at least 2 entries in tangent (read + result), got %d", len(g.EntryIndices))
 	}
 }
 
@@ -275,7 +276,7 @@ func makeToolUseEntry(uuid, toolName, path string) jsonl.Entry {
 	return jsonl.Entry{
 		Type:    jsonl.TypeAssistant,
 		UUID:    uuid,
-		RawSize: len(content) + 100,
+		RawSize: len(content) + 2000, // realistic size for a tool_use entry
 		Message: &jsonl.Message{Role: "assistant", Content: content},
 	}
 }
@@ -287,7 +288,7 @@ func makeToolResultEntry(uuid string) jsonl.Entry {
 	return jsonl.Entry{
 		Type:    jsonl.TypeUser,
 		UUID:    uuid,
-		RawSize: len(content) + 100,
+		RawSize: len(content) + 2000, // realistic size for a tool_result entry
 		Message: &jsonl.Message{Role: "user", Content: content},
 	}
 }

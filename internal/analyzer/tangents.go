@@ -172,8 +172,8 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 			indices = append(indices, j)
 		}
 
-		// Only flag if there are at least 2 entries (a question and response)
-		if len(indices) >= 2 {
+		// Only flag if there are at least 2 entries and enough tokens to matter
+		if len(indices) >= 2 && totalTokens >= minTangentTokens {
 			var uniquePaths []string
 			for p := range externalPathSet {
 				uniquePaths = append(uniquePaths, p)
@@ -340,31 +340,23 @@ func isSystemPath(path string) bool {
 	return false
 }
 
+// minTangentTokens is the minimum estimated tokens for a tangent group to be flagged.
+// Groups below this threshold are too small to matter.
+const minTangentTokens = 100
+
 // isResponseToTangent checks if a conversational entry with no path refs
 // is likely a response within a tangent (e.g., assistant answering about external repo).
+// Requires the preceding conversational entry to have explicitly referenced external paths.
 func isResponseToTangent(entries []jsonl.Entry, infos []entryInfo, idx, tangentStart int) bool {
 	if idx <= tangentStart {
 		return false
 	}
 
-	e := entries[idx]
-
-	// Assistant responses following external-referencing user messages are part of the tangent
-	if e.Type == jsonl.TypeAssistant {
-		// Check if the preceding entry (or recent entries) are in the tangent
-		for j := idx - 1; j >= tangentStart; j-- {
-			if entries[j].IsConversational() {
-				return infos[j].refsExternal || !infos[j].refsCWD
-			}
-		}
-	}
-
-	// User messages with tool_results following tangent assistant messages
-	if e.Type == jsonl.TypeUser {
-		for j := idx - 1; j >= tangentStart; j-- {
-			if entries[j].IsConversational() {
-				return infos[j].refsExternal || !infos[j].refsCWD
-			}
+	// Walk backward to find the nearest preceding conversational entry.
+	// It must have explicitly referenced external paths to continue the tangent.
+	for j := idx - 1; j >= tangentStart; j-- {
+		if entries[j].IsConversational() {
+			return infos[j].refsExternal
 		}
 	}
 
