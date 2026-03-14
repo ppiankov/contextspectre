@@ -17,14 +17,21 @@ type ZombieState struct {
 }
 
 // DetectZombie checks if a session is in an unusable "zombie" state.
-// A zombie session is too large for the client to reload — it has historical
+// A zombie session is too large for the Mac client to reload — it has historical
 // value for search and review but cannot serve as an active conversation.
+// Only Mac/desktop sessions can become zombies; CLI sessions handle large
+// context without hitting "Prompt is too long" errors.
 //
 // Indicators (need 2+ to flag):
 //   - File size > 30 MB
 //   - Current context tokens == 0 (client lost the thread)
 //   - Compaction count > 12 (heavily compressed, likely empty summaries)
 func DetectZombie(stats *jsonl.LightStats) ZombieState {
+	// Only desktop (Mac) sessions can become zombies
+	if !stats.StartsWithQueueOp {
+		return ZombieState{}
+	}
+
 	signals := 0
 
 	if stats.FileSizeBytes > ZombieFileSizeThreshold {
@@ -66,9 +73,10 @@ func DetectZombie(stats *jsonl.LightStats) ZombieState {
 // DetectZombieFromFull checks zombie state from full analysis stats.
 func DetectZombieFromFull(stats *ContextStats, fileSizeBytes int64) ZombieState {
 	light := &jsonl.LightStats{
-		FileSizeBytes:   fileSizeBytes,
-		AssistantCount:  stats.ConversationalTurns / 2,
-		CompactionCount: stats.CompactionCount,
+		FileSizeBytes:     fileSizeBytes,
+		AssistantCount:    stats.ConversationalTurns / 2,
+		CompactionCount:   stats.CompactionCount,
+		StartsWithQueueOp: stats.ClientType == "desktop",
 	}
 	if stats.CurrentContextTokens > 0 {
 		light.LastUsage = &jsonl.Usage{
