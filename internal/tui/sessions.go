@@ -870,9 +870,14 @@ func clientTypeChar(s session.Info) string {
 	}
 }
 
-// isSessionZombie checks if a session is in an unusable zombie state
-// using the same thresholds as analyzer.DetectZombie but from QuickStats.
+// isSessionZombie checks if a session is in an unusable zombie state.
+// Only Mac/desktop sessions can become zombies — CLI handles large context fine.
 func isSessionZombie(s session.Info) bool {
+	// Only desktop sessions can become zombies
+	if s.ContextStats == nil || s.ContextStats.ClientType != "desktop" {
+		return false
+	}
+
 	fileSizeBytes := int64(s.FileSizeMB * 1024 * 1024)
 	if fileSizeBytes <= int64(analyzer.ZombieFileSizeThreshold) {
 		return false
@@ -880,13 +885,11 @@ func isSessionZombie(s session.Info) bool {
 
 	signals := 1 // file size already exceeds threshold
 
-	if s.ContextStats != nil {
-		if s.ContextStats.ContextTokens == 0 && s.MessageCount > 20 {
-			signals++
-		}
-		if s.ContextStats.CompactionCount > analyzer.ZombieCompactionThreshold {
-			signals++
-		}
+	if s.ContextStats.ContextTokens == 0 && s.MessageCount > 20 {
+		signals++
+	}
+	if s.ContextStats.CompactionCount > analyzer.ZombieCompactionThreshold {
+		signals++
 	}
 
 	return signals >= 2
