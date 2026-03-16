@@ -105,8 +105,12 @@ See [Workflow Patterns](docs/workflow.md) for usage philosophy and the explore-e
 ## Installation
 
 ```bash
-# Homebrew
+# Homebrew (macOS/Linux)
 brew install ppiankov/tap/contextspectre
+
+# Scoop (Windows)
+scoop bucket add ppiankov https://github.com/ppiankov/scoop-bucket
+scoop install contextspectre
 
 # From source
 git clone https://github.com/ppiankov/contextspectre.git
