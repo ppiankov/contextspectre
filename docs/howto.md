@@ -83,3 +83,33 @@ contextspectre checkpoint --cwd --format json
 ```
 
 The checkpoint extracts from the active epoch: decisions made, findings discovered, user requests, files touched, and any commit points you've marked.
+
+## Recover from a killed session (false positive, model switch, crash)
+
+Claude Code's safety classifier can false-positive on benign technical terminology (e.g., robotics, physics, security research), killing the session with a "Usage Policy" error. Once triggered, it cascades — every subsequent message in the same session hits the same filter. See [anthropics/claude-code#34977](https://github.com/anthropics/claude-code/issues/34977).
+
+**What makes it worse:** Switching models with `/model` wipes the context window entirely. The "fix" destroys the session too.
+
+**How to recover using contextspectre:**
+
+```bash
+# 1. Open a new terminal / new claude session
+
+# 2. Find the dead session
+contextspectre sessions --cwd
+
+# 3. Extract a resume brief
+contextspectre checkpoint <session-id>
+
+# 4. Or export structured data
+contextspectre export decisions <session-id>
+contextspectre export tasks <session-id>
+
+# 5. Paste the checkpoint into your new session as context
+```
+
+**Prevention tips:**
+- Run `contextspectre checkpoint --cwd --output docs/context.txt` periodically during long sessions
+- Don't switch models (`/model`) when you hit a false positive — it wipes context. Start a fresh session instead
+- If a question uses dual-use terminology (targeting, dropping, accuracy, injection), rephrase before sending
+- Save external API output to files instead of pasting raw content into the session
