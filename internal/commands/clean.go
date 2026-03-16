@@ -8,7 +8,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -514,7 +513,7 @@ func drainTicker(ticker *time.Ticker) {
 // Returns the done channel to check in the main loop.
 func watchSignalHandler() (chan struct{}, chan os.Signal) {
 	sigCh := make(chan os.Signal, 2) // buffer 2 so second signal isn't lost
-	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	signal.Notify(sigCh, shutdownSignals()...)
 
 	done := make(chan struct{})
 

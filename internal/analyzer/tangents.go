@@ -331,9 +331,18 @@ func isBashLikeTool(name string) bool {
 
 // isSystemPath returns true for common system paths that shouldn't be treated as project paths.
 func isSystemPath(path string) bool {
-	prefixes := []string{"/usr/", "/bin/", "/sbin/", "/etc/", "/tmp/", "/var/", "/dev/", "/proc/", "/sys/"}
-	for _, prefix := range prefixes {
+	// Unix system paths
+	unixPrefixes := []string{"/usr/", "/bin/", "/sbin/", "/etc/", "/tmp/", "/var/", "/dev/", "/proc/", "/sys/"}
+	for _, prefix := range unixPrefixes {
 		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	// Windows system paths (case-insensitive)
+	lower := strings.ToLower(path)
+	winPrefixes := []string{`c:\windows\`, `c:\program files\`, `c:\program files (x86)\`, `c:\programdata\`}
+	for _, prefix := range winPrefixes {
+		if strings.HasPrefix(lower, prefix) {
 			return true
 		}
 	}

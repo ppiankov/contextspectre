@@ -8,6 +8,7 @@ builds:
     goos:
       - linux
       - darwin
+      - windows
     goarch:
       - amd64
       - arm64
@@ -20,6 +21,10 @@ builds:
 archives:
   - formats:
       - tar.gz
+    format_overrides:
+      - goos: windows
+        formats:
+          - zip
     name_template: >-
       {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
 
@@ -36,6 +41,15 @@ brews:
       bin.install_symlink "contextspectre" => "cs"
     test: |
       system "#{bin}/contextspectre", "version"
+
+scoops:
+  - repository:
+      owner: ppiankov
+      name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: "https://github.com/ppiankov/contextspectre"
+    description: "Claude Code conversation context manager"
+    license: MIT
 
 checksum:
   name_template: 'checksums.txt'
