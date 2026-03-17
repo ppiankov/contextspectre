@@ -85,7 +85,7 @@ ContextSpectre reads Claude Code's local JSONL session files - from both Claude 
 - Not a Claude Code plugin. It reads local files independently - no API, no integration required.
 - Not a general JSONL editor. It understands Claude Code's specific schema and nothing else.
 - Not a monitoring daemon. It is a point-in-time tool you run when you need visibility.
-- Not multi-vendor. It works with Claude Code's local session format (CLI and Mac). ChatGPT is server-side - there is nothing to edit.
+- Not multi-vendor. It works with Claude Code's local session format (CLI, Mac, and Windows). ChatGPT is server-side - there is nothing to edit.
 - Not an AI summarizer. It extracts existing content. It does not generate new summaries.
 - Not a cost optimizer. It exposes the hidden economics of reasoning. You decide what to do about it.
 - Not a runtime hook. It does not modify Claude, intercept API calls, or alter model behavior. It reads your local session files - your data, your history.
@@ -181,7 +181,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 - **Cost estimates use published pricing.** Dollar figures are calculated from API pricing tables, not from actual Anthropic invoices. They are close but not authoritative.
 - **Compaction threshold is empirical.** The ~165K trigger point is observed behavior, not documented by Anthropic. It may change.
 - **No real-time updates.** ContextSpectre reads the file once on open. It does not watch for changes during a live session.
-- **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating. Works with both CLI and Mac desktop sessions.
+- **Claude Code format only.** If Claude Code changes its JSONL schema, ContextSpectre needs updating. Works with CLI, Mac desktop, and Windows sessions.
 - **Large files are slow to parse.** Sessions over 100MB take a few seconds to load. The parser is streaming but analysis is in-memory.
 - **Branch detection is structural, not semantic.** Branches are identified by compaction boundaries and time gaps, not by understanding what was discussed.
 
@@ -195,7 +195,7 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | [Computation Methodology](docs/methodology.md) | Formula-level specification with source references |
 | [Context Deadlock](docs/deadlock.md) | What it is, why it happens, how to recover |
 | [Workflow Patterns](docs/workflow.md) | Explore-execute-collapse, CLI status line |
-| [How-To Guide](docs/howto.md) | Rename folders, auto-checkpoint, preserve decisions, fix Mac errors |
+| [How-To Guide](docs/howto.md) | Rename folders, auto-checkpoint, preserve decisions, fix Mac errors, session recovery |
 | [Session Architecture](docs/session-architecture.md) | Session storage, multi-instance safety |
 
 ## License
