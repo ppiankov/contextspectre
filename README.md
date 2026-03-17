@@ -105,17 +105,23 @@ See [Workflow Patterns](docs/workflow.md) for usage philosophy and the explore-e
 ## Installation
 
 ```bash
-# Homebrew (macOS/Linux)
+# Homebrew (macOS/Linux/WSL2)
 brew install ppiankov/tap/contextspectre
 
 # Scoop (Windows)
 scoop bucket add ppiankov https://github.com/ppiankov/scoop-bucket
 scoop install contextspectre
 
+# Linux/WSL2 direct download
+curl -L https://github.com/ppiankov/contextspectre/releases/latest/download/contextspectre_$(curl -s https://api.github.com/repos/ppiankov/contextspectre/releases/latest | grep tag_name | cut -d'"' -f4 | tr -d v)_linux_amd64.tar.gz | tar xz
+sudo mv contextspectre /usr/local/bin/
+
 # From source
 git clone https://github.com/ppiankov/contextspectre.git
 cd contextspectre && make build
 ```
+
+> **WSL2 note:** If you run Claude Code on the Windows side, contextspectre auto-detects sessions at `/mnt/c/Users/<you>/.claude/`. No extra flags needed.
 
 ## Quick start
 
