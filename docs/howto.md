@@ -117,3 +117,26 @@ contextspectre export tasks <session-id>
 - Don't switch models (`/model`) when you hit a false positive — it wipes context. Start a fresh session instead
 - If a question uses dual-use terminology (targeting, dropping, accuracy, injection), rephrase before sending
 - Save external API output to files instead of pasting raw content into the session
+
+## Use contextspectre in WSL2
+
+If you run Claude Code on the Windows side (PowerShell, Windows Terminal), your sessions live at `C:\Users\<you>\.claude\`. Inside WSL2, that path is `/mnt/c/Users/<you>/.claude/`.
+
+**contextspectre auto-detects this.** If `~/.claude/projects/` doesn't exist or is empty inside WSL2, it checks `/mnt/c/Users/<you>/.claude/` automatically. No `--claude-dir` flag needed.
+
+**Install:**
+
+```bash
+# Homebrew (works in WSL2)
+brew install ppiankov/tap/contextspectre
+
+# Or direct download
+curl -L https://github.com/ppiankov/contextspectre/releases/latest/download/contextspectre_0.39.9_linux_amd64.tar.gz | tar xz
+sudo mv contextspectre /usr/local/bin/
+```
+
+**Manual override** if auto-detection doesn't find your sessions:
+
+```bash
+contextspectre sessions --claude-dir /mnt/c/Users/yourname/.claude
+```
