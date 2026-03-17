@@ -4,9 +4,19 @@ Practical recipes for common contextspectre tasks.
 
 ## Rename a project folder without losing Claude session history
 
-Claude Code stores session history in `~/.claude/projects/` using path-encoded directory names. If you rename your project folder, Claude won't find old sessions because the encoded path no longer matches.
+Claude Code stores session history under `~/.claude/projects/` (all platforms including Windows: `C:\Users\<you>\.claude\projects\`) using path-encoded directory names. If you rename your project folder, Claude won't find old sessions because the encoded path no longer matches.
 
-**Steps:**
+**Recommended: use `contextspectre relocate`**
+
+```bash
+# Dry run — see what would move
+contextspectre relocate --from ~/dev/old-name --to ~/dev/new-name
+
+# Apply the move
+contextspectre relocate --from ~/dev/old-name --to ~/dev/new-name --apply
+```
+
+**Manual alternative:**
 
 ```bash
 # 1. Rename the project folder
@@ -17,13 +27,7 @@ mv ~/.claude/projects/-Users-you-dev-old-name \
    ~/.claude/projects/-Users-you-dev-new-name
 ```
 
-**How it works:** Claude Code encodes your project's absolute path by replacing `/` with `-`. The directory `~/dev/myproject` becomes `-Users-you-dev-myproject` inside `~/.claude/projects/`. Renaming both keeps all session history, memory files, markers, and analytics intact.
-
-**Finding the encoded name:** If you're unsure of the exact encoded name:
-
-```bash
-ls ~/.claude/projects/ | grep old-name
-```
+**How it works:** Claude Code encodes your project's absolute path by replacing `/` with `-` (on Windows, `\` becomes `-` too). The directory `~/dev/myproject` becomes `-Users-you-dev-myproject` inside `~/.claude/projects/`. Renaming both keeps all session history, memory files, markers, and analytics intact.
 
 **What's preserved:** Session JSONL files, `.markers.json` sidecars, `.bak` backups, and the `memory/` directory (agent memory). Everything stays exactly as it was — only the parent directory name changes.
 
