@@ -15,6 +15,7 @@ import (
 var (
 	sessionsActive  bool
 	sessionsProject string
+	sessionsCWD     bool
 	sessionsAll     bool
 	sessionsLimit   int
 )
@@ -40,7 +41,7 @@ func runSessions(cmd *cobra.Command, args []string) error {
 	total := len(sessions)
 
 	// Apply limit (default 20 unless --all or explicit filters are set).
-	if !sessionsAll && sessionsLimit > 0 && !sessionsActive && sessionsProject == "" && total > sessionsLimit {
+	if !sessionsAll && sessionsLimit > 0 && !sessionsActive && sessionsProject == "" && !sessionsCWD && total > sessionsLimit {
 		sessions = sessions[:sessionsLimit]
 	}
 
@@ -145,10 +146,25 @@ func runSessions(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// filterSessions applies --active and --project flags.
+// filterSessions applies --active, --project, and --cwd flags.
 func filterSessions(sessions []session.Info) []session.Info {
-	if !sessionsActive && sessionsProject == "" {
+	if !sessionsActive && sessionsProject == "" && !sessionsCWD {
 		return sessions
+	}
+
+	// Apply --cwd filter: match sessions whose path contains the encoded CWD
+	if sessionsCWD {
+		cwd, err := os.Getwd()
+		if err == nil {
+			encoded := session.EncodePath(cwd)
+			var filtered []session.Info
+			for _, s := range sessions {
+				if strings.Contains(s.FullPath, encoded) {
+					filtered = append(filtered, s)
+				}
+			}
+			sessions = filtered
+		}
 	}
 
 	// Apply project filter (alias-aware)
@@ -234,6 +250,7 @@ func timeAgo(t time.Time) string {
 func init() {
 	sessionsCmd.Flags().BoolVar(&sessionsActive, "active", false, "Show only active sessions (modified within last 5 minutes)")
 	sessionsCmd.Flags().StringVar(&sessionsProject, "project", "", "Filter by project name (substring match)")
+	sessionsCmd.Flags().BoolVar(&sessionsCWD, "cwd", false, "Show only sessions for the current working directory")
 	sessionsCmd.Flags().BoolVar(&sessionsAll, "all", false, "Show all sessions (no limit)")
 	sessionsCmd.Flags().IntVar(&sessionsLimit, "limit", 20, "Maximum sessions to display")
 	rootCmd.AddCommand(sessionsCmd)

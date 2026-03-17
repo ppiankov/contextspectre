@@ -99,8 +99,8 @@ Claude Code's safety classifier can false-positive on benign technical terminolo
 ```bash
 # 1. Open a new terminal / new claude session
 
-# 2. Find the dead session (use project name or list all)
-contextspectre sessions --project myproject
+# 2. Find the dead session
+contextspectre sessions --cwd
 
 # 3. Extract a resume brief
 contextspectre checkpoint <session-id>
