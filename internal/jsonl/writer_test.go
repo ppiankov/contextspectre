@@ -3,6 +3,7 @@ package jsonl
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -53,6 +54,9 @@ func TestWriteLines_Overwrite(t *testing.T) {
 }
 
 func TestWriteLines_PreservesPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix file permissions not supported on Windows")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
 

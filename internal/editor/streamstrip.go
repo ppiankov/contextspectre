@@ -26,12 +26,12 @@ func StreamStripType(path string, entryType string) (*StreamStripResult, error) 
 	if err != nil {
 		return nil, fmt.Errorf("open %s: %w", path, err)
 	}
-	defer func() { _ = f.Close() }()
 
 	// Create temp file in same directory for atomic rename
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".streamstrip-*")
 	if err != nil {
+		_ = f.Close()
 		return nil, fmt.Errorf("create temp: %w", err)
 	}
 	tmpPath := tmp.Name()
@@ -50,12 +50,14 @@ func StreamStripType(path string, entryType string) (*StreamStripResult, error) 
 		}
 		if !first {
 			if err := writer.WriteByte('\n'); err != nil {
+				_ = f.Close()
 				_ = tmp.Close()
 				_ = os.Remove(tmpPath)
 				return nil, fmt.Errorf("write newline: %w", err)
 			}
 		}
 		if _, err := writer.Write(raw); err != nil {
+			_ = f.Close()
 			_ = tmp.Close()
 			_ = os.Remove(tmpPath)
 			return nil, fmt.Errorf("write line: %w", err)
@@ -63,19 +65,28 @@ func StreamStripType(path string, entryType string) (*StreamStripResult, error) 
 		first = false
 	}
 	if err := scanner.Err(); err != nil {
+		_ = f.Close()
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
 		return nil, fmt.Errorf("scan: %w", err)
 	}
 
 	if err := writer.Flush(); err != nil {
+		_ = f.Close()
 		_ = tmp.Close()
 		_ = os.Remove(tmpPath)
 		return nil, fmt.Errorf("flush: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
+		_ = f.Close()
 		_ = os.Remove(tmpPath)
 		return nil, fmt.Errorf("close temp: %w", err)
+	}
+
+	// Close source file BEFORE rename — Windows locks open files
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmpPath)
+		return nil, fmt.Errorf("close source: %w", err)
 	}
 
 	if removed == 0 {

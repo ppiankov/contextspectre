@@ -3,6 +3,7 @@ package safecopy
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -117,6 +118,9 @@ func TestExists(t *testing.T) {
 }
 
 func TestCreate_PreservesPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix file permissions not supported on Windows")
+	}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "test.jsonl")
 	mustWrite(t, path, []byte("content"), 0600)
