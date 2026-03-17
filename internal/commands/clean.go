@@ -40,6 +40,7 @@ var (
 	cleanWatchInterval int
 	cleanTombstone     bool
 	cleanPreserve      bool
+	cleanNoEscalate    bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -439,13 +440,15 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
 	fmt.Printf("Watching active sessions (%s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+	printEscalationHint()
 
 	var consecutiveClean int
 	lastHeartbeat := time.Now()
 	lastTick := time.Now()
 
 	// Run first cycle immediately.
-	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
+	opts := baseOpts()
+	ct, cs := runWatchCycleDiscover(sinceDuration, acc, opts)
 	if cs > 0 {
 		consecutiveClean = 0
 		acc.sessions += cs
@@ -478,7 +481,15 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 			}
 			lastTick = now
 
-			ct, cs := runWatchCycleDiscover(sinceDuration, acc)
+			opts := baseOpts()
+			if esc, label := escalatedOpts(consecutiveClean, opts); label != "" {
+				ts := now.Format("15:04:05")
+				fmt.Printf("[%s] Auto-escalating to %s after %d clean cycles\n", ts, label, consecutiveClean)
+				opts = esc
+				acc.escalations++
+			}
+
+			ct, cs := runWatchCycleDiscover(sinceDuration, acc, opts)
 			if cs > 0 {
 				consecutiveClean = 0
 				acc.sessions += cs
@@ -532,6 +543,14 @@ func watchSignalHandler() (chan struct{}, chan os.Signal) {
 const smartPollInterval = 5 * time.Second
 const sessionCooldown = 30 * time.Second
 
+// escalateTier3After is the number of consecutive clean cycles before
+// auto-escalating to tier-3 (stale reads, retries).
+const escalateTier3After = 10
+
+// escalateTier5After is the number of consecutive clean cycles before
+// auto-escalating to tier-5 (images, separators, truncation).
+const escalateTier5After = 30
+
 // sleepThreshold is the wall-clock gap that indicates a system sleep occurred.
 // If the time between ticks exceeds this, we assume sleep/wake and reset state.
 const sleepThreshold = 30 * time.Second
@@ -547,6 +566,7 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
 	fmt.Printf("Watching active sessions (%s, smart mode, Ctrl+C to quit)\n", tierLabel)
+	printEscalationHint()
 
 	lastMtime := make(map[string]time.Time)
 	lastClean := make(map[string]time.Time)
@@ -556,7 +576,8 @@ func runSmartWatch(sinceDuration time.Duration) error {
 	lastTick := time.Now()
 
 	// Run first cycle immediately on all active sessions.
-	ct, cs := runWatchCycleDiscover(sinceDuration, acc)
+	opts := baseOpts()
+	ct, cs := runWatchCycleDiscover(sinceDuration, acc, opts)
 	if cs > 0 {
 		acc.sessions += cs
 	} else if ct == 0 {
@@ -597,9 +618,17 @@ func runSmartWatch(sinceDuration time.Duration) error {
 				continue
 			}
 
+			opts := baseOpts()
+			if esc, label := escalatedOpts(consecutiveClean, opts); label != "" {
+				ts := now.Format("15:04:05")
+				fmt.Printf("[%s] Auto-escalating to %s after %d clean cycles\n", ts, label, consecutiveClean)
+				opts = esc
+				acc.escalations++
+			}
+
 			ts := now.Format("15:04:05")
 			fmt.Printf("[%s] Cleaning %d changed sessions...\n", ts, len(changed))
-			totalTokens, cleaned := cleanActiveSessionsWatch(changed, acc)
+			totalTokens, cleaned := cleanActiveSessionsWatch(changed, acc, opts)
 
 			// Update maps.
 			updateNow := time.Now()
@@ -692,7 +721,7 @@ func recordWatchSnapshots(sinceDuration time.Duration) {
 }
 
 // runWatchCycleDiscover discovers active sessions and cleans with watch-tier gating.
-func runWatchCycleDiscover(sinceDuration time.Duration, acc *watchAccumulator) (int, int) {
+func runWatchCycleDiscover(sinceDuration time.Duration, acc *watchAccumulator, opts editor.CleanLiveOpts) (int, int) {
 	active, err := discoverActiveSessions(sinceDuration)
 	if err != nil {
 		slog.Warn("Discovery failed", "error", err)
@@ -707,7 +736,7 @@ func runWatchCycleDiscover(sinceDuration time.Duration, acc *watchAccumulator) (
 	}
 
 	fmt.Printf("[%s] Cleaning %d active sessions...\n", ts, len(active))
-	totalTokens, cleaned := cleanActiveSessionsWatch(active, acc)
+	totalTokens, cleaned := cleanActiveSessionsWatch(active, acc, opts)
 
 	if cleaned > 0 {
 		fmt.Printf("[%s] %s tokens saved across %d sessions\n",
@@ -717,15 +746,57 @@ func runWatchCycleDiscover(sinceDuration time.Duration, acc *watchAccumulator) (
 	return totalTokens, cleaned
 }
 
-// watchTierLabel returns a human label for the active watch tier config.
-func watchTierLabel() string {
-	if cleanAggressive {
+// baseOpts returns the CleanLiveOpts derived from the user's CLI flags.
+func baseOpts() editor.CleanLiveOpts {
+	return editor.CleanLiveOpts{
+		Tier3:      cleanLive || cleanAggressive,
+		Aggressive: cleanAggressive,
+	}
+}
+
+// optsLabel returns the human tier label for a given opts set.
+func optsLabel(opts editor.CleanLiveOpts) string {
+	if opts.Aggressive {
 		return "tier 1-5"
 	}
-	if cleanLive {
+	if opts.Tier3 {
 		return "tier 1-3"
 	}
 	return "tier 1-2"
+}
+
+// watchTierLabel returns a human label for the active watch tier config.
+func watchTierLabel() string {
+	return optsLabel(baseOpts())
+}
+
+// printEscalationHint prints the auto-escalation schedule at watch startup.
+func printEscalationHint() {
+	if cleanNoEscalate || cleanAggressive {
+		return
+	}
+	base := baseOpts()
+	if base.Tier3 {
+		fmt.Printf("  (auto-escalate: tier-5 at %d clean cycles; --no-escalate to disable)\n", escalateTier5After)
+	} else {
+		fmt.Printf("  (auto-escalate: tier-3 at %d, tier-5 at %d clean cycles; --no-escalate to disable)\n",
+			escalateTier3After, escalateTier5After)
+	}
+}
+
+// escalatedOpts returns upgraded opts for a one-shot escalation pass.
+// Returns the opts and a label describing the escalation, or empty string if none.
+func escalatedOpts(consecutiveClean int, base editor.CleanLiveOpts) (editor.CleanLiveOpts, string) {
+	if cleanNoEscalate || base.Aggressive {
+		return base, ""
+	}
+	if consecutiveClean >= escalateTier5After {
+		return editor.CleanLiveOpts{Tier3: true, Aggressive: true}, "tier 1-5"
+	}
+	if consecutiveClean >= escalateTier3After && !base.Tier3 {
+		return editor.CleanLiveOpts{Tier3: true}, "tier 1-3"
+	}
+	return base, ""
 }
 
 // discoverActiveSessions returns sessions modified within the given duration.
@@ -850,21 +921,22 @@ func cleanActiveSessions(active []session.Info) ([]CleanActiveSessionJSON, int, 
 
 // watchAccumulator tracks cumulative stats across watch cycles.
 type watchAccumulator struct {
-	tokens   int
-	avoided  int // compounded: tokens_removed × remaining_turns per cleanup
-	sessions int
-	cycles   int
-	prog     int
-	snap     int
-	coal     int // coalesce merged entries
-	stale    int
-	retry    int
-	img      int
-	sep      int
-	trunc    int
-	tangents int // tangent entries detected (advisory only, not removed)
-	cost     float64
-	start    time.Time
+	tokens      int
+	avoided     int // compounded: tokens_removed × remaining_turns per cleanup
+	sessions    int
+	cycles      int
+	prog        int
+	snap        int
+	coal        int // coalesce merged entries
+	stale       int
+	retry       int
+	img         int
+	sep         int
+	trunc       int
+	tangents    int // tangent groups detected (advisory only, not removed)
+	escalations int // auto-escalation passes triggered
+	cost        float64
+	start       time.Time
 }
 
 // addResult accumulates a single CleanLiveResult into the watch totals.
@@ -933,6 +1005,9 @@ func (w *watchAccumulator) printSummary() {
 	if w.tangents > 0 {
 		fmt.Printf("  Tangent groups:    %d (advisory only)\n", w.tangents)
 	}
+	if w.escalations > 0 {
+		fmt.Printf("  Auto-escalations:  %d\n", w.escalations)
+	}
 }
 
 // maxWatchWorkers is the maximum number of concurrent session cleaners in watch mode.
@@ -950,12 +1025,7 @@ type watchCleanResult struct {
 // cleanActiveSessionsWatch cleans sessions using CleanLive (tier-gated, race-safe).
 // Sessions are cleaned in parallel (up to maxWatchWorkers).
 // Tangents are detected but NOT removed — advisory only.
-func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator) (int, int) {
-	opts := editor.CleanLiveOpts{
-		Tier3:      cleanLive || cleanAggressive,
-		Aggressive: cleanAggressive,
-	}
-
+func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts editor.CleanLiveOpts) (int, int) {
 	// Clean sessions in parallel
 	ch := make(chan watchCleanResult, len(active))
 	sem := make(chan struct{}, maxWatchWorkers)
@@ -1386,5 +1456,6 @@ func init() {
 	cleanCmd.Flags().IntVar(&cleanWatchInterval, "interval", 0, "Watch interval in seconds (0=smart mtime-based)")
 	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", true, "Extract decisions and findings before cleaning (use --no-preserve to skip)")
+	cleanCmd.Flags().BoolVar(&cleanNoEscalate, "no-escalate", false, "Disable auto-escalation in watch mode")
 	rootCmd.AddCommand(cleanCmd)
 }
