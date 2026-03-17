@@ -183,7 +183,6 @@ func rewriteCWD(path, fromPath, toPath string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1<<20), 1<<20)
@@ -229,8 +228,11 @@ func rewriteCWD(path, fromPath, toPath string) (int, error) {
 	}
 
 	if err := scanner.Err(); err != nil {
+		_ = f.Close()
 		return 0, err
 	}
+	// Close source before rename — Windows locks open files
+	_ = f.Close()
 
 	if modified == 0 {
 		return 0, nil

@@ -262,9 +262,9 @@ func extractFinding(text string) string {
 func renderCheckpointBrief(out CheckpointOutput) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("# Checkpoint — %s\n\n", out.SessionID))
-	sb.WriteString(fmt.Sprintf("**Project:** %s\n", out.Project))
-	sb.WriteString(fmt.Sprintf("**Client:** %s\n", out.ClientType))
+	fmt.Fprintf(&sb, "# Checkpoint — %s\n\n", out.SessionID)
+	fmt.Fprintf(&sb, "**Project:** %s\n", out.Project)
+	fmt.Fprintf(&sb, "**Client:** %s\n", out.ClientType)
 	sb.WriteString(fmt.Sprintf("**Context:** %.0f%% | **Turns left:** ~%d\n", out.ContextPercent, out.TurnsRemaining))
 	sb.WriteString(fmt.Sprintf("**Epoch:** #%d (%d turns, $%.4f)\n", out.Epoch.Index, out.Epoch.TurnCount, out.Epoch.Cost))
 	sb.WriteString(fmt.Sprintf("**Saved:** %s\n\n", time.Now().Format("2006-01-02 15:04")))
