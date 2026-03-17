@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -133,12 +134,63 @@ type Discoverer struct {
 }
 
 // DefaultClaudeDir returns the default ~/.claude path.
+// In WSL2, if ~/.claude/projects doesn't exist, falls back to the Windows
+// user's .claude directory at /mnt/c/Users/<name>/.claude.
 func DefaultClaudeDir() string {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(home, ".claude")
+	claudeDir := filepath.Join(home, ".claude")
+
+	// Check if this directory has projects — if so, use it
+	if hasProjects(claudeDir) {
+		return claudeDir
+	}
+
+	// WSL2 fallback: check Windows .claude directory
+	if runtime.GOOS == "linux" {
+		if wslDir := detectWSL2ClaudeDir(); wslDir != "" {
+			return wslDir
+		}
+	}
+
+	// Return default even if empty (first-run case)
+	return claudeDir
+}
+
+// hasProjects returns true if the claude dir has a non-empty projects subdirectory.
+func hasProjects(claudeDir string) bool {
+	entries, err := os.ReadDir(filepath.Join(claudeDir, "projects"))
+	return err == nil && len(entries) > 0
+}
+
+// detectWSL2ClaudeDir looks for Claude Code sessions in the Windows filesystem
+// mounted at /mnt/c/Users/*/. Returns the first .claude dir with projects.
+func detectWSL2ClaudeDir() string {
+	// Quick WSL2 check: /mnt/c must exist
+	if _, err := os.Stat("/mnt/c"); err != nil {
+		return ""
+	}
+	entries, err := os.ReadDir("/mnt/c/Users")
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// Skip system directories
+		if name == "Public" || name == "Default" || name == "Default User" || name == "All Users" {
+			continue
+		}
+		candidate := filepath.Join("/mnt/c/Users", name, ".claude")
+		if hasProjects(candidate) {
+			return candidate
+		}
+	}
+	return ""
 }
 
 // ListProjects returns all project directory paths under the claude dir.
