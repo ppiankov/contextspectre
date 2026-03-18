@@ -3,12 +3,23 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
+func setTempDir(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Setenv("TMP", dir)
+		t.Setenv("TEMP", dir)
+	} else {
+		t.Setenv("TMPDIR", dir)
+	}
+}
+
 func TestWriteContextPercentCache(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
+	setTempDir(t, tmp)
 
 	if err := writeContextPercentCache(12345, 54.4); err != nil {
 		t.Fatalf("writeContextPercentCache failed: %v", err)
@@ -25,7 +36,7 @@ func TestWriteContextPercentCache(t *testing.T) {
 
 func TestWriteContextPercentCacheNoPPID(t *testing.T) {
 	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
+	setTempDir(t, tmp)
 
 	if err := writeContextPercentCache(0, 99); err != nil {
 		t.Fatalf("writeContextPercentCache failed: %v", err)

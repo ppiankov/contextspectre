@@ -1,8 +1,14 @@
 package commands
 
-import "testing"
+import (
+	"runtime"
+	"testing"
+)
 
 func TestInferTimelineTopicFromFiles(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses Unix paths in test fixtures")
+	}
 	files := []string{
 		"/repo/internal/analyzer/a.go",
 		"/repo/internal/analyzer/b.go",
