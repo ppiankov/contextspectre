@@ -88,6 +88,23 @@ contextspectre checkpoint --cwd --format json
 
 The checkpoint extracts from the active epoch: decisions made, findings discovered, user requests, files touched, and any commit points you've marked.
 
+## Resume a Claude Code session by ID
+
+Claude Code's `--resume` requires a full UUID. contextspectre shows short IDs (8 chars). Use `contextspectre id` to resolve:
+
+```bash
+# Resume a specific session (short ID → full UUID)
+claude --resume $(contextspectre id 79109cdc)
+
+# Resume the most recent session in current directory
+claude --resume $(contextspectre sessions --cwd --format json | jq -r '.sessions[0].id')
+
+# List all session IDs for current directory
+contextspectre sessions --cwd --format json | jq -r '.sessions[].id'
+```
+
+**Note:** `claude --continue` resumes the most recent session without needing an ID. Use `--resume` when you want a specific older session.
+
 ## Recover from a killed session (false positive, model switch, crash)
 
 Claude Code's safety classifier can false-positive on benign technical terminology (e.g., robotics, physics, security research), killing the session with a "Usage Policy" error. Once triggered, it cascades — every subsequent message in the same session hits the same filter. See [anthropics/claude-code#34977](https://github.com/anthropics/claude-code/issues/34977).
