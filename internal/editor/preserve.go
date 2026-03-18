@@ -146,13 +146,13 @@ func extractPreserveFinding(text string) string {
 func renderPreserved(sessionID string, decisions, findings, questions, files []string, entriesDeleted int) string {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("\n---\n## Preserved — %s\n", time.Now().Format("2006-01-02 15:04")))
-	sb.WriteString(fmt.Sprintf("Extracted from %d entries before cleanup.\n\n", entriesDeleted))
+	fmt.Fprintf(&sb, "\n---\n## Preserved — %s\n", time.Now().Format("2006-01-02 15:04"))
+	fmt.Fprintf(&sb, "Extracted from %d entries before cleanup.\n\n", entriesDeleted)
 
 	if len(decisions) > 0 {
 		sb.WriteString("### Decisions\n")
 		for _, d := range decisions {
-			sb.WriteString(fmt.Sprintf("- %s\n", d))
+			fmt.Fprintf(&sb, "- %s\n", d)
 		}
 		sb.WriteString("\n")
 	}
@@ -160,7 +160,7 @@ func renderPreserved(sessionID string, decisions, findings, questions, files []s
 	if len(findings) > 0 {
 		sb.WriteString("### Findings\n")
 		for _, f := range findings {
-			sb.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&sb, "- %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
@@ -168,7 +168,7 @@ func renderPreserved(sessionID string, decisions, findings, questions, files []s
 	if len(questions) > 0 {
 		sb.WriteString("### User Requests\n")
 		for _, q := range questions {
-			sb.WriteString(fmt.Sprintf("- %s\n", q))
+			fmt.Fprintf(&sb, "- %s\n", q)
 		}
 		sb.WriteString("\n")
 	}
@@ -176,7 +176,7 @@ func renderPreserved(sessionID string, decisions, findings, questions, files []s
 	if len(files) > 0 {
 		sb.WriteString("### Files Referenced\n")
 		for _, f := range files {
-			sb.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&sb, "- %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
