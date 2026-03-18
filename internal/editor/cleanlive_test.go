@@ -3,6 +3,7 @@ package editor
 import (
 	"errors"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -176,6 +177,9 @@ func TestCleanLive_NotIdle(t *testing.T) {
 }
 
 func TestCleanLive_RaceDetected(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file locking semantics differ on Windows")
+	}
 	path := copyFixture(t, "small_session.jsonl")
 	origData, _ := os.ReadFile(path)
 

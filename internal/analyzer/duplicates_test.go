@@ -2,10 +2,18 @@ package analyzer
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 )
+
+func skipOnWindows(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("uses Unix paths in test fixtures; JSONL always stores Unix paths")
+	}
+}
 
 func makeReadEntry(idx int, toolUseID, filePath string) jsonl.Entry {
 	input, _ := json.Marshal(map[string]string{"file_path": filePath})
@@ -47,6 +55,7 @@ func TestFindDuplicateReads_NoDuplicates(t *testing.T) {
 }
 
 func TestFindDuplicateReads_BasicDuplicate(t *testing.T) {
+	skipOnWindows(t)
 	entries := []jsonl.Entry{
 		makeReadEntry(0, "t1", "/path/a.go"), // stale
 		makeToolResult("t1"),                 // stale result
@@ -274,6 +283,7 @@ func TestFindDuplicateReads_ReadReadWriteReadRead(t *testing.T) {
 }
 
 func TestFindDuplicateReads_PathNormalization(t *testing.T) {
+	skipOnWindows(t)
 	entries := []jsonl.Entry{
 		makeReadEntry(0, "t1", "/a/../b.go"), // stale — same as /b.go
 		makeToolResult("t1"),

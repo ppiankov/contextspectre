@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/ppiankov/contextspectre/internal/jsonl"
@@ -243,6 +244,9 @@ func TestIsSystemPath(t *testing.T) {
 }
 
 func TestExternalRootDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses Unix paths in test fixtures")
+	}
 	got := externalRootDir("/home/user/dev/other-repo/src/main.go", "/home/user/dev/myproject")
 	if got != "/home/user/dev/other-repo" {
 		t.Errorf("expected /home/user/dev/other-repo, got %s", got)
