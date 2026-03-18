@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"encoding/json"
+	"runtime"
 	"testing"
 
 	"github.com/ppiankov/contextspectre/internal/jsonl"
@@ -227,6 +228,9 @@ func TestFindFailedRetries_SameReadSameFile_IsRetry(t *testing.T) {
 }
 
 func TestRetrySignature(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("uses Unix paths in test fixtures")
+	}
 	tests := []struct {
 		name  string
 		tool  string
