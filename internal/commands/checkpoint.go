@@ -265,14 +265,14 @@ func renderCheckpointBrief(out CheckpointOutput) string {
 	fmt.Fprintf(&sb, "# Checkpoint — %s\n\n", out.SessionID)
 	fmt.Fprintf(&sb, "**Project:** %s\n", out.Project)
 	fmt.Fprintf(&sb, "**Client:** %s\n", out.ClientType)
-	sb.WriteString(fmt.Sprintf("**Context:** %.0f%% | **Turns left:** ~%d\n", out.ContextPercent, out.TurnsRemaining))
-	sb.WriteString(fmt.Sprintf("**Epoch:** #%d (%d turns, $%.4f)\n", out.Epoch.Index, out.Epoch.TurnCount, out.Epoch.Cost))
-	sb.WriteString(fmt.Sprintf("**Saved:** %s\n\n", time.Now().Format("2006-01-02 15:04")))
+	fmt.Fprintf(&sb, "**Context:** %.0f%% | **Turns left:** ~%d\n", out.ContextPercent, out.TurnsRemaining)
+	fmt.Fprintf(&sb, "**Epoch:** #%d (%d turns, $%.4f)\n", out.Epoch.Index, out.Epoch.TurnCount, out.Epoch.Cost)
+	fmt.Fprintf(&sb, "**Saved:** %s\n\n", time.Now().Format("2006-01-02 15:04"))
 
 	if len(out.Decisions) > 0 {
 		sb.WriteString("## Decisions\n")
 		for _, d := range out.Decisions {
-			sb.WriteString(fmt.Sprintf("- %s\n", d))
+			fmt.Fprintf(&sb, "- %s\n", d)
 		}
 		sb.WriteString("\n")
 	}
@@ -280,7 +280,7 @@ func renderCheckpointBrief(out CheckpointOutput) string {
 	if len(out.Findings) > 0 {
 		sb.WriteString("## Findings\n")
 		for _, f := range out.Findings {
-			sb.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&sb, "- %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
@@ -288,7 +288,7 @@ func renderCheckpointBrief(out CheckpointOutput) string {
 	if len(out.Questions) > 0 {
 		sb.WriteString("## User Requests\n")
 		for _, q := range out.Questions {
-			sb.WriteString(fmt.Sprintf("- %s\n", q))
+			fmt.Fprintf(&sb, "- %s\n", q)
 		}
 		sb.WriteString("\n")
 	}
@@ -296,7 +296,7 @@ func renderCheckpointBrief(out CheckpointOutput) string {
 	if len(out.Files) > 0 {
 		sb.WriteString("## Files Touched\n")
 		for _, f := range out.Files {
-			sb.WriteString(fmt.Sprintf("- %s\n", f))
+			fmt.Fprintf(&sb, "- %s\n", f)
 		}
 		sb.WriteString("\n")
 	}
@@ -304,9 +304,9 @@ func renderCheckpointBrief(out CheckpointOutput) string {
 	if len(out.CommitPoints) > 0 {
 		sb.WriteString("## Commit Points\n")
 		for _, cp := range out.CommitPoints {
-			sb.WriteString(fmt.Sprintf("- **%s**\n", cp.Goal))
+			fmt.Fprintf(&sb, "- **%s**\n", cp.Goal)
 			for _, d := range cp.Decisions {
-				sb.WriteString(fmt.Sprintf("  - %s\n", d))
+				fmt.Fprintf(&sb, "  - %s\n", d)
 			}
 		}
 		sb.WriteString("\n")
