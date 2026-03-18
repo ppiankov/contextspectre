@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ppiankov/contextspectre/internal/analyzer"
+	"github.com/ppiankov/contextspectre/internal/safecopy"
 	"github.com/ppiankov/contextspectre/internal/session"
 )
 
@@ -37,6 +38,7 @@ type detailModel struct {
 	overviewLines  int // total lines in last rendered overview (for nav)
 	nav            navState
 	help           helpModel
+	statusMsg      string
 	width, height  int
 }
 
@@ -95,6 +97,30 @@ func (m detailModel) countOverviewLines() int {
 	}
 	count += 2 // footer hint
 	return count
+}
+
+// reload re-creates the detail model from the session, preserving panel state.
+func (m detailModel) reload() detailModel {
+	newDetail := newDetailModel(m.session)
+	newDetail.activePanel = m.activePanel
+	newDetail.branchOrigin = m.branchOrigin
+	newDetail.width = m.width
+	newDetail.height = m.height
+	newDetail.statusMsg = m.statusMsg
+	return newDetail
+}
+
+// showCleanConfirmMsg triggers a confirmation dialog for clean --all.
+type showCleanConfirmMsg struct {
+	rec *analyzer.CleanupRecommendation
+}
+
+// showCoalesceConfirmMsg triggers a confirmation dialog for coalesce.
+type showCoalesceConfirmMsg struct{}
+
+// showUndoConfirmMsg triggers a confirmation dialog for undo.
+type showUndoConfirmMsg struct {
+	hasBak bool
 }
 
 func (m detailModel) Init() tea.Cmd {
@@ -171,7 +197,27 @@ func (m detailModel) Update(msg tea.Msg) (detailModel, tea.Cmd) {
 			var cmd tea.Cmd
 			m.messages, cmd = m.messages.Update(msg)
 			return m, cmd
-		case panelCleanup, panelGhost:
+		case panelCleanup:
+			switch {
+			case key.Matches(msg, keys.Help):
+				m.help.width = m.width
+				m.help.height = m.height
+				m.help.toggle("Cleanup", cleanupHelp())
+			case msg.String() == "c":
+				return m, func() tea.Msg {
+					return showCleanConfirmMsg{rec: m.rec}
+				}
+			case msg.String() == "o":
+				return m, func() tea.Msg {
+					return showCoalesceConfirmMsg{}
+				}
+			case msg.String() == "u":
+				return m, func() tea.Msg {
+					return showUndoConfirmMsg{hasBak: safecopy.Exists(m.session.FullPath)}
+				}
+			}
+			return m, nil
+		case panelGhost:
 			if key.Matches(msg, keys.Help) {
 				m.help.width = m.width
 				m.help.height = m.height
@@ -437,10 +483,15 @@ func (m detailModel) renderOverview(height int) string {
 func (m detailModel) renderCleanup(height int) string {
 	var lines []string
 
+	if m.statusMsg != "" {
+		lines = append(lines, lipgloss.NewStyle().Foreground(colorGreen).Render(" "+m.statusMsg))
+		lines = append(lines, "")
+	}
+
 	if m.rec == nil || len(m.rec.Items) == 0 {
 		lines = append(lines, " Nothing to clean.")
 		lines = append(lines, "")
-		lines = append(lines, styleMuted.Render(" Tab: switch panels  Esc: back"))
+		lines = append(lines, styleMuted.Render(" c clean  o coalesce  u undo  Tab panels  ? help"))
 		return m.scrolledContent(lines, height)
 	}
 
@@ -469,8 +520,7 @@ func (m detailModel) renderCleanup(height int) string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, styleMuted.Render(" Use Messages tab for manual selection/deletion"))
-	lines = append(lines, styleMuted.Render(" Tab: switch panels  Esc: back"))
+	lines = append(lines, styleMuted.Render(" c clean  o coalesce  u undo  Tab panels  ? help"))
 
 	return m.scrolledContent(lines, height)
 }
