@@ -166,6 +166,22 @@ func overviewHelp() []helpEntry {
 	}
 }
 
+// cleanupHelp returns help entries for the cleanup panel.
+func cleanupHelp() []helpEntry {
+	return []helpEntry{
+		{"c", "Clean all (with confirm)"},
+		{"o", "Coalesce (fix Mac API errors)"},
+		{"u", "Undo (restore from .bak)"},
+		{"j/↓", "Scroll down"},
+		{"k/↑", "Scroll up"},
+		{"Tab", "Next panel"},
+		{"Shift+Tab", "Previous panel"},
+		{"1-4", "Jump to panel"},
+		{"Esc", "Back to sessions"},
+		{"?", "Toggle this help"},
+	}
+}
+
 // branchesHelp returns help entries for the branch navigator.
 func branchesHelp() []helpEntry {
 	return []helpEntry{
