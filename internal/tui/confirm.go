@@ -13,6 +13,9 @@ import (
 type confirmModel struct {
 	selected      map[int]bool
 	impact        *analyzer.DeletionImpact
+	action        string // "delete", "clean", "coalesce", "undo"
+	title         string
+	description   string
 	width, height int
 }
 
@@ -20,12 +23,24 @@ type confirmDeleteMsg struct {
 	selected map[int]bool
 }
 
+type confirmCleanMsg struct{}
+type confirmCoalesceMsg struct{}
+type confirmUndoMsg struct{}
 type cancelDeleteMsg struct{}
 
 func newConfirmModel(selected map[int]bool, impact *analyzer.DeletionImpact) confirmModel {
 	return confirmModel{
 		selected: selected,
 		impact:   impact,
+		action:   "delete",
+	}
+}
+
+func newActionConfirm(action, title, description string) confirmModel {
+	return confirmModel{
+		action:      action,
+		title:       title,
+		description: description,
 	}
 }
 
@@ -38,7 +53,16 @@ func (m confirmModel) Update(msg tea.Msg) (confirmModel, tea.Cmd) {
 	case tea.KeyMsg:
 		switch {
 		case key.Matches(msg, keys.Confirm):
-			return m, func() tea.Msg { return confirmDeleteMsg{selected: m.selected} }
+			switch m.action {
+			case "clean":
+				return m, func() tea.Msg { return confirmCleanMsg{} }
+			case "coalesce":
+				return m, func() tea.Msg { return confirmCoalesceMsg{} }
+			case "undo":
+				return m, func() tea.Msg { return confirmUndoMsg{} }
+			default:
+				return m, func() tea.Msg { return confirmDeleteMsg{selected: m.selected} }
+			}
 		case key.Matches(msg, keys.Cancel):
 			return m, func() tea.Msg { return cancelDeleteMsg{} }
 		}
@@ -47,10 +71,6 @@ func (m confirmModel) Update(msg tea.Msg) (confirmModel, tea.Cmd) {
 }
 
 func (m confirmModel) View() string {
-	if m.impact == nil {
-		return ""
-	}
-
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorAccent).
@@ -58,6 +78,22 @@ func (m confirmModel) View() string {
 		Width(52)
 
 	var b strings.Builder
+
+	// Action confirm (clean, coalesce, undo)
+	if m.action != "delete" {
+		b.WriteString(styleHeader.Render(m.title))
+		b.WriteString("\n\n")
+		b.WriteString(m.description)
+		b.WriteString("\n\n")
+		b.WriteString(styleHeader.Render("[y] Confirm    [n] Cancel"))
+		return m.centerBox(boxStyle.Render(b.String()))
+	}
+
+	// Delete confirm (existing behavior)
+	if m.impact == nil {
+		return ""
+	}
+
 	b.WriteString(styleHeader.Render(fmt.Sprintf("Delete %d messages?", m.impact.SelectedCount)))
 	b.WriteString("\n\n")
 
@@ -85,9 +121,10 @@ func (m confirmModel) View() string {
 	b.WriteString("Backup will be created: session.jsonl.bak\n\n")
 	b.WriteString(styleHeader.Render("[y] Confirm    [n] Cancel"))
 
-	box := boxStyle.Render(b.String())
+	return m.centerBox(boxStyle.Render(b.String()))
+}
 
-	// Center the box
+func (m confirmModel) centerBox(box string) string {
 	padTop := (m.height - lipgloss.Height(box)) / 2
 	if padTop < 0 {
 		padTop = 0
@@ -96,7 +133,6 @@ func (m confirmModel) View() string {
 	if padLeft < 0 {
 		padLeft = 0
 	}
-
 	return strings.Repeat("\n", padTop) +
 		strings.Repeat(" ", padLeft) + box
 }

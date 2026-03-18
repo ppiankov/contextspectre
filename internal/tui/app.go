@@ -10,6 +10,7 @@ import (
 	"github.com/ppiankov/contextspectre/internal/editor"
 	"github.com/ppiankov/contextspectre/internal/jsonl"
 	"github.com/ppiankov/contextspectre/internal/project"
+	"github.com/ppiankov/contextspectre/internal/safecopy"
 	"github.com/ppiankov/contextspectre/internal/session"
 )
 
@@ -219,11 +220,82 @@ func (m AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case cancelDeleteMsg:
-		if m.detail.activePanel == panelMessages {
+		switch m.detail.activePanel {
+		case panelCleanup, panelMessages:
 			m.currentView = viewDetail
-		} else {
+		default:
 			m.currentView = viewMessages
 		}
+		return m, nil
+
+	case showCleanConfirmMsg:
+		desc := "Run all cleanup operations on this session.\nA backup (.bak) will be created."
+		if msg.rec != nil && msg.rec.TotalTokens > 0 {
+			desc = fmt.Sprintf("Recoverable: ~%s tokens across %d items.\nA backup (.bak) will be created.",
+				formatTokensShort(msg.rec.TotalTokens), len(msg.rec.Items))
+		}
+		m.confirm = newActionConfirm("clean", "Clean all?", desc)
+		m.confirm.width = m.width
+		m.confirm.height = m.height
+		m.currentView = viewConfirm
+		return m, nil
+
+	case showCoalesceConfirmMsg:
+		m.confirm = newActionConfirm("coalesce", "Coalesce?",
+			"Merge adjacent same-role entries to fix API errors.\nA backup (.bak) will be created.")
+		m.confirm.width = m.width
+		m.confirm.height = m.height
+		m.currentView = viewConfirm
+		return m, nil
+
+	case showUndoConfirmMsg:
+		if !msg.hasBak {
+			m.detail.statusMsg = "No backup to restore."
+			return m, nil
+		}
+		m.confirm = newActionConfirm("undo", "Undo last change?",
+			"Restore session from .bak backup.\nThe current file will be replaced.")
+		m.confirm.width = m.width
+		m.confirm.height = m.height
+		m.currentView = viewConfirm
+		return m, nil
+
+	case confirmCleanMsg:
+		result, err := editor.CleanAll(m.detail.session.FullPath, editor.CleanAllOpts{})
+		if err != nil {
+			m.detail.statusMsg = fmt.Sprintf("Error: %v", err)
+		} else {
+			m.detail.statusMsg = fmt.Sprintf("Cleaned: %d prog, %d snap, %d retry, %d stale, %d orphan — saved ~%d tokens",
+				result.ProgressRemoved, result.SnapshotsRemoved,
+				result.FailedRetries, result.StaleReadsRemoved,
+				result.OrphansRemoved, result.TotalTokensSaved)
+			m.detail = m.detail.reload()
+		}
+		m.currentView = viewDetail
+		return m, nil
+
+	case confirmCoalesceMsg:
+		result, err := editor.Coalesce(m.detail.session.FullPath)
+		if err != nil {
+			m.detail.statusMsg = fmt.Sprintf("Error: %v", err)
+		} else if result.EntriesRemoved == 0 {
+			m.detail.statusMsg = "Nothing to coalesce."
+		} else {
+			m.detail.statusMsg = fmt.Sprintf("Coalesced: %d groups merged, %d entries removed, %d orphans stripped",
+				result.GroupsMerged, result.EntriesRemoved, result.OrphansStripped)
+			m.detail = m.detail.reload()
+		}
+		m.currentView = viewDetail
+		return m, nil
+
+	case confirmUndoMsg:
+		if err := safecopy.Restore(m.detail.session.FullPath); err != nil {
+			m.detail.statusMsg = fmt.Sprintf("Restore error: %v", err)
+		} else {
+			m.detail.statusMsg = "Restored from backup."
+			m.detail = m.detail.reload()
+		}
+		m.currentView = viewDetail
 		return m, nil
 
 	case showCommitPointMsg:
