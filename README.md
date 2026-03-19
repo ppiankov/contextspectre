@@ -9,11 +9,13 @@ Reasoning hygiene layer for Claude Code. Not a cleanup utility - a tool you open
 
 ## Before and after
 
-A real session: 14,311 lines, 36.6 MB, 15 compactions, $291 spent. Signal F - 5.9M noise tokens drowning the actual conversation. One `clean --all` later: 4,728 lines, 16.9 MB, Signal A (97.9%), 2.7K noise remaining. Same decisions, same code, no scaffolding.
+A real $1,072 session — 7,701 messages, 46.8 MB, Signal F with 159K cleanable tokens. One `clean --all` later: Signal A, 3K cleanable, 1.5M tokens stripped. Same decisions, no scaffolding.
 
-![Before cleanup - Signal F](assets/stats-before.png)
+![Before - Signal F, 159K cleanable](assets/before.png)
 
-![After cleanup - Signal A](assets/stats-after.png)
+![Cleanup - 1.5M tokens removed, 5.9 MB saved](assets/fix.png)
+
+![After - Signal A, 3K cleanable](assets/after.png)
 
 ## The problem
 
