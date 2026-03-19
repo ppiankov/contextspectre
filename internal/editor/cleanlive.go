@@ -136,7 +136,7 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 
 	abortAndRestore := func() {
 		_ = safecopy.Clean(path)
-		_ = os.Rename(origBak, path)
+		_ = renameOrCopy(origBak, path)
 	}
 
 	// runStep wraps each sub-operation with race check and mtime tracking.

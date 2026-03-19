@@ -94,8 +94,8 @@ func StreamStripType(path string, entryType string) (*StreamStripResult, error) 
 		return &StreamStripResult{LinesRemoved: 0}, nil
 	}
 
-	// Atomic rename
-	if err := os.Rename(tmpPath, path); err != nil {
+	// Atomic rename (falls back to copy on Windows if target is locked)
+	if err := renameOrCopy(tmpPath, path); err != nil {
 		_ = os.Remove(tmpPath)
 		return nil, fmt.Errorf("rename: %w", err)
 	}
