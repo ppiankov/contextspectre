@@ -62,7 +62,16 @@ func TestCheckRace_Detected(t *testing.T) {
 	fi, _ := os.Stat(path)
 	expected := fi.ModTime()
 
-	// Modify the file to change mtime
+	// Force expected mtime into the past so checkRace sees a difference.
+	// Windows mtime resolution (~100ms) can cause a fast write to keep the
+	// same mtime, making the race undetectable. Using Chtimes is deterministic.
+	past := expected.Add(-2 * time.Second)
+	if err := os.Chtimes(path, past, past); err != nil {
+		t.Fatalf("Chtimes: %v", err)
+	}
+	expected = past
+
+	// Write to bump mtime back to "now"
 	f, _ := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0644)
 	if _, err := f.Write([]byte("\n")); err != nil {
 		t.Fatalf("Write: %v", err)
