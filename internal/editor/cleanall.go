@@ -287,7 +287,7 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 // restoreOriginal restores from .bak.orig on failure.
 func restoreOriginal(path, origBak string) error {
 	_ = safecopy.Clean(path)
-	return os.Rename(origBak, path)
+	return renameOrCopy(origBak, path)
 }
 
 // copyFileForCleanAll copies src to dst for backup purposes.
