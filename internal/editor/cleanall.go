@@ -122,6 +122,7 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	// created by those deletions are detected in this same pass.
 	diagnosis := analyzer.DiagnoseExcluding(entries, toDelete)
 	toTombstone := make(map[int]bool)
+	toPatchParent := make(map[int]bool)
 	cascadeInitial := make(map[int]bool)
 	for _, issue := range diagnosis.Issues {
 		idx := issue.EntryIndex
@@ -135,7 +136,11 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			} else {
 				cascadeInitial[idx] = true
 			}
-		case analyzer.IssueChainBroken:
+		case analyzer.IssueChainMissingParent:
+			// Patch parentUuid instead of deleting — avoids cascade.
+			// cleanall handles this after the cascade delete below.
+			toPatchParent[idx] = true
+		case analyzer.IssueChainBadStart, analyzer.IssueChainBroken:
 			cascadeInitial[idx] = true
 		}
 	}
@@ -146,6 +151,15 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 			toDelete[idx] = true
 			result.OrphansRemoved++
 		}
+	}
+
+	// Patch missing-parent chain breaks (in-place, no cascading deletions)
+	if len(toPatchParent) > 0 {
+		if _, err := PatchParentUUID(path, toPatchParent); err != nil {
+			_ = restoreOriginal(path, origBak)
+			return nil, fmt.Errorf("patch parent: %w", err)
+		}
+		cleanIntermediate()
 	}
 
 	// Execute: tombstone first (in-place, preserves UUIDs), then single delete

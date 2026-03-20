@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.40.4] - 2026-03-21
+
+### Fixed
+
+- `fix --apply` no longer requires multiple passes for missing-parent chain breaks
+  - Patches parentUuid to "" instead of deleting entries, preventing cascade
+  - Split `IssueChainBroken` into `IssueChainMissingParent` and `IssueChainBadStart`
+  - Same fix applied to `clean --all` pipeline
+
 ## [0.39.2] - 2026-03-11
 
 ### Added

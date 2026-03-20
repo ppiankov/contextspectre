@@ -15,12 +15,14 @@ const OversizedImageThreshold = 5 * 1024 * 1024
 type IssueKind string
 
 const (
-	IssueFilterBlock       IssueKind = "filter_block"
-	IssueOversizedImage    IssueKind = "oversized_image"
-	IssueOrphanedResult    IssueKind = "orphaned_result"
-	IssueMalformed         IssueKind = "malformed"
-	IssueMediaTypeMismatch IssueKind = "media_type_mismatch"
-	IssueChainBroken       IssueKind = "chain_broken"
+	IssueFilterBlock        IssueKind = "filter_block"
+	IssueOversizedImage     IssueKind = "oversized_image"
+	IssueOrphanedResult     IssueKind = "orphaned_result"
+	IssueMalformed          IssueKind = "malformed"
+	IssueMediaTypeMismatch  IssueKind = "media_type_mismatch"
+	IssueChainBroken        IssueKind = "chain_broken"         // generic (kept for backward compat)
+	IssueChainMissingParent IssueKind = "chain_missing_parent" // parentUuid references non-existent entry
+	IssueChainBadStart      IssueKind = "chain_bad_start"      // active chain starts with assistant
 )
 
 // Issue describes a single detected problem in a session.
@@ -133,8 +135,15 @@ func DiagnoseExcluding(entries []jsonl.Entry, excluded map[int]bool) *DiagnosisR
 	integrity := CheckIntegrity(entries)
 	if !integrity.Healthy {
 		for _, issue := range integrity.Issues {
+			kind := IssueChainBroken
+			switch issue.Kind {
+			case IntegrityMissingParent:
+				kind = IssueChainMissingParent
+			case IntegrityBadChainStart:
+				kind = IssueChainBadStart
+			}
 			result.Issues = append(result.Issues, Issue{
-				Kind:        IssueChainBroken,
+				Kind:        kind,
 				EntryIndex:  issue.EntryIndex,
 				Description: fmt.Sprintf("[%s] %s", issue.Kind, issue.Detail),
 			})
