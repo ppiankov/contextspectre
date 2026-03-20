@@ -1,6 +1,7 @@
 package editor
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
@@ -15,6 +16,7 @@ type RepairResult struct {
 	EntriesTombstoned int
 	ImagesReplaced    int
 	ChainRepairs      int
+	ParentPatches     int
 }
 
 // Repair applies fixes for detected issues.
@@ -25,9 +27,10 @@ func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult
 		return &RepairResult{}, nil
 	}
 
-	// Collect entries to delete, tombstone, and images to replace
+	// Collect entries to delete, tombstone, patch, and images to replace
 	toDelete := make(map[int]bool)
 	toTombstone := make(map[int]bool)
+	toPatchParent := make(map[int]bool)
 	oversizedEntries := make(map[int]bool)
 	mismatchEntries := make(map[int]bool)
 
@@ -46,7 +49,9 @@ func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult
 			}
 		case analyzer.IssueMalformed:
 			toDelete[issue.EntryIndex] = true
-		case analyzer.IssueChainBroken:
+		case analyzer.IssueChainMissingParent:
+			toPatchParent[issue.EntryIndex] = true
+		case analyzer.IssueChainBadStart, analyzer.IssueChainBroken:
 			toDelete[issue.EntryIndex] = true
 		case analyzer.IssueOversizedImage:
 			oversizedEntries[issue.EntryIndex] = true
@@ -73,6 +78,16 @@ func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult
 			return nil, fmt.Errorf("replace oversized images: %w", err)
 		}
 		result.ImagesReplaced += imgResult
+	}
+
+	// Handle missing-parent chain breaks: patch parentUuid to "" instead of deleting.
+	// This reconnects the active chain in one pass without cascading orphans.
+	if len(toPatchParent) > 0 {
+		patched, err := PatchParentUUID(path, toPatchParent)
+		if err != nil {
+			return nil, fmt.Errorf("patch parent: %w", err)
+		}
+		result.ParentPatches = patched
 	}
 
 	// Handle tombstones (before deletions — tombstone modifies in-place,
@@ -159,6 +174,54 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 	}
 
 	return replaced, nil
+}
+
+// PatchParentUUID clears the parentUuid of entries at the given indices,
+// making them chain roots. This fixes missing-parent chain breaks without
+// deleting entries (which would cascade into more broken chains).
+func PatchParentUUID(path string, indices map[int]bool) (int, error) {
+	if len(indices) == 0 {
+		return 0, nil
+	}
+
+	_, rawLines, err := jsonl.ParseRaw(path)
+	if err != nil {
+		return 0, fmt.Errorf("parse: %w", err)
+	}
+
+	if err := safecopy.CreateIfMissing(path); err != nil {
+		return 0, fmt.Errorf("backup: %w", err)
+	}
+
+	patched := 0
+	for i := range rawLines {
+		if !indices[i] || i >= len(rawLines) {
+			continue
+		}
+
+		var raw map[string]json.RawMessage
+		if err := json.Unmarshal(rawLines[i], &raw); err != nil {
+			continue
+		}
+		raw["parentUuid"] = json.RawMessage(`""`)
+		updated, err := json.Marshal(raw)
+		if err != nil {
+			continue
+		}
+		rawLines[i] = updated
+		patched++
+	}
+
+	if patched == 0 {
+		return 0, nil
+	}
+
+	if err := jsonl.WriteLines(path, rawLines); err != nil {
+		_ = safecopy.Restore(path)
+		return 0, fmt.Errorf("write: %w", err)
+	}
+
+	return patched, nil
 }
 
 // fixMediaTypes corrects image media_type declarations to match actual data.

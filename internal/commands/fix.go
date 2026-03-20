@@ -64,7 +64,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 			prefix = "  [orphan]  "
 		case analyzer.IssueMalformed:
 			prefix = "  [broken]  "
-		case analyzer.IssueChainBroken:
+		case analyzer.IssueChainBroken, analyzer.IssueChainMissingParent, analyzer.IssueChainBadStart:
 			prefix = "  [chain]   "
 		}
 		fmt.Printf("%sline %d: %s\n", prefix, entries[issue.EntryIndex].LineNumber, issue.Description)
@@ -105,6 +105,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	totalTombstoned := result.EntriesTombstoned
 	totalImages := result.ImagesReplaced
 	totalChains := result.ChainRepairs
+	totalPatches := result.ParentPatches
 	totalIssues := len(diagnosis.Issues)
 
 	// Cascade: re-parse after initial repair, expand remaining orphans/chains.
@@ -117,6 +118,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 		totalIssues += len(diagnosis.Issues)
 		toDelete := make(map[int]bool)
 		toTombstone := make(map[int]bool)
+		toPatchParent := make(map[int]bool)
 		for _, issue := range diagnosis.Issues {
 			switch issue.Kind {
 			case analyzer.IssueOrphanedResult:
@@ -125,9 +127,18 @@ func runFix(cmd *cobra.Command, args []string) error {
 				} else {
 					toDelete[issue.EntryIndex] = true
 				}
-			case analyzer.IssueChainBroken:
+			case analyzer.IssueChainMissingParent:
+				toPatchParent[issue.EntryIndex] = true
+			case analyzer.IssueChainBadStart, analyzer.IssueChainBroken:
 				toDelete[issue.EntryIndex] = true
 			}
+		}
+		if len(toPatchParent) > 0 {
+			patched, err := editor.PatchParentUUID(path, toPatchParent)
+			if err != nil {
+				return fmt.Errorf("cascade patch parent: %w", err)
+			}
+			totalPatches += patched
 		}
 		toDelete = analyzer.CascadeDeleteSet(entries, toDelete, func(string) bool { return false })
 		if len(toTombstone) > 0 {
@@ -164,6 +175,9 @@ func runFix(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Repaired: %d entries removed, %d images replaced, %d chains repaired",
 			totalRemoved, totalImages, totalChains)
 	}
+	if totalPatches > 0 {
+		fmt.Printf(", %d parents reconnected", totalPatches)
+	}
 	if coalesced > 0 {
 		fmt.Printf(", %d coalesced", coalesced)
 	}
@@ -175,6 +189,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 		"tombstoned", totalTombstoned,
 		"images", totalImages,
 		"chains", totalChains,
+		"parents_patched", totalPatches,
 		"coalesced", coalesced)
 
 	return nil
