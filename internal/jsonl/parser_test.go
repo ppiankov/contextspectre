@@ -166,6 +166,51 @@ not valid json
 	}
 }
 
+func TestParseRaw_SkipsMalformedLines(t *testing.T) {
+	tmp := filepath.Join(t.TempDir(), "bad.jsonl")
+	content := `{"type":"user","uuid":"u1","message":{"role":"user","content":"good"}}
+not valid json
+{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":"also good"}}
+{BROKEN}
+{"type":"user","uuid":"u2","parentUuid":"a1","message":{"role":"user","content":"third"}}
+`
+	if err := os.WriteFile(tmp, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	parseEntries, err := Parse(tmp)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	rawEntries, rawLines, err := ParseRaw(tmp)
+	if err != nil {
+		t.Fatalf("ParseRaw: %v", err)
+	}
+
+	// Parse and ParseRaw must produce the same number of entries
+	if len(parseEntries) != len(rawEntries) {
+		t.Fatalf("index mismatch: Parse=%d entries, ParseRaw=%d entries",
+			len(parseEntries), len(rawEntries))
+	}
+	if len(rawEntries) != len(rawLines) {
+		t.Fatalf("ParseRaw entries/rawLines mismatch: %d vs %d",
+			len(rawEntries), len(rawLines))
+	}
+
+	// UUIDs must match at every index
+	for i := range parseEntries {
+		if parseEntries[i].UUID != rawEntries[i].UUID {
+			t.Errorf("index %d: Parse UUID=%q, ParseRaw UUID=%q",
+				i, parseEntries[i].UUID, rawEntries[i].UUID)
+		}
+	}
+
+	// Should have 3 valid entries (2 malformed lines skipped)
+	if len(rawEntries) != 3 {
+		t.Errorf("expected 3 entries, got %d", len(rawEntries))
+	}
+}
+
 func TestScanLight_SmallSession(t *testing.T) {
 	stats, err := ScanLight(testdataPath("small_session.jsonl"))
 	if err != nil {
