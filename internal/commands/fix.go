@@ -108,15 +108,20 @@ func runFix(cmd *cobra.Command, args []string) error {
 	totalPatches := result.ParentPatches
 	totalIssues := len(diagnosis.Issues)
 
-	// Cascade: re-parse after initial repair, expand remaining orphans/chains.
-	entries, err = jsonl.Parse(path)
-	if err != nil {
-		return fmt.Errorf("reparse: %w", err)
-	}
-	diagnosis = analyzer.Diagnose(entries)
-	if len(diagnosis.Issues) > 0 {
+	// Cascade: re-parse and repair until no more issues (max 10 passes).
+	// Each pass may reveal new chain breaks after patching missing parents.
+	for cascadePass := 0; cascadePass < 10; cascadePass++ {
+		entries, err = jsonl.Parse(path)
+		if err != nil {
+			return fmt.Errorf("reparse: %w", err)
+		}
+		diagnosis = analyzer.Diagnose(entries)
+		if len(diagnosis.Issues) == 0 {
+			break
+		}
 		totalIssues += len(diagnosis.Issues)
-		toDelete := make(map[int]bool)
+		toDeleteChain := make(map[int]bool)
+		toDeleteOther := make(map[int]bool)
 		toTombstone := make(map[int]bool)
 		toPatchParent := make(map[int]bool)
 		for _, issue := range diagnosis.Issues {
@@ -125,12 +130,12 @@ func runFix(cmd *cobra.Command, args []string) error {
 				if tombstone {
 					toTombstone[issue.EntryIndex] = true
 				} else {
-					toDelete[issue.EntryIndex] = true
+					toDeleteOther[issue.EntryIndex] = true
 				}
 			case analyzer.IssueChainMissingParent:
 				toPatchParent[issue.EntryIndex] = true
 			case analyzer.IssueChainBadStart, analyzer.IssueChainBroken:
-				toDelete[issue.EntryIndex] = true
+				toDeleteChain[issue.EntryIndex] = true
 			}
 		}
 		if len(toPatchParent) > 0 {
@@ -140,7 +145,15 @@ func runFix(cmd *cobra.Command, args []string) error {
 			}
 			totalPatches += patched
 		}
-		toDelete = analyzer.CascadeDeleteSet(entries, toDelete, func(string) bool { return false })
+		// Only cascade-expand non-chain deletes (orphans). Chain issues are
+		// handled by Delete's built-in parent repair — cascading them destroys
+		// sidechains and prevents convergence.
+		if len(toDeleteOther) > 0 {
+			toDeleteOther = analyzer.CascadeDeleteSet(entries, toDeleteOther, func(string) bool { return false })
+		}
+		for idx := range toDeleteChain {
+			toDeleteOther[idx] = true
+		}
 		if len(toTombstone) > 0 {
 			tsResult, err := editor.Tombstone(path, toTombstone)
 			if err != nil {
@@ -148,13 +161,13 @@ func runFix(cmd *cobra.Command, args []string) error {
 			}
 			totalTombstoned += tsResult.EntriesTombstoned
 		}
-		if len(toDelete) > 0 {
-			dr, err := editor.Delete(path, toDelete)
+		if len(toDeleteOther) > 0 {
+			dr, err := editor.Delete(path, toDeleteOther)
 			if err != nil {
 				return fmt.Errorf("cascade: %w", err)
 			}
 			totalRemoved += dr.EntriesRemoved
-			totalChains += dr.EntriesRemoved // chain repairs from cascade
+			totalChains += dr.ChainRepairs
 		}
 	}
 

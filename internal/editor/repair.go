@@ -179,14 +179,39 @@ func replaceOversizedImages(path string, indices map[int]bool) (int, error) {
 // PatchParentUUID clears the parentUuid of entries at the given indices,
 // making them chain roots. This fixes missing-parent chain breaks without
 // deleting entries (which would cascade into more broken chains).
+//
+// It also expands the patch set: if any flagged entry references a missing
+// parent UUID, ALL other entries referencing the same UUID are patched too.
+// This ensures sidechains sharing a missing parent converge in one pass.
 func PatchParentUUID(path string, indices map[int]bool) (int, error) {
 	if len(indices) == 0 {
 		return 0, nil
 	}
 
-	_, rawLines, err := jsonl.ParseRaw(path)
+	entries, rawLines, err := jsonl.ParseRaw(path)
 	if err != nil {
 		return 0, fmt.Errorf("parse: %w", err)
+	}
+
+	// Expand: find all entries referencing the same missing parent UUIDs.
+	uuidExists := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		if e.UUID != "" {
+			uuidExists[e.UUID] = true
+		}
+	}
+	missingUUIDs := make(map[string]bool)
+	for idx := range indices {
+		if idx < len(entries) && entries[idx].ParentUUID != "" && !uuidExists[entries[idx].ParentUUID] {
+			missingUUIDs[entries[idx].ParentUUID] = true
+		}
+	}
+	if len(missingUUIDs) > 0 {
+		for i, e := range entries {
+			if missingUUIDs[e.ParentUUID] {
+				indices[i] = true
+			}
+		}
 	}
 
 	if err := safecopy.CreateIfMissing(path); err != nil {
