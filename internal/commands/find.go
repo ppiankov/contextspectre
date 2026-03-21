@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
@@ -72,8 +73,14 @@ func runFind(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
+	// Resolve relative path to absolute
+	moveTo, err := filepath.Abs(findMove)
+	if err != nil {
+		return fmt.Errorf("resolve path: %w", err)
+	}
+
 	// Move the session
-	result, err := session.MoveSession(dir, found, findMove)
+	result, err := session.MoveSession(dir, found, moveTo)
 	if err != nil {
 		return fmt.Errorf("move: %w", err)
 	}
