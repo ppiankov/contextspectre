@@ -50,6 +50,9 @@ func runSessions(cmd *cobra.Command, args []string) error {
 			return printJSON(SessionsOutput{Sessions: []SessionJSON{}, Total: 0})
 		}
 		fmt.Println("No sessions found.")
+		if sessionsCWD {
+			suggestRelocation(dir)
+		}
 		return nil
 	}
 
@@ -245,6 +248,37 @@ func timeAgo(t time.Time) string {
 	default:
 		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
+}
+
+// suggestRelocation checks if sessions for the CWD exist under a different
+// project directory (e.g. a parent path) and prints relocation hints.
+func suggestRelocation(claudeDir string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	matches := session.FindSessionsForCWD(claudeDir, cwd)
+	if len(matches) == 0 {
+		return
+	}
+
+	// Group by project
+	projects := map[string]int{}
+	for _, m := range matches {
+		projects[m.ProjectPath]++
+	}
+
+	fmt.Println()
+	fmt.Println("Sessions may exist under a parent or related project:")
+	for proj, count := range projects {
+		fmt.Printf("  %s (%d sessions)\n", proj, count)
+	}
+	fmt.Println()
+	fmt.Println("To find a specific session by ID:")
+	fmt.Printf("  contextspectre find <session-id>\n")
+	fmt.Println()
+	fmt.Println("To move all sessions to this project:")
+	fmt.Printf("  contextspectre relocate --from <parent-path> --to %s --apply\n", cwd)
 }
 
 func init() {
