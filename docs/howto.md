@@ -31,6 +31,52 @@ mv ~/.claude/projects/-Users-you-dev-old-name \
 
 **What's preserved:** Session JSONL files, `.markers.json` sidecars, `.bak` backups, and the `memory/` directory (agent memory). Everything stays exactly as it was — only the parent directory name changes.
 
+## Fix "No conversation found with session ID" in Claude Code
+
+`claude --resume <session-id>` fails with "No conversation found" when the session was created from a parent directory. Claude Code files sessions under the path you launched from — if you ran `claude` from `~/dev/myproject` but the session was started from `~/dev`, it lives under `~/dev`'s encoded directory, not `~/dev/myproject`.
+
+**Find where the session actually is:**
+
+```bash
+contextspectre find 88789f29
+# Session:     88789f29-eb9d-4b3b-8022-246fc4136f6d
+# Project:     /Users/you/dev
+# Path:        ~/.claude/projects/-Users-you-dev/88789f29-...jsonl
+```
+
+**Move it to the correct project:**
+
+```bash
+contextspectre find 88789f29 --move ~/dev/myproject
+# Moved session 88789f29-eb9d-4b3b-8022-246fc4136f6d
+#   From: /Users/you/dev
+#   To:   /Users/you/dev/myproject
+# You can now resume with:
+#   claude --resume 88789f29-eb9d-4b3b-8022-246fc4136f6d
+```
+
+**Discover misplaced sessions automatically:**
+
+```bash
+cd ~/dev/myproject
+contextspectre sessions --cwd
+# No sessions found.
+#
+# Sessions may exist under a parent or related project:
+#   /Users/you/dev (3 sessions)
+#
+# To find a specific session by ID:
+#   contextspectre find <session-id>
+```
+
+**Why this happens:** Claude Code encodes the working directory path into the project folder name. `/Users/you/dev` and `/Users/you/dev/myproject` produce different encoded directories. Sessions don't automatically follow you into subdirectories.
+
+**Bulk fix:** If many sessions are under the wrong project, use `relocate` instead:
+
+```bash
+contextspectre relocate --from ~/dev --to ~/dev/myproject --apply
+```
+
 ## Auto-checkpoint before compaction
 
 ContextSpectre can automatically save a resume brief when your context window reaches 70%, before Claude's compaction destroys specificity.

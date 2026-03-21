@@ -95,6 +95,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre sessions --limit 50` | Show N most recent sessions |
 | `contextspectre sessions --active` | Show sessions modified in last 5 minutes |
 | `contextspectre sessions --project <name>` | Filter by project name or alias |
+| `contextspectre sessions --cwd` | Show sessions for current directory (suggests relocation if none found) |
 | `contextspectre active` | Show currently active sessions with signal grades |
 | `contextspectre active --since 30m` | Custom activity window |
 | `contextspectre active --quiet` | One-line summary output |
@@ -257,6 +258,8 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 | Command | Description |
 |---------|-------------|
+| `contextspectre find <session-id>` | Find a session by UUID or prefix across all projects |
+| `contextspectre find <session-id> --move /path/to/project` | Move session to the correct project directory |
 | `contextspectre id <short-id>` | Resolve short ID to full UUID, client type, project |
 | `contextspectre id <short-id> --format json` | JSON output |
 
