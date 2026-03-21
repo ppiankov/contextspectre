@@ -87,9 +87,10 @@ func ParseRaw(path string) ([]Entry, [][]byte, error) {
 
 		var e Entry
 		if err := json.Unmarshal(lineCopy, &e); err != nil {
-			// Keep raw line even if parse fails — preserve file structure
-			rawLines = append(rawLines, lineCopy)
-			entries = append(entries, Entry{LineNumber: lineNum, RawSize: len(lineCopy)})
+			// Skip malformed lines (same as Parse) so indices match.
+			// Editor functions receive indices from Diagnose (Parse-based)
+			// and operate via ParseRaw — mismatched indices cause wrong
+			// entries to be edited.
 			continue
 		}
 		e.LineNumber = lineNum
