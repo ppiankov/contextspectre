@@ -319,6 +319,67 @@ func TestRepair_MissingParentConverges(t *testing.T) {
 	}
 }
 
+func TestRepair_MissingParentSidechains(t *testing.T) {
+	// Multiple sidechains reference the same missing parent UUID.
+	// The active chain only walks through one, but PatchParentUUID
+	// should patch ALL of them so the fix converges in one pass.
+	//
+	// Chain structure:
+	//   GONE (deleted)
+	//    ├── a1 (assistant, sidechain)
+	//    ├── a2 (assistant, active chain root) → u1 → a3 → u2
+	//    └── a4 (assistant, sidechain)
+	lines := []string{
+		`{"type":"assistant","uuid":"a1","parentUuid":"GONE","isSidechain":true,"message":{"role":"assistant","content":"side1"}}`,
+		`{"type":"assistant","uuid":"a2","parentUuid":"GONE","message":{"role":"assistant","content":"root"}}`,
+		`{"type":"user","uuid":"u1","parentUuid":"a2","message":{"role":"user","content":"q1"}}`,
+		`{"type":"assistant","uuid":"a3","parentUuid":"u1","message":{"role":"assistant","content":"r1"}}`,
+		`{"type":"assistant","uuid":"a4","parentUuid":"GONE","isSidechain":true,"message":{"role":"assistant","content":"side2"}}`,
+		`{"type":"user","uuid":"u2","parentUuid":"a3","message":{"role":"user","content":"last"}}`,
+	}
+	path := filepath.Join(t.TempDir(), "sidechains.jsonl")
+	var data []byte
+	for _, l := range lines {
+		data = append(data, []byte(l+"\n")...)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	// Diagnose: should find missing_parent + bad_chain_start for a2
+	entries, _ := jsonl.Parse(path)
+	diag := analyzer.Diagnose(entries)
+	if len(diag.Issues) == 0 {
+		t.Fatal("expected issues")
+	}
+
+	// Repair
+	result, err := Repair(path, diag.Issues, false)
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	// Should patch a1, a2, and a4 (all reference GONE)
+	if result.ParentPatches < 3 {
+		t.Errorf("expected at least 3 parent patches (all refs to GONE), got %d", result.ParentPatches)
+	}
+
+	// After repair + re-diagnosis, no entry should reference GONE
+	entries, _ = jsonl.Parse(path)
+	for _, e := range entries {
+		if e.ParentUUID == "GONE" {
+			t.Errorf("entry %s still references GONE after repair", e.UUID)
+		}
+	}
+
+	// Second repair pass should converge (no issues about GONE)
+	diag = analyzer.Diagnose(entries)
+	for _, issue := range diag.Issues {
+		if issue.Kind == analyzer.IssueChainMissingParent {
+			t.Errorf("missing_parent issue persists after repair: %s", issue.Description)
+		}
+	}
+}
+
 func TestTombstone_Basic(t *testing.T) {
 	path := copyFixture(t, "small_session.jsonl")
 
