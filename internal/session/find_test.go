@@ -161,6 +161,40 @@ func TestMoveSession_Conflict(t *testing.T) {
 	}
 }
 
+func TestCopySession_Basic(t *testing.T) {
+	claudeDir := setupFindFixture(t)
+
+	found, err := FindByID(claudeDir, "aaaa1111-bbbb-cccc-dddd-eeee11111111")
+	if err != nil {
+		t.Fatalf("find: %v", err)
+	}
+
+	result, err := CopySession(claudeDir, found, "/Users/test/dev/project3")
+	if err != nil {
+		t.Fatalf("copy: %v", err)
+	}
+
+	if result.ToProject != "/Users/test/dev/project3" {
+		t.Errorf("to = %s, want /Users/test/dev/project3", result.ToProject)
+	}
+
+	// Original must still exist
+	if _, err := os.Stat(found.FullPath); err != nil {
+		t.Errorf("original file should still exist: %v", err)
+	}
+	// Copy must exist
+	if _, err := os.Stat(result.NewPath); err != nil {
+		t.Errorf("copied file should exist: %v", err)
+	}
+
+	// Contents must match
+	orig, _ := os.ReadFile(found.FullPath)
+	copied, _ := os.ReadFile(result.NewPath)
+	if string(orig) != string(copied) {
+		t.Error("copied file contents differ from original")
+	}
+}
+
 func TestFindSessionsForCWD(t *testing.T) {
 	claudeDir := setupFindFixture(t)
 
