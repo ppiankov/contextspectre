@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -139,6 +140,68 @@ func MoveSession(claudeDir string, found *FindResult, targetPath string) (*MoveR
 	}
 
 	return result, nil
+}
+
+// CopySession copies a session JSONL file to the project directory for
+// targetPath. The original file is preserved. Creates the target directory
+// if it doesn't exist. Updates sessions-index.json in the target.
+func CopySession(claudeDir string, found *FindResult, targetPath string) (*MoveResult, error) {
+	targetDirName := EncodePath(targetPath)
+	projectsDir := filepath.Join(claudeDir, "projects")
+	targetDir := filepath.Join(projectsDir, targetDirName)
+
+	if found.ProjectDir == targetDirName {
+		return nil, fmt.Errorf("session is already in project %s", targetPath)
+	}
+
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
+		return nil, fmt.Errorf("create target dir: %w", err)
+	}
+
+	filename := filepath.Base(found.FullPath)
+	newPath := filepath.Join(targetDir, filename)
+
+	if _, err := os.Stat(newPath); err == nil {
+		return nil, fmt.Errorf("session already exists in target: %s", newPath)
+	}
+
+	if err := copyFile(found.FullPath, newPath); err != nil {
+		return nil, fmt.Errorf("copy session file: %w", err)
+	}
+
+	result := &MoveResult{
+		SessionID:   found.SessionID,
+		FromProject: found.ProjectPath,
+		ToProject:   targetPath,
+		NewPath:     newPath,
+	}
+
+	dstIndexPath := filepath.Join(targetDir, "sessions-index.json")
+	if addToIndex(dstIndexPath, found.SessionID, newPath, targetPath) == nil {
+		result.IndexUpdated = true
+	}
+
+	return result, nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+
+	if _, err := io.Copy(out, in); err != nil {
+		_ = out.Close()
+		_ = os.Remove(dst)
+		return err
+	}
+	return out.Close()
 }
 
 // removeFromIndex removes an entry from sessions-index.json by session ID.
