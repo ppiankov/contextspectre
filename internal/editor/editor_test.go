@@ -225,10 +225,26 @@ func TestResolveParent_Cycle(t *testing.T) {
 }
 
 func TestPatchParentUUID_Basic(t *testing.T) {
-	path := copyFixture(t, "small_session.jsonl")
+	// PatchParentUUID finds and patches all entries whose parentUuid
+	// references a non-existent UUID. The indices parameter signals that
+	// patching is needed but entries are identified by missing parent scan.
+	lines := []string{
+		`{"type":"user","uuid":"u1","parentUuid":"","message":{"role":"user","content":"q1"}}`,
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":"r1"}}`,
+		`{"type":"user","uuid":"u2","parentUuid":"GONE","message":{"role":"user","content":"q2"}}`,
+		`{"type":"assistant","uuid":"a2","parentUuid":"u2","message":{"role":"assistant","content":"r2"}}`,
+	}
+	path := filepath.Join(t.TempDir(), "patch_basic.jsonl")
+	var data []byte
+	for _, l := range lines {
+		data = append(data, []byte(l+"\n")...)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
 
-	// Patch entry at index 3 (u2, parentUuid=a1)
-	patched, err := PatchParentUUID(path, map[int]bool{3: true})
+	// Index 2 has parentUuid=GONE (missing)
+	patched, err := PatchParentUUID(path, map[int]bool{2: true})
 	if err != nil {
 		t.Fatalf("patch: %v", err)
 	}
@@ -240,12 +256,13 @@ func TestPatchParentUUID_Basic(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-parse: %v", err)
 	}
-	if entries[3].ParentUUID != "" {
-		t.Errorf("expected empty parentUuid after patch, got %q", entries[3].ParentUUID)
+	// u2 should have empty parentUuid
+	if entries[2].ParentUUID != "" {
+		t.Errorf("expected empty parentUuid after patch, got %q", entries[2].ParentUUID)
 	}
-	// Other entries should be unchanged
-	if entries[4].ParentUUID != "u2" {
-		t.Errorf("expected a2.parentUuid=u2 unchanged, got %q", entries[4].ParentUUID)
+	// a2 should be unchanged (its parent u2 exists)
+	if entries[3].ParentUUID != "u2" {
+		t.Errorf("expected a2.parentUuid=u2 unchanged, got %q", entries[3].ParentUUID)
 	}
 }
 
@@ -376,6 +393,62 @@ func TestRepair_MissingParentSidechains(t *testing.T) {
 	for _, issue := range diag.Issues {
 		if issue.Kind == analyzer.IssueChainMissingParent {
 			t.Errorf("missing_parent issue persists after repair: %s", issue.Description)
+		}
+	}
+}
+
+func TestRepair_MissingParentWithMalformedLines(t *testing.T) {
+	// When malformed lines exist, Parse skips them but ParseRaw keeps them
+	// as placeholders. This shifts indices. PatchParentUUID must find
+	// entries by their actual parentUuid, not by Parse index.
+	lines := []string{
+		`{"type":"user","uuid":"u1","parentUuid":"","message":{"role":"user","content":"first"}}`,
+		`{MALFORMED LINE}`, // Parse skips, ParseRaw keeps → index shift
+		`{"type":"assistant","uuid":"a1","parentUuid":"u1","message":{"role":"assistant","content":"reply"}}`,
+		`{ALSO BROKEN}`, // another malformed line
+		// u2 references missing parent — Parse index 2, ParseRaw index 4
+		`{"type":"user","uuid":"u2","parentUuid":"GONE","message":{"role":"user","content":"second"}}`,
+		`{"type":"assistant","uuid":"a2","parentUuid":"u2","message":{"role":"assistant","content":"reply2"}}`,
+		`{"type":"user","uuid":"u3","parentUuid":"a2","message":{"role":"user","content":"third"}}`,
+	}
+	path := filepath.Join(t.TempDir(), "malformed.jsonl")
+	var data []byte
+	for _, l := range lines {
+		data = append(data, []byte(l+"\n")...)
+	}
+	if err := os.WriteFile(path, data, 0644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	// Diagnose uses Parse (skips malformed lines)
+	entries, _ := jsonl.Parse(path)
+	diag := analyzer.Diagnose(entries)
+	if len(diag.Issues) == 0 {
+		t.Fatal("expected issues")
+	}
+
+	// Repair must patch the correct entry despite index mismatch
+	result, err := Repair(path, diag.Issues, false)
+	if err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+	if result.ParentPatches == 0 {
+		t.Error("expected parent patches")
+	}
+
+	// Verify convergence: re-diagnose should find no missing_parent
+	entries, _ = jsonl.Parse(path)
+	diag = analyzer.Diagnose(entries)
+	for _, issue := range diag.Issues {
+		if issue.Kind == analyzer.IssueChainMissingParent {
+			t.Errorf("missing_parent persists after repair: %s", issue.Description)
+		}
+	}
+
+	// Verify u2's parentUuid was actually patched
+	for _, e := range entries {
+		if e.UUID == "u2" && e.ParentUUID != "" {
+			t.Errorf("u2 still has parentUuid=%q, expected empty", e.ParentUUID)
 		}
 	}
 }
