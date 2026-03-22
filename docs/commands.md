@@ -258,9 +258,9 @@ Running `contextspectre` without arguments opens the interactive TUI.
 
 | Command | Description |
 |---------|-------------|
-| `contextspectre find <session-id>` | Find a session by UUID or prefix across all projects |
-| `contextspectre find <session-id> --move /path/to/project` | Move session to the correct project directory |
-| `contextspectre find <session-id> --copy /path/to/project` | Copy session to another project (original stays) |
+| `contextspectre find <id-or-name>` | Find a session by UUID, prefix, slug, or custom title |
+| `contextspectre find <id-or-name> --move /path/to/project` | Move session to the correct project directory |
+| `contextspectre find <id-or-name> --copy /path/to/project` | Copy session to another project (original stays) |
 | `contextspectre id <short-id>` | Resolve short ID to full UUID, client type, project |
 | `contextspectre id <short-id> --format json` | JSON output |
 
