@@ -36,11 +36,12 @@ Claude Code CLI supports a custom status line hook. ContextSpectre's `status-lin
 
 ```
 contextspectre | Opus 4.6 15c93cef | ctx:73% | sig:A clean:3K ips:77 | $86.66
+contextspectre:plan | Opus 4.6 15c93cef | ctx:73% | sig:A clean:3K ips:77 | $86.66
 ```
 
 When a session has a broken parent chain, a red `⚠` appears at the end of the status line. This indicates the session's JSONL file has structural corruption that will prevent resume - run `contextspectre fix <session-id> --apply` to repair it. See [chain integrity](#chain-integrity) below.
 
-The status line shows repo, model, session ID (first 8 chars), context fill, signal grade, cleanable tokens, input purity score, and session cost - all at a glance while you work. The session ID lets you cross-reference with `contextspectre stats`, `fix`, or `doctor` without hunting for the full UUID - essential when debugging corruption or managing multiple sessions. Labels stay neutral; only values are color-coded so the numbers pop when they need attention.
+The status line shows repo (with optional mode suffix), model, session ID (first 8 chars), context fill, signal grade, cleanable tokens, input purity score, and session cost - all at a glance while you work. The session ID lets you cross-reference with `contextspectre stats`, `fix`, or `doctor` without hunting for the full UUID - essential when debugging corruption or managing multiple sessions. Labels stay neutral; only values are color-coded so the numbers pop when they need attention. The context percentage is also written to `/tmp/claude-ctx-$PPID` for use by other hooks (e.g., auto-checkpoint triggers).
 
 **Setup.** Register a status line hook in `~/.claude/settings.json` and point it at the hook script:
 
@@ -212,3 +213,40 @@ Tasks that can be offloaded:
 These tasks do not require large reasoning context and can be executed by cheaper agents, local tools, or CI systems.
 
 While those run, your primary session remains focused on architectural decisions and high-signal reasoning. ContextSpectre helps keep the reasoning session clean so it remains useful when you return - clean noise before the session resumes, not after it overflows.
+
+## Claude Code hooks integration
+
+ContextSpectre integrates with Claude Code through two hook types:
+
+**Status line** (`statusLine` in settings.json) — runs every turn, shows live session telemetry. See [status line hook](statusline-hook.md) for the full script.
+
+```json
+{
+  "statusLine": {
+    "type": "command",
+    "command": "~/.claude/statusline.sh",
+    "padding": 2
+  }
+}
+```
+
+**SessionEnd hook** (`hooks.SessionEnd` in settings.json) — runs when a session exits, saves the resume command with slug to `docs/resume.md`. See [How-To: Auto-save resume info](howto.md#auto-save-resume-info-on-session-exit) for the full script.
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/save-resume.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Both hooks are non-blocking and safe for production use. The status line reads from a background cache (never stalls the prompt). The SessionEnd hook writes a local file and exits.

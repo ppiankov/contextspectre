@@ -159,6 +159,85 @@ claude --resume $(contextspectre sessions --cwd --format json | jq -r '.sessions
 
 **Note:** `claude --continue` resumes the most recent session without needing an ID. Use `--resume` when you want a specific older session. In `--print` mode, `--resume` requires a full UUID — slugs and names only work in interactive mode.
 
+## Auto-save resume info on session exit
+
+A `SessionEnd` hook can automatically save the resume command (with slug) every time a session ends. This way you always know how to resume your last session without hunting for the ID.
+
+**Setup.** Add a `SessionEnd` hook in `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/save-resume.sh"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+**Hook script.** Save as `~/.claude/hooks/save-resume.sh` and make executable (`chmod +x`):
+
+```bash
+#!/bin/bash
+# SessionEnd hook: save resume command to docs/resume.md
+# Shows slug (for interactive resume) and UUID (for --print mode).
+
+HOOK_INPUT=$(cat)
+
+SESSION_ID=$(echo "$HOOK_INPUT" | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print(d.get('session_id',''))" 2>/dev/null)
+
+if [ -z "$SESSION_ID" ]; then
+  exit 0
+fi
+
+# Determine project root
+work_dir=$(git rev-parse --show-toplevel 2>/dev/null || echo "$PWD")
+
+# Resolve slug from session JSONL
+SLUG=""
+project_key=$(echo "$work_dir" | sed 's|/|-|g; s|^-||')
+session_file="$HOME/.claude/projects/$project_key/$SESSION_ID.jsonl"
+if [ -f "$session_file" ]; then
+  SLUG=$(grep -o '"slug":"[^"]*"' "$session_file" | tail -1 | sed 's/"slug":"//; s/"//')
+fi
+
+# Build resume command — prefer slug for interactive, show UUID for --print
+if [ -n "$SLUG" ]; then
+  resume_cmd="claude --resume $SLUG"
+else
+  resume_cmd="claude --resume $SESSION_ID"
+fi
+
+# Write resume file
+mkdir -p "$work_dir/docs" 2>/dev/null
+cat > "$work_dir/docs/resume.md" << EOF
+# Resume
+
+\`\`\`bash
+$resume_cmd
+\`\`\`
+
+**Project:** $work_dir
+**Slug:** ${SLUG:-n/a}
+**Session:** $SESSION_ID
+**Saved:** $(date +%Y-%m-%d\ %H:%M)
+EOF
+
+exit 0
+```
+
+**What it does:** On every session exit, writes `docs/resume.md` with the `claude --resume` command using the session's slug (or UUID fallback). The file shows the project, slug, session ID, and timestamp. Gitignore `docs/resume.md` to keep it local.
+
+**Why slug?** Claude CLI v2.1+ supports `--resume <slug>` in interactive mode — shorter and memorable. The full UUID is included for `--print` mode which requires it.
+
 ## Recover from a killed session (false positive, model switch, crash)
 
 Claude Code's safety classifier can false-positive on benign technical terminology (e.g., robotics, physics, security research), killing the session with a "Usage Policy" error. Once triggered, it cascades — every subsequent message in the same session hits the same filter. See [anthropics/claude-code#34977](https://github.com/anthropics/claude-code/issues/34977).
@@ -202,7 +281,7 @@ If you run Claude Code on the Windows side (PowerShell, Windows Terminal), your 
 brew install ppiankov/tap/contextspectre
 
 # Or direct download
-curl -L https://github.com/ppiankov/contextspectre/releases/latest/download/contextspectre_0.39.9_linux_amd64.tar.gz | tar xz
+curl -L https://github.com/ppiankov/contextspectre/releases/latest/download/contextspectre_$(curl -s https://api.github.com/repos/ppiankov/contextspectre/releases/latest | grep tag_name | cut -d'"' -f4 | tr -d v)_linux_amd64.tar.gz | tar xz
 sudo mv contextspectre /usr/local/bin/
 ```
 
