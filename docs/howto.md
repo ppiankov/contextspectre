@@ -38,10 +38,16 @@ mv ~/.claude/projects/-Users-you-dev-old-name \
 **Find where the session actually is:**
 
 ```bash
+# By UUID prefix
 contextspectre find 88789f29
+
+# By slug or custom title (claude --name)
+contextspectre find async-submission-queue
 # Session:     88789f29-eb9d-4b3b-8022-246fc4136f6d
+# Name:        async-submission-queue
 # Project:     /Users/you/dev
-# Path:        ~/.claude/projects/-Users-you-dev/88789f29-...jsonl
+# Resume:   claude --resume "async-submission-queue"
+# Print:    claude -p --resume 88789f29-eb9d-4b3b-8022-246fc4136f6d
 ```
 
 **Move it to the correct project:**
@@ -51,8 +57,7 @@ contextspectre find 88789f29 --move ~/dev/myproject
 # Moved session 88789f29-eb9d-4b3b-8022-246fc4136f6d
 #   From: /Users/you/dev
 #   To:   /Users/you/dev/myproject
-# You can now resume with:
-#   claude --resume 88789f29-eb9d-4b3b-8022-246fc4136f6d
+# Resume:   claude --resume "async-submission-queue"
 ```
 
 **Discover misplaced sessions automatically:**
@@ -134,22 +139,25 @@ contextspectre checkpoint --cwd --format json
 
 The checkpoint extracts from the active epoch: decisions made, findings discovered, user requests, files touched, and any commit points you've marked.
 
-## Resume a Claude Code session by ID
+## Resume a Claude Code session
 
-Claude Code's `--resume` requires a full UUID. contextspectre shows short IDs (8 chars). Use `contextspectre id` to resolve:
+Claude CLI v2.1+ supports resuming by name (interactive) or UUID (scripted):
 
 ```bash
-# Resume a specific session (short ID → full UUID)
-claude --resume $(contextspectre id 79109cdc)
+# Interactive resume by slug or custom title
+claude --resume "async-submission-queue"
+
+# Interactive picker (fuzzy search)
+claude --resume
+
+# Scripted/print mode (requires full UUID)
+claude -p --resume $(contextspectre id 79109cdc)
 
 # Resume the most recent session in current directory
 claude --resume $(contextspectre sessions --cwd --format json | jq -r '.sessions[0].id')
-
-# List all session IDs for current directory
-contextspectre sessions --cwd --format json | jq -r '.sessions[].id'
 ```
 
-**Note:** `claude --continue` resumes the most recent session without needing an ID. Use `--resume` when you want a specific older session.
+**Note:** `claude --continue` resumes the most recent session without needing an ID. Use `--resume` when you want a specific older session. In `--print` mode, `--resume` requires a full UUID — slugs and names only work in interactive mode.
 
 ## Recover from a killed session (false positive, model switch, crash)
 
