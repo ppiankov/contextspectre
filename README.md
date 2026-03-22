@@ -70,7 +70,7 @@ ContextSpectre reads Claude Code's local JSONL session files - from both Claude 
 - Amputation for [context deadlock](docs/deadlock.md) recovery
 - Chain repair for parentUuid integrity
 - CWD-based session targeting
-- Find and move misplaced sessions across projects (`find`, `find --move`)
+- Find and move misplaced sessions by ID, slug, or name (`find`, `find --move`)
 - Federated project identity (project aliases across directories)
 
 **Cross-session**
