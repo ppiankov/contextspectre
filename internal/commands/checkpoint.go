@@ -39,6 +39,7 @@ func init() {
 // CheckpointOutput is the JSON output for the checkpoint command.
 type CheckpointOutput struct {
 	SessionID      string          `json:"session_id"`
+	Slug           string          `json:"slug,omitempty"`
 	Project        string          `json:"project"`
 	ClientType     string          `json:"client_type"`
 	Timestamp      string          `json:"timestamp"`
@@ -120,6 +121,21 @@ func runCheckpoint(_ *cobra.Command, args []string) error {
 	sessionID := strings.TrimSuffix(base, ".jsonl")
 	project := extractProjectFromPath(path)
 
+	// Extract display name (custom title > slug)
+	var sessionSlug, sessionCustomTitle string
+	for _, e := range entries {
+		if sessionSlug == "" && e.Slug != "" {
+			sessionSlug = e.Slug
+		}
+		if e.CustomTitle != "" {
+			sessionCustomTitle = e.CustomTitle
+		}
+	}
+	displayName := sessionCustomTitle
+	if displayName == "" {
+		displayName = sessionSlug
+	}
+
 	// Active epoch data
 	var activeEpoch CheckpointEpoch
 	if len(epochs) > 0 {
@@ -135,6 +151,7 @@ func runCheckpoint(_ *cobra.Command, args []string) error {
 
 	output := CheckpointOutput{
 		SessionID:      sessionID,
+		Slug:           displayName,
 		Project:        project,
 		ClientType:     stats.ClientType,
 		Timestamp:      time.Now().Format(time.RFC3339),
@@ -262,12 +279,20 @@ func extractFinding(text string) string {
 func renderCheckpointBrief(out CheckpointOutput) string {
 	var sb strings.Builder
 
-	fmt.Fprintf(&sb, "# Checkpoint — %s\n\n", out.SessionID)
+	heading := out.SessionID
+	if out.Slug != "" {
+		heading = out.Slug
+	}
+	fmt.Fprintf(&sb, "# Checkpoint — %s\n\n", heading)
 	fmt.Fprintf(&sb, "**Project:** %s\n", out.Project)
 	fmt.Fprintf(&sb, "**Client:** %s\n", out.ClientType)
 	fmt.Fprintf(&sb, "**Context:** %.0f%% | **Turns left:** ~%d\n", out.ContextPercent, out.TurnsRemaining)
 	fmt.Fprintf(&sb, "**Epoch:** #%d (%d turns, $%.4f)\n", out.Epoch.Index, out.Epoch.TurnCount, out.Epoch.Cost)
-	fmt.Fprintf(&sb, "**Saved:** %s\n\n", time.Now().Format("2006-01-02 15:04"))
+	fmt.Fprintf(&sb, "**Saved:** %s\n", time.Now().Format("2006-01-02 15:04"))
+	if out.Slug != "" {
+		fmt.Fprintf(&sb, "**Resume:** `claude --resume %q`\n", out.Slug)
+	}
+	sb.WriteString("\n")
 
 	if len(out.Decisions) > 0 {
 		sb.WriteString("## Decisions\n")

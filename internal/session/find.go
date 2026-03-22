@@ -196,6 +196,12 @@ func findByName(claudeDir, name string) (*FindResult, error) {
 	return &matches[0], nil
 }
 
+// ScanNameFields extracts slug and custom title from a JSONL file without full parsing.
+// Exported for use in commands that need the display name.
+func ScanNameFields(path string) (slug, customTitle string) {
+	return scanNameFields(path)
+}
+
 // scanNameFields does a lightweight scan of a JSONL file to extract slug and custom title
 // without full parsing. Reads lines looking for slug and custom-title entries.
 func scanNameFields(path string) (slug, customTitle string) {
