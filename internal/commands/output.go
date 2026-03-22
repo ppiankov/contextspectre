@@ -17,6 +17,7 @@ var outputFormat string
 type SessionJSON struct {
 	ID             string    `json:"id"`
 	Slug           string    `json:"slug,omitempty"`
+	CustomTitle    string    `json:"custom_title,omitempty"`
 	Project        string    `json:"project"`
 	Branch         string    `json:"branch,omitempty"`
 	Messages       int       `json:"messages"`

@@ -113,6 +113,7 @@ type LightStats struct {
 	LastUsage             *Usage
 	MaxContext            int
 	Slug                  string
+	CustomTitle           string // user-set session name (--name flag, custom-title entry)
 	ImageCount            int
 	ImageBytesEstimate    int64 // total raw bytes of JSONL entries containing images
 	CompactionCount       int
@@ -198,6 +199,11 @@ func ScanLight(path string) (*LightStats, error) {
 
 		if stats.Slug == "" && e.Slug != "" {
 			stats.Slug = e.Slug
+		}
+
+		// custom-title entries carry the user-set session name (--name flag)
+		if e.CustomTitle != "" {
+			stats.CustomTitle = e.CustomTitle
 		}
 
 		if stats.CWD == "" && e.CWD != "" {
