@@ -6,7 +6,7 @@
 contextspectre/
 ├── cmd/contextspectre/main.go      # Entry point (LDFLAGS version injection)
 ├── internal/
-│   ├── commands/                   # Cobra CLI: sessions, stats, clean, quick-clean, fix, doctor, relocate
+│   ├── commands/                   # Cobra CLI: 55+ commands (see docs/commands.md)
 │   ├── jsonl/                      # JSONL parser, types, writer (streaming, 10MB buffer)
 │   ├── session/                    # Session discovery, relocation, path encoding
 │   ├── analyzer/                   # Context stats, compaction detection, token estimation,
