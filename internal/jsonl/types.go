@@ -16,6 +16,8 @@ const (
 	TypeFileHistorySnapshot MessageType = "file-history-snapshot"
 	TypeSystem              MessageType = "system"
 	TypeQueueOperation      MessageType = "queue-operation"
+	TypeCustomTitle         MessageType = "custom-title"
+	TypeAgentName           MessageType = "agent-name"
 )
 
 // Entry is the top-level structure of every JSONL line.
@@ -32,6 +34,8 @@ type Entry struct {
 	IsSidechain      bool            `json:"isSidechain,omitempty"`
 	UserType         string          `json:"userType,omitempty"`
 	Slug             string          `json:"slug,omitempty"`
+	CustomTitle      string          `json:"customTitle,omitempty"`
+	AgentName        string          `json:"agentName,omitempty"`
 	PermissionMode   string          `json:"permissionMode,omitempty"`
 	RequestID        string          `json:"requestId,omitempty"`
 	Message          *Message        `json:"message,omitempty"`

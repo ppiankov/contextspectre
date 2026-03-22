@@ -249,7 +249,8 @@ func (m *sessionsModel) filterSessions() {
 			if strings.Contains(strings.ToLower(s.ProjectName), q) ||
 				strings.Contains(strings.ToLower(s.GitBranch), q) ||
 				strings.Contains(strings.ToLower(s.SessionID), q) ||
-				strings.Contains(strings.ToLower(s.Slug), q) ||
+				strings.Contains(strings.ToLower(s.DisplayName()), q) ||
+				strings.Contains(strings.ToLower(s.CustomTitle), q) ||
 				(aliasName != "" && strings.Contains(strings.ToLower(aliasName), q)) {
 				m.filtered = append(m.filtered, s)
 			}
@@ -559,8 +560,8 @@ func (m sessionsModel) View() string {
 
 		project := truncateStr(s.ProjectName, cols.projW)
 
-		slug := middleTruncate(s.Slug, cols.slugW)
-		if slug == "" {
+		slug := middleTruncate(s.DisplayName(), cols.slugW)
+		if slug == s.ShortID() {
 			slug = "\u2014"
 		}
 

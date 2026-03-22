@@ -210,7 +210,7 @@ func (m vectorModel) View() string {
 
 	// Title bar
 	title := fmt.Sprintf(" Vector Control: %s (%s)",
-		m.session.Slug, m.session.ShortID())
+		m.session.DisplayName(), m.session.ShortID())
 	if m.session.IsActive() {
 		title += " " + lipgloss.NewStyle().Foreground(colorYellow).Render("[ACTIVE]")
 	}

@@ -301,7 +301,7 @@ func (m detailModel) View() string {
 
 	// Title bar
 	title := fmt.Sprintf(" %s (%s) | %s",
-		m.session.Slug, m.session.ShortID(), m.session.ProjectName)
+		m.session.DisplayName(), m.session.ShortID(), m.session.ProjectName)
 	if m.session.IsActive() {
 		title += " " + lipgloss.NewStyle().Foreground(colorYellow).Render("[ACTIVE]")
 	}
