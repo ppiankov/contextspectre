@@ -18,6 +18,7 @@ import (
 type Info struct {
 	SessionID    string
 	Slug         string
+	CustomTitle  string // user-set session name (claude --name)
 	FullPath     string
 	FirstPrompt  string
 	MessageCount int
@@ -41,8 +42,11 @@ func (i Info) ShortID() string {
 	return i.SessionID
 }
 
-// DisplayName returns the slug if available, otherwise the short ID.
+// DisplayName returns the custom title if set, then slug, then short ID.
 func (i Info) DisplayName() string {
+	if i.CustomTitle != "" {
+		return i.CustomTitle
+	}
 	if i.Slug != "" {
 		return i.Slug
 	}
@@ -114,6 +118,7 @@ type indexEntry struct {
 
 	// Cached stats (populated by contextspectre, skips ScanLight when mtime matches)
 	CachedSlug          string  `json:"cachedSlug,omitempty"`
+	CachedCustomTitle   string  `json:"cachedCustomTitle,omitempty"`
 	CachedContextTokens int     `json:"cachedContextTokens,omitempty"`
 	CachedContextPct    float64 `json:"cachedContextPct,omitempty"`
 	CachedImageCount    int     `json:"cachedImageCount,omitempty"`
@@ -287,6 +292,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 		currentMtime := float64(fi.ModTime().UnixMilli())
 		if currentMtime == e.FileMtime && e.CachedClientType != "" {
 			info.Slug = e.CachedSlug
+			info.CustomTitle = e.CachedCustomTitle
 			info.MessageCount = e.CachedLineCount
 			info.Zombie = e.CachedIsZombie
 			info.ZombieReason = e.CachedZombieReason
@@ -309,6 +315,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 		// Cache miss: ScanLight and update index entry
 		if stats, err := jsonl.ScanLight(e.FullPath); err == nil {
 			info.Slug = stats.Slug
+			info.CustomTitle = stats.CustomTitle
 			info.MessageCount = stats.LineCount
 			info.ContextStats = quickStatsFromLight(stats)
 			if stats.LastUsage != nil {
@@ -328,6 +335,7 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 			// Update cache fields in index entry
 			idx.Entries[i].FileMtime = currentMtime
 			idx.Entries[i].CachedSlug = info.Slug
+			idx.Entries[i].CachedCustomTitle = info.CustomTitle
 			idx.Entries[i].CachedContextTokens = info.ContextStats.ContextTokens
 			idx.Entries[i].CachedContextPct = info.ContextStats.ContextPct
 			idx.Entries[i].CachedImageCount = info.ContextStats.ImageCount
@@ -383,6 +391,7 @@ func (d *Discoverer) fromGlob(projectDir string) ([]Info, error) {
 
 		if stats, err := jsonl.ScanLight(path); err == nil {
 			info.Slug = stats.Slug
+			info.CustomTitle = stats.CustomTitle
 			info.MessageCount = stats.LineCount
 			info.ContextStats = quickStatsFromLight(stats)
 			if stats.LastUsage != nil {

@@ -62,6 +62,7 @@ func runSessions(cmd *cobra.Command, args []string) error {
 			sj := SessionJSON{
 				ID:            s.SessionID,
 				Slug:          s.Slug,
+				CustomTitle:   s.CustomTitle,
 				Project:       s.ProjectPath,
 				Branch:        s.GitBranch,
 				Messages:      s.MessageCount,
@@ -122,8 +123,8 @@ func runSessions(cmd *cobra.Command, args []string) error {
 			branch = "—"
 		}
 
-		slug := s.Slug
-		if slug == "" {
+		slug := s.DisplayName()
+		if slug == s.ShortID() {
 			slug = "—"
 		}
 
