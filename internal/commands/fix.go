@@ -109,7 +109,9 @@ func runFix(cmd *cobra.Command, args []string) error {
 	totalIssues := len(diagnosis.Issues)
 
 	// Cascade: re-parse and repair until no more issues (max 10 passes).
-	// Each pass may reveal new chain breaks after patching missing parents.
+	// Each pass may reveal new chain breaks after patching missing parents
+	// or coalescing adjacent entries.
+	coalesced := 0
 	for cascadePass := 0; cascadePass < 10; cascadePass++ {
 		entries, err = jsonl.Parse(path)
 		if err != nil {
@@ -117,7 +119,19 @@ func runFix(cmd *cobra.Command, args []string) error {
 		}
 		diagnosis = analyzer.Diagnose(entries)
 		if len(diagnosis.Issues) == 0 {
-			break
+			// No issues — coalesce and check if that introduced new ones.
+			cr, err := editor.Coalesce(path)
+			if err != nil {
+				slog.Warn("coalesce failed", "err", err)
+				break
+			}
+			if cr != nil {
+				coalesced += cr.EntriesRemoved
+			}
+			if cr == nil || (cr.EntriesRemoved == 0 && cr.OrphansStripped == 0) {
+				break // coalesce was a no-op, truly converged
+			}
+			continue // coalesce changed the file, re-diagnose
 		}
 		totalIssues += len(diagnosis.Issues)
 		toDeleteChain := make(map[int]bool)
@@ -169,16 +183,6 @@ func runFix(cmd *cobra.Command, args []string) error {
 			totalRemoved += dr.EntriesRemoved
 			totalChains += dr.ChainRepairs
 		}
-	}
-
-	// Post-repair: coalesce adjacent same-role entries.
-	cr, err := editor.Coalesce(path)
-	if err != nil {
-		slog.Warn("coalesce failed", "err", err)
-	}
-	coalesced := 0
-	if cr != nil {
-		coalesced = cr.EntriesRemoved
 	}
 
 	if totalTombstoned > 0 {
