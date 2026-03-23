@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"log/slog"
+	"os"
+	"time"
 
 	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/editor"
@@ -15,6 +17,7 @@ var (
 	fixCWD       bool
 	fixTombstone bool
 	fixPreserve  bool
+	fixForce     bool
 )
 
 var fixCmd = &cobra.Command{
@@ -73,6 +76,15 @@ func runFix(cmd *cobra.Command, args []string) error {
 	if !fixApply {
 		fmt.Println("\nDry run — no changes made. Use --apply to fix.")
 		return nil
+	}
+
+	// Guard: refuse to repair live sessions unless --force is set.
+	// Claude and subagents actively writing will race with fix, preventing convergence.
+	if !fixForce {
+		if fi, err := os.Stat(path); err == nil && time.Since(fi.ModTime()) < 60*time.Second {
+			return fmt.Errorf("session is active (modified %s ago) — fix cannot converge while Claude is writing.\n"+
+				"Wait for the session to idle, or use --force to attempt anyway", time.Since(fi.ModTime()).Truncate(time.Second))
+		}
 	}
 
 	// Preserve decisions/findings from entries about to be deleted
@@ -217,5 +229,6 @@ func init() {
 	fixCmd.Flags().BoolVar(&fixCWD, "cwd", false, "Use most recent session for current directory")
 	fixCmd.Flags().BoolVar(&fixTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	fixCmd.Flags().BoolVar(&fixPreserve, "preserve", false, "Extract decisions and findings before repair (writes .preserved.md sidecar)")
+	fixCmd.Flags().BoolVar(&fixForce, "force", false, "Attempt repair even on active sessions (may not converge)")
 	rootCmd.AddCommand(fixCmd)
 }
