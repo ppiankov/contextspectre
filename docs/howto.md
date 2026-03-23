@@ -104,6 +104,31 @@ cat ~/.claude/projects/.../session-id.preserved.md
 
 The `--preserve` flag scans entries about to be deleted for decision keywords ("decided", "chose", "because") and finding keywords ("found that", "root cause", "confirmed"). Results are appended to a `.preserved.md` sidecar file next to the session.
 
+## Identify CLI vs Mac sessions before resuming
+
+`claude -r` lists all sessions from `~/.claude/projects/` without distinguishing whether they were created by Claude CLI or Claude for Mac. Resuming a Mac session from the CLI (or vice versa) can cause unexpected behavior. This is a [known upstream bug](https://github.com/anthropics/claude-code/issues/37665).
+
+**contextspectre tells you which is which:**
+
+```bash
+# TUI shows C (CLI) or M (Mac) next to each session
+contextspectre
+
+# id command prints client type
+contextspectre id 88275ecc
+# Full ID:    88275ecc-6767-...
+# Client:     desktop
+# Project:    /Users/you/dev/myproject
+# Path:       /Users/you/.claude/projects/...
+
+# sessions JSON includes client_type field
+contextspectre sessions --cwd --format json | jq '.sessions[] | {id: .short_id, client: .client_type, slug: .slug}'
+```
+
+**How detection works:** CLI sessions contain `file-history-snapshot` entries. Mac/desktop sessions start with a `queue-operation` entry. contextspectre uses these markers to classify each session as `cli`, `desktop`, or `unknown`.
+
+**Best practice:** Before running `claude --resume`, check the client type with `contextspectre id <prefix>`. Only resume sessions that match your current client.
+
 ## Fix Mac session API errors
 
 Claude for Mac splits multi-tool calls into separate JSONL entries, causing API 400 errors ("unexpected tool_use_id in tool_result blocks"). Coalesce merges them back:

@@ -31,6 +31,8 @@ If launched from **different directories** in the same repo, they get **differen
 
 Key point: the project path is determined by launch directory, not by git root.
 
+**Caution:** `claude -r` does not distinguish CLI sessions from Mac sessions — both appear in the same resume picker. Resuming a session from the wrong client can cause unexpected behavior ([anthropics/claude-code#37665](https://github.com/anthropics/claude-code/issues/37665)). Use `contextspectre id <prefix>` to check client type before resuming.
+
 ## Session identity
 
 Each session has several identifying fields in its JSONL entries:

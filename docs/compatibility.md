@@ -53,3 +53,11 @@ When a session has both a `slug` and a `customTitle`, contextspectre displays th
 | v0.1.0–v0.29.x | any | Basic session analysis |
 
 All versions are backward-compatible — newer contextspectre works with older Claude CLI sessions. Sessions without newer fields simply show auto-slugs or short IDs.
+
+## Known Issues
+
+### Cross-client resume ([anthropics/claude-code#37665](https://github.com/anthropics/claude-code/issues/37665))
+
+`claude -r` does not distinguish CLI sessions from Claude for Mac sessions. Both live in `~/.claude/projects/` and appear in the same resume picker. Resuming a Mac session from the CLI (or vice versa) can cause unexpected behavior.
+
+**Workaround:** Use `contextspectre id <prefix>` or the TUI (`C`/`M` indicator) to check client type before resuming. See [How-To: Identify CLI vs Mac sessions](howto.md#identify-cli-vs-mac-sessions-before-resuming).
