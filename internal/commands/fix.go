@@ -18,6 +18,7 @@ var (
 	fixTombstone bool
 	fixPreserve  bool
 	fixForce     bool
+	fixWait      bool
 )
 
 var fixCmd = &cobra.Command{
@@ -78,12 +79,46 @@ func runFix(cmd *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Guard: refuse to repair live sessions unless --force is set.
-	// Claude and subagents actively writing will race with fix, preventing convergence.
+	// Guard: refuse to repair live sessions unless --force or --wait is set.
+	// Active writers race with fix, preventing convergence.
 	if !fixForce {
 		if fi, err := os.Stat(path); err == nil && time.Since(fi.ModTime()) < 60*time.Second {
-			return fmt.Errorf("session is active (modified %s ago) — fix cannot converge while Claude is writing.\n"+
-				"Wait for the session to idle, or use --force to attempt anyway", time.Since(fi.ModTime()).Truncate(time.Second))
+			if fixWait {
+				if err := waitForIdle(path); err != nil {
+					return err
+				}
+				// Re-parse after waiting — file contents may have changed.
+				entries, err = jsonl.Parse(path)
+				if err != nil {
+					return fmt.Errorf("parse after wait: %w", err)
+				}
+				diagnosis = analyzer.Diagnose(entries)
+				if len(diagnosis.Issues) == 0 {
+					fmt.Println("No issues found after waiting.")
+					return nil
+				}
+				fmt.Printf("Found %d issue(s) after waiting:\n\n", len(diagnosis.Issues))
+				for _, issue := range diagnosis.Issues {
+					prefix := "  "
+					switch issue.Kind {
+					case analyzer.IssueFilterBlock:
+						prefix = "  [filter]  "
+					case analyzer.IssueOversizedImage:
+						prefix = "  [image]   "
+					case analyzer.IssueOrphanedResult:
+						prefix = "  [orphan]  "
+					case analyzer.IssueMalformed:
+						prefix = "  [broken]  "
+					case analyzer.IssueChainBroken, analyzer.IssueChainMissingParent, analyzer.IssueChainBadStart:
+						prefix = "  [chain]   "
+					}
+					fmt.Printf("%sline %d: %s\n", prefix, entries[issue.EntryIndex].LineNumber, issue.Description)
+				}
+			} else {
+				return fmt.Errorf("session is active (modified %s ago) — fix cannot converge while Claude is writing.\n"+
+					"Use --wait to poll until idle, or --force to attempt anyway",
+					time.Since(fi.ModTime()).Truncate(time.Second))
+			}
 		}
 	}
 
@@ -224,11 +259,41 @@ func runFix(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// waitForIdle polls the session file until it hasn't been modified for 60 seconds.
+// Times out after 10 minutes.
+func waitForIdle(path string) error {
+	const (
+		idleThreshold = 60 * time.Second
+		pollInterval  = 5 * time.Second
+		timeout       = 10 * time.Minute
+	)
+	deadline := time.Now().Add(timeout)
+	fmt.Printf("Waiting for session to idle (no writes for %s)...\n", idleThreshold)
+
+	for time.Now().Before(deadline) {
+		fi, err := os.Stat(path)
+		if err != nil {
+			return fmt.Errorf("stat: %w", err)
+		}
+		idle := time.Since(fi.ModTime())
+		if idle >= idleThreshold {
+			fmt.Printf("Session idle for %s — proceeding with repair.\n", idle.Truncate(time.Second))
+			return nil
+		}
+		remaining := idleThreshold - idle
+		fmt.Printf("\r  last write %s ago, need %s more quiet...  ",
+			idle.Truncate(time.Second), remaining.Truncate(time.Second))
+		time.Sleep(pollInterval)
+	}
+	return fmt.Errorf("timed out after %s waiting for session to idle", timeout)
+}
+
 func init() {
 	fixCmd.Flags().BoolVar(&fixApply, "apply", false, "Apply repairs (default: dry-run)")
 	fixCmd.Flags().BoolVar(&fixCWD, "cwd", false, "Use most recent session for current directory")
 	fixCmd.Flags().BoolVar(&fixTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	fixCmd.Flags().BoolVar(&fixPreserve, "preserve", false, "Extract decisions and findings before repair (writes .preserved.md sidecar)")
 	fixCmd.Flags().BoolVar(&fixForce, "force", false, "Attempt repair even on active sessions (may not converge)")
+	fixCmd.Flags().BoolVar(&fixWait, "wait", false, "Wait for session to idle before repairing (polls every 5s, 10m timeout)")
 	rootCmd.AddCommand(fixCmd)
 }
