@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.43.1] - 2026-03-23
+
+### Fixed
+
+- `fix --apply` refuses to repair active sessions (modified < 60s) — prevents
+  non-convergence when racing with active writers
+
+### Added
+
+- `fix --wait` flag: polls every 5s until session idles (60s quiet), then repairs
+- `fix --force` flag: override live session guard when user accepts the risk
+- Docs: cross-client resume bug and detection workaround
+  ([anthropics/claude-code#37665](https://github.com/anthropics/claude-code/issues/37665))
+
 ## [0.40.4] - 2026-03-21
 
 ### Fixed
