@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.44.1] - 2026-03-24
+
+### Added
+
+- `launch --wait`: poll until session idles before launching (reuses fix's waitForIdle)
+- `launch --force`: skip the active-session mtime check
+
+### Fixed
+
+- `launch` now uses full UUID for `claude --resume` to avoid opening the session picker
+
 ## [0.44.0] - 2026-03-24
 
 ### Added
