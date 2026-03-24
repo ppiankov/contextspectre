@@ -120,6 +120,16 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre watch --alert 80` | Terminal bell at context threshold |
 | `contextspectre timeline <id>` | Chronological reasoning timeline |
 
+### Pre-flight resume
+
+| Command | Description |
+|---------|-------------|
+| `contextspectre launch <id>` | Checkpoint → fix → clean → exec `claude --resume` |
+| `contextspectre launch --cwd` | Launch most recent session in current directory |
+| `contextspectre launch --cwd --dry-run` | Preview what would be cleaned without modifying |
+| `contextspectre launch --cwd --clean-only` | Skip fix, only clean before launching |
+| `contextspectre launch --cwd --print` | Launch in headless mode (`claude -p --resume`) |
+
 ### Cleanup
 
 | Command | Description |
@@ -148,6 +158,8 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre collapse <id> --commit-point <uuid>` | Collapse exploration above a commit point |
 | `contextspectre fix <id>` | Diagnose and repair session problems |
 | `contextspectre fix <id> --apply --tombstone` | Repair with tombstone mode (preserves Mac scroll-back) |
+| `contextspectre fix <id> --apply --wait` | Wait for session to idle, then repair |
+| `contextspectre fix <id> --apply --force` | Repair even if session is active (may not converge) |
 | `contextspectre repair <id>` | Repair or prune orphaned sidechains |
 | `contextspectre sidechains <id>` | Report structural sidechains |
 

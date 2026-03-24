@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.44.0] - 2026-03-24
+
+### Added
+
+- `launch` command: pre-flight cleanup pipeline for session resume
+  - Checkpoint → fix → clean --all → exec `claude --resume`
+  - Refuses active sessions (mtime < 60s) — guaranteed convergence
+  - `--cwd` for most recent session, `--dry-run` to preview
+  - `--clean-only` skips fix, `--print` launches headless mode
+  - Platform-split exec: `syscall.Exec` on Unix, `exec.Command` on Windows
+
 ## [0.43.1] - 2026-03-23
 
 ### Fixed

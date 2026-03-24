@@ -164,6 +164,37 @@ contextspectre checkpoint --cwd --format json
 
 The checkpoint extracts from the active epoch: decisions made, findings discovered, user requests, files touched, and any commit points you've marked.
 
+## Clean and resume in one step
+
+`launch` runs the full pre-flight pipeline — checkpoint, fix, clean — then exec-s into `claude --resume`. The session must be idle (not actively used) for fix to converge.
+
+```bash
+# Most recent session in current directory
+contextspectre launch --cwd
+# Session:  88275ecc (toasty-jumping-hare) [Cli]
+# Entries:  4231 | Size: 12.4 MB
+#
+# Checkpoint... saved → docs/context.txt
+# Fix...        2 removed, 1 chains repaired, 1 parents reconnected
+# Clean...      312 entries removed, 2 images replaced, 18.3 KB freed
+#
+# Launching: claude --resume toasty-jumping-hare
+
+# Specific session
+contextspectre launch 88275ecc
+
+# Dry run — preview without modifying
+contextspectre launch --cwd --dry-run
+
+# Skip fix, just clean and launch
+contextspectre launch --cwd --clean-only
+
+# Headless mode (claude -p --resume)
+contextspectre launch --cwd --print
+```
+
+If the session is still active (modified < 60s), launch refuses — wait for it to idle or close the Claude session first.
+
 ## Resume a Claude Code session
 
 Claude CLI v2.1+ supports resuming by name (interactive) or UUID (scripted):
