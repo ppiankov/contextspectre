@@ -18,6 +18,8 @@ var (
 	launchDryRun    bool
 	launchCleanOnly bool
 	launchPrint     bool
+	launchWait      bool
+	launchForce     bool
 )
 
 var launchCmd = &cobra.Command{
@@ -37,6 +39,8 @@ func init() {
 	launchCmd.Flags().BoolVar(&launchDryRun, "dry-run", false, "Show what would be done without modifying or launching")
 	launchCmd.Flags().BoolVar(&launchCleanOnly, "clean-only", false, "Skip fix, only clean")
 	launchCmd.Flags().BoolVar(&launchPrint, "print", false, "Launch with claude -p --resume (headless mode)")
+	launchCmd.Flags().BoolVar(&launchWait, "wait", false, "Wait for session to idle before launching (polls every 5s, 10m timeout)")
+	launchCmd.Flags().BoolVar(&launchForce, "force", false, "Skip the active-session check")
 	rootCmd.AddCommand(launchCmd)
 }
 
@@ -46,14 +50,26 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		return err
 	}
 
-	// Refuse if session is active.
+	// Refuse if session is active (unless --force).
 	fi, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("stat: %w", err)
 	}
-	if time.Since(fi.ModTime()) < 60*time.Second {
-		return fmt.Errorf("session is active (modified %s ago) — wait for it to idle before launching",
-			time.Since(fi.ModTime()).Truncate(time.Second))
+	if !launchForce && time.Since(fi.ModTime()) < 60*time.Second {
+		if launchWait {
+			if err := waitForIdle(path); err != nil {
+				return err
+			}
+			// Re-stat after waiting.
+			fi, err = os.Stat(path)
+			if err != nil {
+				return fmt.Errorf("stat after wait: %w", err)
+			}
+		} else {
+			return fmt.Errorf("session is active (modified %s ago) — wait for it to idle before launching.\n"+
+				"Use --wait to poll until idle, or --force to skip this check",
+				time.Since(fi.ModTime()).Truncate(time.Second))
+		}
 	}
 
 	// Session identity.
@@ -130,21 +146,12 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		fmt.Println(cleanResult)
 	}
 
-	// Step 4: Launch.
-	resumeArg := fullID
-	if displayName != "" {
-		resumeArg = displayName
-	}
-
+	// Step 4: Launch — always use full UUID to avoid the session picker.
+	fmt.Printf("\nLaunching: claude --resume %s\n", fullID)
 	if launchPrint {
-		// Print mode requires full UUID.
-		resumeArg = fullID
-		fmt.Printf("\nLaunching: claude -p --resume %s\n", resumeArg)
-		return execClaude([]string{"claude", "-p", "--resume", resumeArg})
+		return execClaude([]string{"claude", "-p", "--resume", fullID})
 	}
-
-	fmt.Printf("\nLaunching: claude --resume %s\n", resumeArg)
-	return execClaude([]string{"claude", "--resume", resumeArg})
+	return execClaude([]string{"claude", "--resume", fullID})
 }
 
 // runLaunchCheckpoint saves a checkpoint to docs/context.txt if the docs/ dir exists.
