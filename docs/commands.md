@@ -129,6 +129,8 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre launch --cwd --dry-run` | Preview what would be cleaned without modifying |
 | `contextspectre launch --cwd --clean-only` | Skip fix, only clean before launching |
 | `contextspectre launch --cwd --print` | Launch in headless mode (`claude -p --resume`) |
+| `contextspectre launch --cwd --wait` | Poll until session idles, then launch |
+| `contextspectre launch --cwd --force` | Skip the active-session check |
 
 ### Cleanup
 

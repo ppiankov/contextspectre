@@ -193,7 +193,15 @@ contextspectre launch --cwd --clean-only
 contextspectre launch --cwd --print
 ```
 
-If the session is still active (modified < 60s), launch refuses — wait for it to idle or close the Claude session first.
+If the session is still active (modified < 60s), launch refuses. Use `--wait` to poll until idle, or `--force` to skip the check:
+
+```bash
+# Poll until session idles, then launch
+contextspectre launch --cwd --wait
+
+# Skip the active-session check entirely
+contextspectre launch --cwd --force
+```
 
 ## Resume a Claude Code session
 
