@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.0] - 2026-03-26
+
+### Added
+
+- Launch pre-flight detects concurrent claude process on same session (PID check via pgrep/wmic)
+- Refuses with "session already open by claude (PID X)" — `--force` overrides
+
 ## [0.44.1] - 2026-03-24
 
 ### Added
