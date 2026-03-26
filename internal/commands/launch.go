@@ -154,18 +154,19 @@ func runLaunch(_ *cobra.Command, args []string) error {
 	}
 
 	// Step 4: Launch.
-	// Interactive: use slug/custom-title (claude --resume expects these, not UUIDs).
+	// Use -r (short flag) because --resume is broken in Claude CLI v2.1.x.
+	// Interactive: use slug/custom-title as the resume argument.
 	// Print mode: use full UUID (headless, no picker).
 	resumeArg := fullID
 	if displayName != "" {
 		resumeArg = displayName
 	}
 	if launchPrint {
-		fmt.Printf("\nLaunching: claude -p --resume %s\n", fullID)
-		return execClaude([]string{"claude", "-p", "--resume", fullID})
+		fmt.Printf("\nLaunching: claude -p -r %s\n", fullID)
+		return execClaude([]string{"claude", "-p", "-r", fullID})
 	}
-	fmt.Printf("\nLaunching: claude --resume %s\n", resumeArg)
-	return execClaude([]string{"claude", "--resume", resumeArg})
+	fmt.Printf("\nLaunching: claude -r %s\n", resumeArg)
+	return execClaude([]string{"claude", "-r", resumeArg})
 }
 
 // runLaunchCheckpoint saves a checkpoint to docs/context.txt if the docs/ dir exists.
