@@ -23,6 +23,7 @@ const (
 	IssueChainBroken        IssueKind = "chain_broken"         // generic (kept for backward compat)
 	IssueChainMissingParent IssueKind = "chain_missing_parent" // parentUuid references non-existent entry
 	IssueChainBadStart      IssueKind = "chain_bad_start"      // active chain starts with assistant
+	IssueOrphanedToolUse    IssueKind = "orphaned_tool_use"    // tool_use without matching tool_result
 )
 
 // Issue describes a single detected problem in a session.
@@ -50,14 +51,37 @@ func Diagnose(entries []jsonl.Entry) *DiagnosisResult {
 func DiagnoseExcluding(entries []jsonl.Entry, excluded map[int]bool) *DiagnosisResult {
 	result := &DiagnosisResult{}
 
-	// Build tool_use ID set from assistant messages, excluding pending deletes
+	// Build tool_use ID set from assistant messages, excluding pending deletes.
 	toolUseIDs := make(map[string]bool)
+	// Map tool_use ID → entry index for orphaned tool_use detection.
+	toolUseIndex := make(map[string]int)
 	for i, e := range entries {
 		if excluded[i] {
 			continue
 		}
 		for _, id := range e.ToolUseIDs() {
 			toolUseIDs[id] = true
+			toolUseIndex[id] = i
+		}
+	}
+
+	// Build tool_result ID set from user messages.
+	toolResultIDs := make(map[string]bool)
+	for i, e := range entries {
+		if excluded[i] {
+			continue
+		}
+		if e.Type != jsonl.TypeUser || e.Message == nil {
+			continue
+		}
+		blocks, err := jsonl.ParseContentBlocks(e.Message.Content)
+		if err != nil {
+			continue
+		}
+		for _, b := range blocks {
+			if b.Type == "tool_result" && b.ToolUseID != "" {
+				toolResultIDs[b.ToolUseID] = true
+			}
 		}
 	}
 
@@ -128,6 +152,18 @@ func DiagnoseExcluding(entries []jsonl.Entry, excluded map[int]bool) *DiagnosisR
 					}
 				}
 			}
+		}
+	}
+
+	// Orphaned tool_use: tool_use without matching tool_result.
+	// This causes API 400 errors — the session becomes unrecoverable.
+	for id, idx := range toolUseIndex {
+		if !toolResultIDs[id] {
+			result.Issues = append(result.Issues, Issue{
+				Kind:        IssueOrphanedToolUse,
+				EntryIndex:  idx,
+				Description: fmt.Sprintf("tool_use %s has no matching tool_result", id),
+			})
 		}
 	}
 
