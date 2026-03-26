@@ -144,6 +144,19 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		}
 	}
 
+	// Step 2b: Rewire — inject synthetic tool_results for orphaned tool_use blocks.
+	if !launchCleanOnly {
+		fmt.Print("Rewire...     ")
+		rewireResult, err := editor.Rewire(path)
+		if err != nil {
+			fmt.Printf("error: %v\n", err)
+		} else if rewireResult.Injected == 0 {
+			fmt.Println("clean")
+		} else {
+			fmt.Printf("%d tool_result(s) injected\n", rewireResult.Injected)
+		}
+	}
+
 	// Step 3: Clean.
 	fmt.Print("Clean...      ")
 	cleanResult, err := runLaunchClean(path, clientType == "desktop")
