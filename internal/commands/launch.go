@@ -50,6 +50,14 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		return err
 	}
 
+	// Session identity (needed for process check).
+	base := filepath.Base(path)
+	fullID := strings.TrimSuffix(base, ".jsonl")
+	shortID := fullID
+	if len(shortID) > 8 {
+		shortID = shortID[:8]
+	}
+
 	// Refuse if session is active (unless --force).
 	fi, err := os.Stat(path)
 	if err != nil {
@@ -72,12 +80,11 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		}
 	}
 
-	// Session identity.
-	base := filepath.Base(path)
-	fullID := strings.TrimSuffix(base, ".jsonl")
-	shortID := fullID
-	if len(shortID) > 8 {
-		shortID = shortID[:8]
+	// Check if another claude process already has this session open.
+	if !launchForce {
+		if pid, err := findClaudeProcess(fullID, ""); err == nil && pid > 0 {
+			return fmt.Errorf("session already open by claude (PID %d) — close it first or use --force", pid)
+		}
 	}
 
 	stats, err := jsonl.ScanLight(path)
