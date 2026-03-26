@@ -153,12 +153,19 @@ func runLaunch(_ *cobra.Command, args []string) error {
 		fmt.Println(cleanResult)
 	}
 
-	// Step 4: Launch — always use full UUID to avoid the session picker.
-	fmt.Printf("\nLaunching: claude --resume %s\n", fullID)
+	// Step 4: Launch.
+	// Interactive: use slug/custom-title (claude --resume expects these, not UUIDs).
+	// Print mode: use full UUID (headless, no picker).
+	resumeArg := fullID
+	if displayName != "" {
+		resumeArg = displayName
+	}
 	if launchPrint {
+		fmt.Printf("\nLaunching: claude -p --resume %s\n", fullID)
 		return execClaude([]string{"claude", "-p", "--resume", fullID})
 	}
-	return execClaude([]string{"claude", "--resume", fullID})
+	fmt.Printf("\nLaunching: claude --resume %s\n", resumeArg)
+	return execClaude([]string{"claude", "--resume", resumeArg})
 }
 
 // runLaunchCheckpoint saves a checkpoint to docs/context.txt if the docs/ dir exists.
