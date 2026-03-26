@@ -162,6 +162,8 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre fix <id> --apply --tombstone` | Repair with tombstone mode (preserves Mac scroll-back) |
 | `contextspectre fix <id> --apply --wait` | Wait for session to idle, then repair |
 | `contextspectre fix <id> --apply --force` | Repair even if session is active (may not converge) |
+| `contextspectre rewire <id>` | Detect orphaned tool_use blocks (dry run) |
+| `contextspectre rewire <id> --apply` | Inject synthetic tool_results to fix 400 errors |
 | `contextspectre repair <id>` | Repair or prune orphaned sidechains |
 | `contextspectre sidechains <id>` | Report structural sidechains |
 
