@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.45.2] - 2026-03-26
+
+### Fixed
+
+- `launch` uses `-r` instead of `--resume` — long form is broken in Claude CLI v2.1.x ([#39291](https://github.com/anthropics/claude-code/issues/39291))
+
 ## [0.45.1] - 2026-03-26
 
 ### Fixed
 
-- `launch` uses slug for interactive `claude --resume` (UUID doesn't resume, opens new session)
+- `launch` uses slug for interactive resume (UUID doesn't resume, opens new session)
 - UUID kept for `--print` (headless) mode only
 
 ## [0.45.0] - 2026-03-26
