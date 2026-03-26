@@ -204,6 +204,25 @@ contextspectre launch --cwd --wait
 contextspectre launch --cwd --force
 ```
 
+## Fix unrecoverable "API Error 400" sessions
+
+When Claude Code drops a `tool_result`, the session becomes permanently stuck — every message returns "API Error: 400 due to tool use concurrency issues" and all recovery mechanisms (rewind, restore, summarize) also fail. See [anthropics/claude-code#39316](https://github.com/anthropics/claude-code/issues/39316).
+
+`rewire` fixes this by injecting synthetic `tool_result` entries for any orphaned `tool_use` blocks:
+
+```bash
+# Dry run — show orphaned tool_use blocks
+contextspectre rewire <session-id>
+
+# Fix — inject synthetic tool_results
+contextspectre rewire <session-id> --apply
+
+# Then resume
+contextspectre launch <session-id>
+```
+
+`launch` runs rewire automatically as part of its pre-flight pipeline.
+
 ## Resume a Claude Code session
 
 Claude CLI v2.1+ supports resuming by name (interactive) or UUID (scripted):
