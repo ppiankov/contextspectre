@@ -176,9 +176,10 @@ contextspectre launch --cwd
 #
 # Checkpoint... saved → docs/context.txt
 # Fix...        2 removed, 1 chains repaired, 1 parents reconnected
+# Rewire...     clean
 # Clean...      312 entries removed, 2 images replaced, 18.3 KB freed
 #
-# Launching: claude --resume toasty-jumping-hare
+# Launching: claude -r toasty-jumping-hare
 
 # Specific session
 contextspectre launch 88275ecc

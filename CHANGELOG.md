@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.46.0] - 2026-03-26
+
+### Added
+
+- `rewire` command: detect and fix orphaned `tool_use` blocks that cause unrecoverable API 400 errors
+  - Injects synthetic `tool_result` entries for any `tool_use` without a matching result
+  - Dry run by default, `--apply` to write, `--cwd` for current directory
+  - Integrated into `launch` pre-flight pipeline (checkpoint → fix → rewire → clean)
+- `IssueOrphanedToolUse` diagnosis: `fix` and `doctor` now detect missing tool_results
+
 ## [0.45.2] - 2026-03-26
 
 ### Fixed
