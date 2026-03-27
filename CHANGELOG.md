@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.47.0] - 2026-03-27
+
+### Added
+
+- Clean thinking blocks and signatures from assistant entries (2-5% savings on Opus sessions)
+- Dedup repeated system-reminder injections (keeps last occurrence, removes earlier duplicates)
+- Truncate oversized content blocks >100KB with marker
+- All three integrated into `clean --all` and `launch` pipeline
+
 ## [0.46.0] - 2026-03-26
 
 ### Added
