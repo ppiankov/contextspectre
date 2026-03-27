@@ -11,23 +11,27 @@ import (
 
 // CleanAllResult holds the combined results of all cleanup operations.
 type CleanAllResult struct {
-	ProgressRemoved    int
-	SnapshotsRemoved   int
-	SidechainsRemoved  int
-	TangentsRemoved    int
-	FailedRetries      int
-	StaleReadsRemoved  int
-	OrphansRemoved     int
-	OrphansTombstoned  int
-	ImagesReplaced     int
-	SeparatorsStripped int
-	OutputsTruncated   int
-	CoalesceMerged     int
-	CoalesceOrphans    int
-	TotalTokensSaved   int
-	KeepSkipped        int
-	BytesBefore        int64
-	BytesAfter         int64
+	ProgressRemoved     int
+	SnapshotsRemoved    int
+	SidechainsRemoved   int
+	TangentsRemoved     int
+	FailedRetries       int
+	StaleReadsRemoved   int
+	OrphansRemoved      int
+	OrphansTombstoned   int
+	ImagesReplaced      int
+	SeparatorsStripped  int
+	OutputsTruncated    int
+	ThinkingRemoved     int
+	SignaturesRemoved   int
+	RemindersDeduped    int
+	MegaBlocksTruncated int
+	CoalesceMerged      int
+	CoalesceOrphans     int
+	TotalTokensSaved    int
+	KeepSkipped         int
+	BytesBefore         int64
+	BytesAfter          int64
 }
 
 // CleanAllOpts configures a CleanAll run.
@@ -246,7 +250,40 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 		cleanIntermediate()
 	}
 
-	// 2b. Strip separators
+	// 2b. Clean thinking blocks and signatures
+	thinkResult, err := CleanThinking(path)
+	if err != nil {
+		_ = restoreOriginal(path, origBak)
+		return nil, fmt.Errorf("thinking: %w", err)
+	}
+	result.ThinkingRemoved = thinkResult.ThinkingRemoved
+	result.SignaturesRemoved = thinkResult.SignaturesRemoved
+	if thinkResult.ThinkingRemoved > 0 || thinkResult.SignaturesRemoved > 0 {
+		cleanIntermediate()
+	}
+
+	// 2c. Dedup system reminders
+	reminderResult, err := CleanSystemReminders(path)
+	if err != nil {
+		_ = restoreOriginal(path, origBak)
+		return nil, fmt.Errorf("reminders: %w", err)
+	}
+	result.RemindersDeduped = reminderResult.RemindersRemoved
+	if reminderResult.RemindersRemoved > 0 {
+		cleanIntermediate()
+	}
+
+	// 2d. Truncate mega blocks (>100KB)
+	megaResult, err := CleanMegaBlocks(path)
+	if err != nil {
+		_ = restoreOriginal(path, origBak)
+		return nil, fmt.Errorf("mega blocks: %w", err)
+	}
+	result.MegaBlocksTruncated = megaResult.BlocksTruncated
+	if megaResult.BlocksTruncated > 0 {
+		cleanIntermediate()
+	}
+
 	sr, err := StripSeparators(path)
 	if err != nil {
 		_ = restoreOriginal(path, origBak)

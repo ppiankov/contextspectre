@@ -391,7 +391,9 @@ func runLaunchClean(path string, isDesktop bool) (string, error) {
 		result.OrphansRemoved
 	saved := result.BytesBefore - result.BytesAfter
 
-	if totalRemoved == 0 && result.ImagesReplaced == 0 && result.CoalesceMerged == 0 {
+	totalSurgery := result.ThinkingRemoved + result.RemindersDeduped + result.MegaBlocksTruncated
+
+	if totalRemoved == 0 && result.ImagesReplaced == 0 && result.CoalesceMerged == 0 && totalSurgery == 0 {
 		return "already clean", nil
 	}
 
@@ -404,6 +406,15 @@ func runLaunchClean(path string, isDesktop bool) (string, error) {
 	}
 	if result.CoalesceMerged > 0 {
 		parts = append(parts, fmt.Sprintf("%d coalesced", result.CoalesceMerged))
+	}
+	if result.ThinkingRemoved > 0 {
+		parts = append(parts, fmt.Sprintf("%d thinking blocks", result.ThinkingRemoved))
+	}
+	if result.RemindersDeduped > 0 {
+		parts = append(parts, fmt.Sprintf("%d reminders deduped", result.RemindersDeduped))
+	}
+	if result.MegaBlocksTruncated > 0 {
+		parts = append(parts, fmt.Sprintf("%d mega blocks truncated", result.MegaBlocksTruncated))
 	}
 	if saved > 0 {
 		parts = append(parts, fmt.Sprintf("%s freed", humanBytes(saved)))
