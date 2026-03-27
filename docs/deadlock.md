@@ -25,3 +25,21 @@ contextspectre amputate <session-id> --last 20 --apply
 This removes the last 20 entries (typically the oversized message that triggered the deadlock plus error responses), allowing Claude Code to resume and compact normally. Always runs in dry-run mode first - add `--apply` to execute.
 
 See [Commands](commands.md) for the full CLI reference.
+
+## When amputate is NOT the right tool
+
+If the session is stuck with "API Error: 400 due to tool use concurrency issues" and all recovery mechanisms (rewind, restore, summarize) fail, the problem is structural — a `tool_use` block is missing its `tool_result`. Amputating won't fix it because the orphaned pair may be deep in compacted history.
+
+Use `rewire` instead:
+
+```bash
+contextspectre rewire <session-id> --apply
+```
+
+This injects synthetic `tool_result` entries for any orphaned `tool_use` blocks, making the conversation structurally valid again. See [How to fix unrecoverable 400 errors](howto.md#fix-unrecoverable-api-error-400-sessions) and [anthropics/claude-code#39316](https://github.com/anthropics/claude-code/issues/39316).
+
+| Symptom | Tool | Why |
+|---------|------|-----|
+| "Prompt is too long" — session too large to continue or compact | `amputate` | Removes entries to reduce token count |
+| "API Error: 400 due to tool use concurrency issues" — rewind/restore fail | `rewire` | Injects missing tool_results to fix structural corruption |
+| Broken parent chain — orphaned entries, sidechains | `fix` | Repairs parentUuid references |
