@@ -28,7 +28,8 @@
 | **Re-explanation tax** | The cumulative cost of re-stating architecture, constraints, and decisions in every new session because prior sessions are inaccessible. |
 | **Keep marker** | Human tag protecting an entry from cleanup. Survives all automated operations. |
 | **Commit point** | A decision boundary. Exploration above it can be collapsed - the scaffolding served its purpose. |
-| **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. |
+| **Amputation** | Surgically removing entries from the end of a session to drop token count below the compaction threshold. Recovery operation for context deadlock. Use when the session is too large to continue. Does NOT fix structural corruption — for that, use rewire. See [Context Deadlock](deadlock.md). |
+| **Rewire** | Injecting synthetic `tool_result` entries for orphaned `tool_use` blocks. Recovery operation for the "API Error: 400 due to tool use concurrency issues" state where a dropped tool_result makes the session permanently unrecoverable. Use when the session hits 400 errors and rewind/restore/summarize all fail. Does NOT reduce session size — for that, use amputate. Runs automatically in `launch` pre-flight. See [anthropics/claude-code#39316](https://github.com/anthropics/claude-code/issues/39316). |
 | **Split surgery** | Extracting a range of entries to portable markdown. Non-destructive by default; optionally prunes from the source. |
 | **Separation surgery** | Marking conversation branches worth continuing, exporting them, starting fresh. Implemented via `split`, `export`, and branch navigation. |
 | **Unite** | Merging multiple branch exports into a single context file with deduplication and token budgeting. |
