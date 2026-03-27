@@ -223,6 +223,34 @@ contextspectre launch <session-id>
 
 `launch` runs rewire automatically as part of its pre-flight pipeline.
 
+## Move a project and its Claude sessions
+
+Claude Code stores sessions under `~/.claude/projects/` in directories named after the project's filesystem path (with `/` replaced by `-`). When you move a project, the session directory must be renamed to match.
+
+```bash
+# 1. Move the project
+mv ~/dev/old-location/myproject ~/dev/new-location/myproject
+
+# 2. Rename the Claude session directory
+mv ~/.claude/projects/-Users-you-dev-old-location-myproject \
+   ~/.claude/projects/-Users-you-dev-new-location-myproject
+
+# 3. Verify sessions resolve
+cd ~/dev/new-location/myproject
+contextspectre sessions --cwd
+```
+
+**Common scenarios:**
+
+- **Nested by mistake** (e.g., `clickpulse/mysqlpulse` → `mysqlpulse`): move the dir, rename the session path, verify
+- **Two copies exist**: compare `git log --oneline -1` in each to find which is ahead, push the newer one, delete the older
+- **Session in wrong project**: use `contextspectre find <session-id> --move` to relocate a session between project directories
+
+**What breaks if you skip step 2:**
+- `contextspectre sessions --cwd` won't find old sessions
+- `contextspectre launch --cwd` won't find the session to resume
+- Claude Code's `--continue` may still work (it searches by recency, not path) but `--resume` with a slug may not
+
 ## Resume a Claude Code session
 
 Claude CLI v2.1+ supports resuming by name (interactive) or UUID (scripted):
