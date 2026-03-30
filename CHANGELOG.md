@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.47.1] - 2026-03-30
+
+### Fixed
+
+- `fix --apply` no longer loops infinitely on orphaned tool_use blocks — these require `rewire`, not `fix`
+- `fix` now prints actionable guidance: "Run: contextspectre rewire --apply" when orphaned tool_use blocks remain
+- `IssuesFixed` count in repair now reflects actual repair actions, not input issue count
+- Same convergence fix applied to `launch` pre-flight fix path
+
 ## [0.47.0] - 2026-03-27
 
 ### Added
