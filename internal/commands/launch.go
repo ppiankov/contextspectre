@@ -292,12 +292,18 @@ func runLaunchFix(path string) (string, error) {
 	}
 
 	diagnosis := analyzer.Diagnose(entries)
-	if len(diagnosis.Issues) == 0 {
+	var fixable []analyzer.Issue
+	for _, issue := range diagnosis.Issues {
+		if isFixable(issue.Kind) {
+			fixable = append(fixable, issue)
+		}
+	}
+	if len(fixable) == 0 {
 		return "", nil
 	}
 
 	tombstone := autoTombstone(path)
-	result, err := editor.Repair(path, diagnosis.Issues, tombstone)
+	result, err := editor.Repair(path, fixable, tombstone)
 	if err != nil {
 		return "", err
 	}
@@ -313,7 +319,13 @@ func runLaunchFix(path string) (string, error) {
 			return "", err
 		}
 		diagnosis = analyzer.Diagnose(entries)
-		if len(diagnosis.Issues) == 0 {
+		fixableCount := 0
+		for _, issue := range diagnosis.Issues {
+			if isFixable(issue.Kind) {
+				fixableCount++
+			}
+		}
+		if fixableCount == 0 {
 			cr, _ := editor.Coalesce(path)
 			if cr == nil || (cr.EntriesRemoved == 0 && cr.OrphansStripped == 0) {
 				break

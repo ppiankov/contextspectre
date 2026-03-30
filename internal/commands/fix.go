@@ -70,6 +70,8 @@ func runFix(cmd *cobra.Command, args []string) error {
 			prefix = "  [broken]  "
 		case analyzer.IssueChainBroken, analyzer.IssueChainMissingParent, analyzer.IssueChainBadStart:
 			prefix = "  [chain]   "
+		case analyzer.IssueOrphanedToolUse:
+			prefix = "  [tool_use]"
 		}
 		fmt.Printf("%sline %d: %s\n", prefix, entries[issue.EntryIndex].LineNumber, issue.Description)
 	}
@@ -111,6 +113,8 @@ func runFix(cmd *cobra.Command, args []string) error {
 						prefix = "  [broken]  "
 					case analyzer.IssueChainBroken, analyzer.IssueChainMissingParent, analyzer.IssueChainBadStart:
 						prefix = "  [chain]   "
+					case analyzer.IssueOrphanedToolUse:
+						prefix = "  [tool_use]"
 					}
 					fmt.Printf("%sline %d: %s\n", prefix, entries[issue.EntryIndex].LineNumber, issue.Description)
 				}
@@ -122,10 +126,18 @@ func runFix(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Split fixable vs unfixable (orphaned tool_use requires rewire, not fix).
+	var fixable []analyzer.Issue
+	for _, issue := range diagnosis.Issues {
+		if isFixable(issue.Kind) {
+			fixable = append(fixable, issue)
+		}
+	}
+
 	// Preserve decisions/findings from entries about to be deleted
 	if fixPreserve {
 		toDelete := make(map[int]bool)
-		for _, issue := range diagnosis.Issues {
+		for _, issue := range fixable {
 			toDelete[issue.EntryIndex] = true
 		}
 		expanded := analyzer.CascadeDeleteSet(entries, toDelete, func(string) bool { return false })
@@ -144,7 +156,7 @@ func runFix(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 	tombstone := fixTombstone || autoTombstone(path)
 
-	result, err := editor.Repair(path, diagnosis.Issues, tombstone)
+	result, err := editor.Repair(path, fixable, tombstone)
 	if err != nil {
 		return fmt.Errorf("repair: %w", err)
 	}
@@ -165,8 +177,14 @@ func runFix(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("reparse: %w", err)
 		}
 		diagnosis = analyzer.Diagnose(entries)
-		if len(diagnosis.Issues) == 0 {
-			// No issues — coalesce and check if that introduced new ones.
+		fixableCount := 0
+		for _, issue := range diagnosis.Issues {
+			if isFixable(issue.Kind) {
+				fixableCount++
+			}
+		}
+		if fixableCount == 0 {
+			// No fixable issues — coalesce and check if that introduced new ones.
 			cr, err := editor.Coalesce(path)
 			if err != nil {
 				slog.Warn("coalesce failed", "err", err)
@@ -256,6 +274,26 @@ func runFix(cmd *cobra.Command, args []string) error {
 		"parents_patched", totalPatches,
 		"coalesced", coalesced)
 
+	// Check for remaining orphaned tool_use blocks that require rewire.
+	entries, _ = jsonl.Parse(path)
+	if entries != nil {
+		diagnosis = analyzer.Diagnose(entries)
+		var remaining []analyzer.Issue
+		for _, issue := range diagnosis.Issues {
+			if issue.Kind == analyzer.IssueOrphanedToolUse {
+				remaining = append(remaining, issue)
+			}
+		}
+		if len(remaining) > 0 {
+			fmt.Printf("\n%d orphaned tool_use block(s) require rewire:\n", len(remaining))
+			for _, issue := range remaining {
+				fmt.Printf("  [tool_use] line %d: %s\n",
+					entries[issue.EntryIndex].LineNumber, issue.Description)
+			}
+			fmt.Println("\nRun: contextspectre rewire --apply")
+		}
+	}
+
 	return nil
 }
 
@@ -286,6 +324,19 @@ func waitForIdle(path string) error {
 		time.Sleep(pollInterval)
 	}
 	return fmt.Errorf("timed out after %s waiting for session to idle", timeout)
+}
+
+// isFixable returns true for issue kinds that Repair() can handle.
+// IssueOrphanedToolUse requires rewire (synthetic injection), not fix (deletion/patching).
+func isFixable(k analyzer.IssueKind) bool {
+	switch k {
+	case analyzer.IssueFilterBlock, analyzer.IssueOrphanedResult,
+		analyzer.IssueMalformed, analyzer.IssueChainMissingParent,
+		analyzer.IssueChainBadStart, analyzer.IssueChainBroken,
+		analyzer.IssueOversizedImage, analyzer.IssueMediaTypeMismatch:
+		return true
+	}
+	return false
 }
 
 func init() {

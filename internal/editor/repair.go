@@ -60,7 +60,10 @@ func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult
 		}
 	}
 
-	result := &RepairResult{IssuesFixed: len(issues)}
+	result := &RepairResult{
+		IssuesFixed: len(toDelete) + len(toTombstone) + len(toPatchParent) +
+			len(oversizedEntries) + len(mismatchEntries),
+	}
 
 	// Handle media type mismatches first (lightest fix)
 	if len(mismatchEntries) > 0 {
