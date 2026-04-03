@@ -326,10 +326,14 @@ func CleanAll(path string, opts CleanAllOpts) (*CleanAllResult, error) {
 	result.BytesAfter = finalInfo.Size()
 	result.TotalTokensSaved = int(result.BytesBefore-result.BytesAfter) / 4
 
-	// Move .bak.orig to .bak (the single undo point)
+	// Move .bak.orig to .bak (the single undo point).
+	// If .bak.orig is missing (e.g. concurrent access or prior crash),
+	// the clean operations still succeeded — just skip the undo file.
 	_ = safecopy.Clean(path) // remove any remaining intermediate
-	if err := os.Rename(origBak, path+".bak"); err != nil {
-		return nil, fmt.Errorf("finalize backup: %w", err)
+	if _, err := os.Stat(origBak); err == nil {
+		if err := os.Rename(origBak, path+".bak"); err != nil {
+			return nil, fmt.Errorf("finalize backup: %w", err)
+		}
 	}
 
 	return result, nil

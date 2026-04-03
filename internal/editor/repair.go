@@ -113,6 +113,10 @@ func Repair(path string, issues []analyzer.Issue, tombstone bool) (*RepairResult
 		result.ChainRepairs = delResult.ChainRepairs
 	}
 
+	// Clean up intermediate .bak so sequential callers (e.g. clean --all)
+	// start with a clean backup state.
+	_ = safecopy.Clean(path)
+
 	return result, nil
 }
 
