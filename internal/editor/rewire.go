@@ -146,6 +146,10 @@ func Rewire(path string) (*RewireResult, error) {
 		result.BytesAfter += int64(len(line))
 	}
 
+	// Clean up .bak so sequential callers (e.g. clean --all)
+	// start with a clean backup state.
+	_ = safecopy.Clean(path)
+
 	return result, nil
 }
 

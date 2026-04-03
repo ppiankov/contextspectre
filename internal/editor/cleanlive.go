@@ -302,10 +302,14 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 	result.BytesAfter = finalInfo.Size()
 	result.TotalTokensSaved = int(result.BytesBefore-result.BytesAfter) / 4
 
-	// Finalize: move .bak.orig to .bak (same pattern as CleanAll)
+	// Finalize: move .bak.orig to .bak (same pattern as CleanAll).
+	// If .bak.orig is missing (e.g. concurrent access or prior crash),
+	// the clean operations still succeeded — just skip the undo file.
 	_ = safecopy.Clean(path) // remove any remaining intermediate
-	if err := os.Rename(origBak, path+".bak"); err != nil {
-		return nil, fmt.Errorf("finalize backup: %w", err)
+	if _, err := os.Stat(origBak); err == nil {
+		if err := os.Rename(origBak, path+".bak"); err != nil {
+			return nil, fmt.Errorf("finalize backup: %w", err)
+		}
 	}
 
 	return result, nil

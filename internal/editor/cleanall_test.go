@@ -154,6 +154,62 @@ func TestCleanAll_UndoRestoresOriginal(t *testing.T) {
 	}
 }
 
+func TestCleanAll_AfterRepair(t *testing.T) {
+	path := copyFixture(t, "orphan_cascade.jsonl")
+
+	// Run fix first (Repair), then clean all — the WO-167 sequence.
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	diag := analyzer.Diagnose(entries)
+	if _, err := Repair(path, diag.Issues, false); err != nil {
+		t.Fatalf("repair: %v", err)
+	}
+
+	// Repair should NOT leave .bak behind (fixed in WO-167)
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Error("expected .bak to be cleaned after repair")
+	}
+
+	// Now clean all should succeed without "finalize backup" error
+	result, err := CleanAll(path, CleanAllOpts{})
+	if err != nil {
+		t.Fatalf("clean all after repair: %v", err)
+	}
+	if result.BytesAfter > result.BytesBefore {
+		t.Error("expected bytes after <= bytes before")
+	}
+
+	// .bak should exist (undo point), .bak.orig should not
+	if _, err := os.Stat(path + ".bak"); os.IsNotExist(err) {
+		t.Error("expected .bak to exist after clean all")
+	}
+	if _, err := os.Stat(path + ".bak.orig"); !os.IsNotExist(err) {
+		t.Error("expected .bak.orig to be cleaned up")
+	}
+}
+
+func TestCleanAll_AfterRewire(t *testing.T) {
+	path := copyFixture(t, "orphan_cascade.jsonl")
+
+	// Run rewire first, then clean all — the WO-167 sequence variant.
+	if _, err := Rewire(path); err != nil {
+		t.Fatalf("rewire: %v", err)
+	}
+
+	// Rewire should NOT leave .bak behind (fixed in WO-167)
+	if _, err := os.Stat(path + ".bak"); !os.IsNotExist(err) {
+		t.Error("expected .bak to be cleaned after rewire")
+	}
+
+	// Now clean all should succeed
+	_, err := CleanAll(path, CleanAllOpts{})
+	if err != nil {
+		t.Fatalf("clean all after rewire: %v", err)
+	}
+}
+
 func TestCleanAll_Tombstone(t *testing.T) {
 	path := copyFixture(t, "orphan_cascade.jsonl")
 
