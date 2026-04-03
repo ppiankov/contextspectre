@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.47.2] - 2026-04-03
+
+### Fixed
+
+- Backup file collision when `fix` and `clean` run in sequence on the same session
+- `repair` and `rewire` now clean stale `.bak` files after success
+- `clean --all` and `clean --live` finalize gracefully if `.bak.orig` is missing
+
 ## [0.47.1] - 2026-03-30
 
 ### Fixed
