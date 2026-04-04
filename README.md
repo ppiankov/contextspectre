@@ -4,6 +4,9 @@
 [![Go 1.24+](https://img.shields.io/badge/Go-1.24+-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![ANCC](https://img.shields.io/badge/ANCC-agent--native-blue)](https://ancc.dev)
+[![Status: Stable](https://img.shields.io/badge/Status-Stable-green)](CHANGELOG.md)
+
+> **Project status:** ContextSpectre is stable and feature-complete. It receives bug fixes and compatibility updates only.
 
 Reasoning hygiene layer for Claude Code. Not a cleanup utility - a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
