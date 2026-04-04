@@ -83,7 +83,7 @@ ContextSpectre reads Claude Code's local JSONL session files - from both Claude 
 - Project memory synthesis from session history
 - CLAUDE.md sync from distilled decisions
 
-**See also:** [VectorPad](https://github.com/ppiankov/vectorpad) - pre-flight vector control panel (TUI). **Planned:** cleanup cadence, budget protection, reasoning entropy score, decision lineage. See [Roadmap](#roadmap).
+**See also:** [VectorPad](https://github.com/ppiankov/vectorpad) — pre-flight vector control panel (TUI).
 
 ## What it is NOT
 
