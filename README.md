@@ -182,10 +182,10 @@ Full glossary: [Concepts & Glossary](docs/concepts.md)
 | 1. Entropy control | Complete | Noise removal, live cleanup, batch operations |
 | 2. Reasoning economics | Complete | Cost attribution, epoch timeline, compaction archaeology |
 | 3. Reasoning navigation | Complete | Scope drift, branches, phases, keep markers, vector health, ghost context |
-| 4. Operational control | In progress | Federated project identity ✓, session search ✓, watch mode ✓, smart watch ✓, cost alerts ✓, savings attribution ✓, per-model cost ✓, TUI responsive columns ✓, TUI tabbed detail ✓, vim navigation + search ✓, active dashboard ✓, status line telemetry ✓, expert hygiene ✓, session analytics ✓, decision economics (CPD/TTC/CDR) ✓, onboarding polish ✓, input purity score ✓, session integrity guard ✓, [Vector Control panel](https://github.com/ppiankov/vectorpad) ✓, cleanup cadence, budget protection, session timeline |
-| 5. Reasoning memory | In progress | Project reasoning graph ✓, conflict detection ✓, project memory synthesis ✓, CLAUDE.md sync ✓, decision lineage ✓, reasoning entropy |
-| 6. Reasoning metrics | In progress | Repo token budget ✓, reasoning half-life ✓, reasoning efficiency map ✓, flight recorder ✓, reasoning diff ✓, throughput metrics ✓ |
-| 7. Security | In progress | Vector injection detection ✓, cross-project bond ✓, signal-first status line ✓ |
+| 4. Operational control | Complete | Federated project identity, session search, watch mode, smart watch, cost alerts, savings attribution, per-model cost, TUI responsive columns, TUI tabbed detail, vim navigation + search, active dashboard, status line telemetry, expert hygiene, session analytics, decision economics (CPD/TTC/CDR), onboarding polish, input purity score, session integrity guard, [Vector Control panel](https://github.com/ppiankov/vectorpad) |
+| 5. Reasoning memory | Complete | Project reasoning graph, conflict detection, project memory synthesis, CLAUDE.md sync, decision lineage |
+| 6. Reasoning metrics | Complete | Repo token budget, reasoning half-life, reasoning efficiency map, flight recorder, reasoning diff, throughput metrics |
+| 7. Security | Complete | Vector injection detection, cross-project bond, signal-first status line |
 
 ## Known limitations
 
