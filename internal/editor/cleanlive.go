@@ -27,6 +27,7 @@ type CleanLiveOpts struct {
 	Aggressive bool          // include Tier 4-5 (images, separators, truncation)
 	Tier3      bool          // include stale reads + failed retries
 	Threshold  time.Duration // idle threshold (default: DefaultIdleThreshold)
+	DryRun     bool          // report what would be cleaned, do not write
 }
 
 // CleanLiveResult holds the combined results of live cleanup operations.
@@ -94,6 +95,10 @@ func recordMtime(path string) (time.Time, error) {
 // Tier 6-7 operations (sidechains, tangents, retries, dedup) are NEVER
 // available in live mode regardless of flags.
 func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
+	if opts.DryRun {
+		return dryRunCleanLive(path, opts)
+	}
+
 	threshold := opts.Threshold
 	if threshold == 0 {
 		threshold = DefaultIdleThreshold
@@ -107,6 +112,15 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 	if !idle {
 		return nil, ErrSessionNotIdle
 	}
+
+	// Acquire exclusive lock for the entire CleanLive operation.
+	// Sub-calls to StreamStripType and WriteLines will see the refcount
+	// and skip re-locking (no deadlock).
+	unlock, lockErr := jsonl.LockFile(path)
+	if lockErr != nil {
+		return nil, fmt.Errorf("acquire lock: %w", lockErr)
+	}
+	defer unlock()
 
 	result := &CleanLiveResult{}
 
@@ -310,6 +324,85 @@ func CleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
 		if err := os.Rename(origBak, path+".bak"); err != nil {
 			return nil, fmt.Errorf("finalize backup: %w", err)
 		}
+	}
+
+	return result, nil
+}
+
+// dryRunCleanLive counts what CleanLive would remove without writing.
+// Read-only — no lock needed, no backup, no mtime checks.
+func dryRunCleanLive(path string, opts CleanLiveOpts) (*CleanLiveResult, error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("stat: %w", err)
+	}
+
+	entries, err := jsonl.Parse(path)
+	if err != nil {
+		return nil, fmt.Errorf("parse: %w", err)
+	}
+
+	result := &CleanLiveResult{
+		BytesBefore: fi.Size(),
+		BytesAfter:  fi.Size(),
+	}
+
+	// Tier 1+2: progress and snapshot entries
+	for _, e := range entries {
+		switch e.Type {
+		case "progress":
+			result.ProgressRemoved++
+		case "file-history-snapshot":
+			result.SnapshotsRemoved++
+		}
+	}
+
+	// Tier 2.5: coalesce candidates — count adjacent same-role runs
+	for i := 1; i < len(entries); i++ {
+		prev := entryRole(entries[i-1])
+		cur := entryRole(entries[i])
+		if prev != "" && prev == cur {
+			result.CoalesceMerged++
+		}
+	}
+
+	// Tier 3: stale reads + failed retries
+	if opts.Tier3 {
+		dupResult := analyzer.FindDuplicateReads(entries)
+		result.StaleReadsRemoved = dupResult.TotalStale
+		retryResult := analyzer.FindFailedRetries(entries)
+		result.FailedRetries = retryResult.TotalFailed
+	}
+
+	// Tier 4-5: images, separators, truncation (aggressive only)
+	if opts.Aggressive {
+		for _, e := range entries {
+			if e.Type == "separator" {
+				result.SeparatorsStripped++
+			}
+			if analyzer.EstimateImageTokens(&e) > 0 {
+				result.ImagesReplaced++
+			}
+		}
+		// Count large bash outputs
+		for _, e := range entries {
+			if e.Type == "tool_result" && e.RawSize >= analyzer.LargeOutputThreshold {
+				result.OutputsTruncated++
+			}
+		}
+	}
+
+	// Estimate token savings (rough: 4 bytes per token)
+	removedEntries := result.ProgressRemoved + result.SnapshotsRemoved +
+		result.CoalesceMerged + result.StaleReadsRemoved + result.FailedRetries
+	if removedEntries > 0 && len(entries) > 0 {
+		avgEntrySize := fi.Size() / int64(len(entries))
+		estimatedSaved := int64(removedEntries) * avgEntrySize
+		result.BytesAfter = fi.Size() - estimatedSaved
+		if result.BytesAfter < 0 {
+			result.BytesAfter = 0
+		}
+		result.TotalTokensSaved = int(estimatedSaved) / 4
 	}
 
 	return result, nil
