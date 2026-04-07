@@ -8,7 +8,14 @@ import (
 
 // WriteLines writes raw JSONL lines to a file atomically.
 // It writes to a temp file first, then renames to the target path.
+// An exclusive advisory lock is held for the duration of the write.
 func WriteLines(path string, lines [][]byte) error {
+	unlock, err := LockFile(path)
+	if err != nil {
+		return fmt.Errorf("acquire lock: %w", err)
+	}
+	defer unlock()
+
 	dir := filepath.Dir(path)
 	tmp, err := os.CreateTemp(dir, ".contextspectre-*.tmp")
 	if err != nil {

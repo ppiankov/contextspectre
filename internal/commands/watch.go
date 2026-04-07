@@ -58,7 +58,6 @@ func runWatch(cmd *cobra.Command, args []string) error {
 			lastTick = now
 
 			prevTokens = displayWatchLine(path, prevTokens, &alerted)
-			tryExpertClean(path)
 		case <-done:
 			fmt.Println()
 			return nil

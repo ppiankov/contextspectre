@@ -439,7 +439,8 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
-	fmt.Printf("Watching active sessions (%s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+	fmt.Printf("Watching active sessions (read-only, %s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+	fmt.Println("  Run 'contextspectre clean --active --all' to apply cleanup.")
 	printEscalationHint()
 
 	var consecutiveClean int
@@ -565,7 +566,8 @@ func runSmartWatch(sinceDuration time.Duration) error {
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
-	fmt.Printf("Watching active sessions (%s, smart mode, Ctrl+C to quit)\n", tierLabel)
+	fmt.Printf("Watching active sessions (read-only, %s, smart mode, Ctrl+C to quit)\n", tierLabel)
+	fmt.Println("  Run 'contextspectre clean --active --all' to apply cleanup.")
 	printEscalationHint()
 
 	lastMtime := make(map[string]time.Time)
@@ -1022,11 +1024,15 @@ type watchCleanResult struct {
 	proj    string
 }
 
-// cleanActiveSessionsWatch cleans sessions using CleanLive (tier-gated, race-safe).
-// Sessions are cleaned in parallel (up to maxWatchWorkers).
+// cleanActiveSessionsWatch analyzes sessions using CleanLive in dry-run mode (read-only).
+// Reports what WOULD be cleaned without modifying session files.
+// Sessions are analyzed in parallel (up to maxWatchWorkers).
 // Tangents are detected but NOT removed — advisory only.
 func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts editor.CleanLiveOpts) (int, int) {
-	// Clean sessions in parallel
+	// Force dry-run — watch mode is strictly read-only
+	opts.DryRun = true
+
+	// Analyze sessions in parallel
 	ch := make(chan watchCleanResult, len(active))
 	sem := make(chan struct{}, maxWatchWorkers)
 
@@ -1075,7 +1081,11 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts
 			tokensSaved = 0
 		}
 
-		savingsEvent := recordCleanupSavings(cr.info.FullPath, tokensSaved)
+		// In dry-run (watch) mode, don't record savings — nothing was actually cleaned
+		var savingsEvent *savings.Event
+		if !opts.DryRun {
+			savingsEvent = recordCleanupSavings(cr.info.FullPath, tokensSaved)
+		}
 		acc.addResult(result, savingsEvent)
 
 		if totalOps == 0 {
@@ -1116,7 +1126,7 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts
 				if savingsEvent != nil {
 					costStr = fmt.Sprintf(" (~%s)", analyzer.FormatCost(savingsEvent.AvoidedCost))
 				}
-				fmt.Printf("  %s (%s): %s → %s tokens saved%s\n",
+				fmt.Printf("  %s (%s): %s → %s tokens reclaimable%s\n",
 					cr.proj, cr.shortID, strings.Join(parts, ", "),
 					formatTokens(tokensSaved), costStr)
 			}

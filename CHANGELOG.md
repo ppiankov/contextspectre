@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.48.0] - 2026-04-07
+
+### Changed
+
+- `clean --active --watch` is now read-only — reports reclaimable tokens without modifying session files
+- `watch` command no longer triggers expert auto-clean on each tick
+
+### Added
+
+- File locking for all session write operations (flock on Unix, LockFileEx on Windows) — prevents concurrent contextspectre commands from racing on the same session file
+- `DryRun` option for `CleanLive` — analyze cleanup potential without writing
+
 ## [0.47.2] - 2026-04-04
 
 ### Fixed

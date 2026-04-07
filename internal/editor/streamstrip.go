@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/ppiankov/contextspectre/internal/jsonl"
 )
 
 // StreamStripResult holds the result of a streaming strip operation.
@@ -18,6 +20,12 @@ type StreamStripResult struct {
 // pattern `"type":"<entryType>"` (with and without spaces), and writes
 // non-matching lines to a temp file, then atomic-renames.
 func StreamStripType(path string, entryType string) (*StreamStripResult, error) {
+	unlock, err := jsonl.LockFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("acquire lock: %w", err)
+	}
+	defer unlock()
+
 	// Build both marker variants: with and without space after colon
 	markerNoSpace := []byte(fmt.Sprintf(`"type":"%s"`, entryType))
 	markerSpace := []byte(fmt.Sprintf(`"type": "%s"`, entryType))
