@@ -6,10 +6,25 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestLockExclusion(t *testing.T) {
-	dir := t.TempDir()
+	// Use a manual temp dir instead of t.TempDir() because on Windows
+	// lock file handles may linger briefly after Close(), causing
+	// t.TempDir()'s RemoveAll to fail. We retry removal ourselves.
+	dir, err := os.MkdirTemp("", "TestLockExclusion")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for i := 0; i < 50; i++ {
+			if err := os.RemoveAll(dir); err == nil {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	})
 	path := filepath.Join(dir, "test.jsonl")
 	if err := os.WriteFile(path, []byte(`{"type":"user"}`+"\n"), 0644); err != nil {
 		t.Fatal(err)
