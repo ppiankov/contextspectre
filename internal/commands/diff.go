@@ -79,8 +79,14 @@ func runReasoningDiff(cmd *cobra.Command, args []string) error {
 }
 
 func runCrossSessionDiff(argA, argB string) error {
-	pathA := resolveSessionPath(argA)
-	pathB := resolveSessionPath(argB)
+	pathA, err := resolveSessionPath(argA)
+	if err != nil {
+		return err
+	}
+	pathB, err := resolveSessionPath(argB)
+	if err != nil {
+		return err
+	}
 
 	entriesA, err := jsonl.Parse(pathA)
 	if err != nil {
