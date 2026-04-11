@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.0] - 2026-04-12
+
+### Added
+
+- Session ID disambiguation — when a short ID matches sessions in multiple project directories (e.g. after a repo move), prefer the match for the current working directory instead of failing with "session not found"
+- Actionable error for truly ambiguous session IDs — lists all matching paths and suggests using full UUID or `--cwd`
+
+### Fixed
+
+- Windows CI: `TestLockExclusion` cleanup no longer races with lingering lock file handles
+
 ## [0.48.0] - 2026-04-07
 
 ### Changed
