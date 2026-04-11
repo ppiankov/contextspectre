@@ -36,7 +36,10 @@ Examples:
 }
 
 func runExport(cmd *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
+	path, err := resolveSessionPath(args[0])
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("session not found: %s", path)
 	}

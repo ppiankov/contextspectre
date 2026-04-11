@@ -42,7 +42,7 @@ func runContinuity(cmd *cobra.Command, args []string) error {
 	projectFilter := continuityProject
 	useCWD := continuityCWD
 	if len(args) > 0 {
-		targetPath := resolveSessionPath(args[0])
+		targetPath, _ := resolveSessionPath(args[0])
 		for _, si := range sessions {
 			if si.FullPath == targetPath || si.SessionID == args[0] || si.ShortID() == args[0] {
 				projectFilter = si.ProjectName

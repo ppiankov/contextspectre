@@ -721,13 +721,10 @@ func runStats(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func resolveSessionPath(arg string) string {
+func resolveSessionPath(arg string) (string, error) {
 	// If it's already a path, use it
 	if strings.HasSuffix(arg, ".jsonl") {
-		if filepath.IsAbs(arg) {
-			return arg
-		}
-		return arg
+		return arg, nil
 	}
 
 	// Try to find it in the claude projects dir
@@ -736,7 +733,7 @@ func resolveSessionPath(arg string) string {
 	// Search all project dirs for a matching session UUID
 	entries, err := os.ReadDir(projectsDir)
 	if err != nil {
-		return arg + ".jsonl"
+		return arg + ".jsonl", nil
 	}
 
 	// First try exact match
@@ -746,13 +743,13 @@ func resolveSessionPath(arg string) string {
 		}
 		candidate := filepath.Join(projectsDir, e.Name(), arg+".jsonl")
 		if _, err := os.Stat(candidate); err == nil {
-			return candidate
+			return candidate, nil
 		}
 	}
 
 	// Then try prefix match (short ID like "5d624f4a")
 	if !strings.Contains(arg, "-") || len(arg) < 36 {
-		var match string
+		var matches []string
 		for _, e := range entries {
 			if !e.IsDir() {
 				continue
@@ -764,20 +761,40 @@ func resolveSessionPath(arg string) string {
 			for _, f := range files {
 				name := f.Name()
 				if strings.HasPrefix(name, arg) && strings.HasSuffix(name, ".jsonl") && !strings.Contains(name, ".bak") {
-					if match != "" {
-						// Ambiguous — multiple matches, fall through
-						return arg + ".jsonl"
-					}
-					match = filepath.Join(projectsDir, e.Name(), name)
+					matches = append(matches, filepath.Join(projectsDir, e.Name(), name))
 				}
 			}
 		}
-		if match != "" {
-			return match
+		if len(matches) == 1 {
+			return matches[0], nil
+		}
+		if len(matches) > 1 {
+			// Disambiguate: prefer the match whose project dir matches CWD
+			cwd, cwdErr := os.Getwd()
+			if cwdErr == nil {
+				encodedCWD := session.EncodePath(cwd)
+				var cwdMatches []string
+				for _, m := range matches {
+					projDir := filepath.Base(filepath.Dir(m))
+					if projDir == encodedCWD {
+						cwdMatches = append(cwdMatches, m)
+					}
+				}
+				if len(cwdMatches) == 1 {
+					return cwdMatches[0], nil
+				}
+			}
+			// Still ambiguous — return actionable error
+			lines := make([]string, len(matches))
+			for i, m := range matches {
+				lines[i] = "  " + m
+			}
+			return "", fmt.Errorf("ambiguous session ID %q matches %d sessions:\n%s\nuse full UUID or --cwd to disambiguate",
+				arg, len(matches), strings.Join(lines, "\n"))
 		}
 	}
 
-	return arg + ".jsonl"
+	return arg + ".jsonl", nil
 }
 
 // resolveCWDSession finds the most recent session for the current working directory.
@@ -828,7 +845,10 @@ func resolveCWDSession() (string, error) {
 // If useCWD is true and no args provided, auto-discovers the most recent session for CWD.
 func resolveSessionArg(args []string, useCWD bool) (string, error) {
 	if len(args) > 0 {
-		path := resolveSessionPath(args[0])
+		path, err := resolveSessionPath(args[0])
+		if err != nil {
+			return "", err
+		}
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return "", fmt.Errorf("session not found: %s", path)
 		}

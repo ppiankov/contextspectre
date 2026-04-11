@@ -31,7 +31,10 @@ type IDOutput struct {
 }
 
 func runID(_ *cobra.Command, args []string) error {
-	path := resolveSessionPath(args[0])
+	path, err := resolveSessionPath(args[0])
+	if err != nil {
+		return err
+	}
 
 	// Check the file exists
 	if strings.HasSuffix(path, args[0]+".jsonl") && !strings.Contains(path, string(filepath.Separator)+"projects"+string(filepath.Separator)) {

@@ -98,7 +98,10 @@ func runClean(cmd *cobra.Command, args []string) error {
 		return runCleanAuto()
 	}
 
-	path := resolveSessionPath(args[0])
+	path, err := resolveSessionPath(args[0])
+	if err != nil {
+		return err
+	}
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return fmt.Errorf("session not found: %s", path)
 	}
