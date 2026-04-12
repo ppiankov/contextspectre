@@ -54,7 +54,7 @@ func WriteLines(path string, lines [][]byte) error {
 		_ = os.Chmod(tmpPath, info.Mode())
 	}
 
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := renameOrCopy(tmpPath, path); err != nil {
 		return fmt.Errorf("rename temp to target: %w", err)
 	}
 
