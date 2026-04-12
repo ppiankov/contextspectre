@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.1] - 2026-04-12
+
+### Fixed
+
+- Windows: `WriteLines` uses rename-or-copy fallback to avoid "Access is denied" when target file has a lingering handle
+
 ## [0.49.0] - 2026-04-12
 
 ### Added
