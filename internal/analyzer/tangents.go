@@ -144,15 +144,10 @@ func FindTangents(entries []jsonl.Entry) *TangentResult {
 				continue
 			}
 
-			// Include non-conversational entries (progress, snapshots) between tangent entries
-			if !e.IsConversational() {
-				totalTokens += e.RawSize / 4
-				i++
-				continue
-			}
-
 			// Conversational entry with no path refs: could be part of the tangent
-			if isResponseToTangent(entries, infos, i, start) {
+			// Only continue if the immediately preceding conversational entry
+			// referenced external paths (not any entry back to tangent start).
+			if isResponseToTangent(entries, infos, i) {
 				totalTokens += e.RawSize / 4
 				i++
 				continue
@@ -351,20 +346,30 @@ func isSystemPath(path string) bool {
 
 // minTangentTokens is the minimum estimated tokens for a tangent group to be flagged.
 // Groups below this threshold are too small to matter.
-const minTangentTokens = 100
+const minTangentTokens = 500
 
 // isResponseToTangent checks if a conversational entry with no path refs
 // is likely a response within a tangent (e.g., assistant answering about external repo).
-// Requires the preceding conversational entry to have explicitly referenced external paths.
-func isResponseToTangent(entries []jsonl.Entry, infos []entryInfo, idx, tangentStart int) bool {
-	if idx <= tangentStart {
+// Walks back at most maxTangentLookback entries to find one with path refs.
+// If found, returns whether it referenced external paths. This handles
+// tool_result entries (which have no paths) between a tool_use and its response,
+// while preventing long tangent chains from sweeping in unrelated responses.
+func isResponseToTangent(entries []jsonl.Entry, infos []entryInfo, idx int) bool {
+	if idx == 0 {
 		return false
 	}
 
-	// Walk backward to find the nearest preceding conversational entry.
-	// It must have explicitly referenced external paths to continue the tangent.
-	for j := idx - 1; j >= tangentStart; j-- {
-		if entries[j].IsConversational() {
+	// Walk back up to 3 entries to find one with path information.
+	// This bridges short gaps (tool_result with no paths) without
+	// sweeping in entries far from the last external reference.
+	const maxTangentLookback = 3
+	limit := idx - maxTangentLookback
+	if limit < 0 {
+		limit = 0
+	}
+
+	for j := idx - 1; j >= limit; j-- {
+		if infos[j].refsExternal || infos[j].refsCWD {
 			return infos[j].refsExternal
 		}
 	}
