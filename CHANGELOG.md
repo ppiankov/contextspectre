@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.2] - 2026-04-13
+
+### Fixed
+
+- Release pages now show curated changelog notes instead of auto-generated commit list
+
 ## [0.49.1] - 2026-04-12
 
 ### Fixed
