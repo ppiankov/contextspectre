@@ -33,6 +33,22 @@ jobs:
         with:
           go-version: '1.24'
 
+      - name: Extract changelog for this release
+        id: changelog
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Extract the section between ## [VERSION] and the next ## [
+          NOTES=$(awk "/^## \\[${VERSION}\\]/{found=1; next} /^## \\[/{if(found) exit} found{print}" CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${GITHUB_REF_NAME}"
+          fi
+          # Write to env file using delimiter to handle multiline
+          {
+            echo "RELEASE_NOTES<<GORELEASER_NOTES_EOF"
+            echo "$NOTES"
+            echo "GORELEASER_NOTES_EOF"
+          } >> "$GITHUB_ENV"
+
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
@@ -40,3 +56,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          RELEASE_NOTES: ${{ env.RELEASE_NOTES }}
