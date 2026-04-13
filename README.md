@@ -161,6 +161,8 @@ contextspectre sessions --format json
 
 See [CLI & TUI Reference](docs/commands.md) for the full command list, keybindings, and cleanup tiers.
 
+**Want this automated?** [NeuroRouter Pro](https://neurorouter.dev/#pricing) runs as a local proxy that applies these fixes in real time — before your requests hit the API. No manual cleanup needed.
+
 ## Key concepts
 
 | Term | Definition |
