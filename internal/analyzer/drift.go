@@ -389,7 +389,7 @@ func detectTangentSequences(entries []jsonl.Entry, infos []entryScopeInfo, cwds 
 			}
 
 			// Conversational entry with no path refs
-			if isResponseToTangent(entries, tangentInfos, i, start) {
+			if isResponseToTangent(entries, tangentInfos, i) {
 				totalTokens += entries[i].RawSize / 4
 				indices = append(indices, i)
 
