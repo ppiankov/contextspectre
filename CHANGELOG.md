@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Release pages now show curated changelog notes instead of auto-generated commit list
+- Reduce tangent detection false positives — raise minimum token threshold from 100 to 500, limit lookback to 3 entries, exclude non-conversational entries from tangent groups
 
 ## [0.49.1] - 2026-04-12
 
