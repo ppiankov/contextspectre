@@ -105,3 +105,73 @@ LLM sessions move through three phases. Claude Code treats them identically - al
 **Operational.** Execution after a decision. Writing code, running tests, fixing errors. Forward-only - the decision is made, the work is being done. Operational context is valuable while active but ages quickly.
 
 The transition from exploratory to decision is the key moment. ContextSpectre's commit points mark this boundary. Everything above a commit point can be collapsed - the scaffolding served its purpose.
+
+## Input Purity Score (IPS)
+
+IPS measures how much incoming tool output is already purified before it enters the context window. Scale: 0-100, where 100 means all tool results are irreducible signal and 0 means everything could have been compressed.
+
+### What IPS measures
+
+Every tool result that enters context is classified against known compressible patterns:
+
+| Category | Compression ratio | Example |
+|----------|------------------|---------|
+| `git_output` | 70% compressible | `git status`, `git diff`, `git log` — verbose by default, most information redundant with prior reads |
+| `test_output` | 65% compressible | `go test`, `pytest` — pass/fail summaries carry the signal, stack traces and timing are noise |
+| `file_listing` | 60% compressible | `ls`, `find`, `tree` — directory structure rarely needs full enumeration |
+| `lint_output` | 55% compressible | `golangci-lint`, `eslint` — issue lines matter, surrounding context doesn't |
+| `build_output` | 50% compressible | `make`, `go build` — success is one bit of information, failure output is partially compressible |
+| `large_result` | 30% compressible | Any tool result exceeding 2,000 tokens from an unclassified source |
+
+Native tools (Read, Grep, Glob, Edit, Write) produce irreducible output — file content and matched lines are the signal itself. These are excluded from compressibility scoring.
+
+**Formula:** `IPS = (1 - compressible_tokens / total_result_tokens) × 100`
+
+### What degrades IPS
+
+IPS drops when raw, unfiltered command output enters context:
+
+- **Verbose `git diff` output** — full diffs when only changed file names are needed
+- **Unfiltered test runs** — entire test suite output when only failures matter
+- **Repeated `ls` / `find`** — re-enumerating directories already known
+- **Large build logs** — compiler output with thousands of lines of warnings
+- **Unclassified bash commands** — any large tool result from an unknown command pattern
+
+Each of these enters context as tool_result tokens. Once in context, they are re-read on every subsequent turn (the re-read tax), compounding waste across the session.
+
+### What improves IPS
+
+Three layers of the anti-dilution pipeline, from source to cleanup:
+
+1. **Tool-level purification** — Tools like [RTK](https://github.com/rtk-ai/rtk) compress command output before it enters context. `git status` output goes from 10 lines to 1. Operates at the CLI layer.
+
+2. **Proxy-level filtering** — [NeuroRouter Pro](https://neurorouter.dev) strips noise from API requests before they reach the model. Removes thinking blocks, stale reads, failed retries, system reminder duplicates, file snapshots, and progress metadata. Operates at the HTTP layer — the model never sees the waste, and you don't pay for it.
+
+3. **Post-hoc cleanup** — ContextSpectre removes noise from the JSONL session file after requests complete. Catches cross-turn patterns (tangents, accumulated snapshots, stale reads across turns) that single-request filters cannot detect.
+
+### Observed data
+
+| Configuration | Typical IPS | Why |
+|--------------|-------------|-----|
+| No filtering | 50-60 | Raw command output enters context unchecked |
+| NeuroRouter Pro active | 90+ | Proxy strips noise before it enters context; remaining tool results are mostly native (Read, Grep) which are irreducible |
+| NeuroRouter Pro + ContextSpectre | 90+ (sustained) | Proxy prevents new noise; contextspectre removes cross-turn accumulation (tangents, snapshot drift) |
+
+The gap between proxy-filtered (90+) and unfiltered (50-60) represents tokens that enter context, get re-read every turn, compound via the snowball effect, and contribute to earlier compaction — all avoidable.
+
+### Where to see IPS
+
+- `contextspectre stats` — shows IPS with per-category breakdown
+- `contextspectre status-line` — shows `ips:N` in the status bar
+- `contextspectre stats --json` — machine-readable `input_purity` object with `score`, `total_result_tokens`, `compressible_tokens`, and `by_category`
+
+### Relationship to other metrics
+
+IPS is a **leading indicator**. Low IPS predicts future noise ratio increase — compressible tokens entering context now become the stale reads and re-read tax of future turns. By the time the noise multiplier rises, the damage is already in the context window.
+
+| Metric | Layer | When it matters |
+|--------|-------|----------------|
+| **IPS** | Input | Before tokens enter context — prevention |
+| **Noise multiplier** | Context | After tokens accumulate — diagnosis |
+| **Cadence score** | Action | When cleanup is overdue — urgency |
+| **CPD** | Economics | Per-decision cost — impact |
