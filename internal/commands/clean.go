@@ -443,7 +443,14 @@ func runFixedIntervalWatch(sinceDuration time.Duration) error {
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
-	fmt.Printf("Watching active sessions (read-only, %s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+	if cleanAutoRepair {
+		fmt.Printf("Watching active sessions (auto-repair EXPERIMENTAL, %s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+		fmt.Println("WARNING: auto-repair writes are not coordinated with Claude Code.")
+		fmt.Println("  Safe operation requires neurorouter-pro in the chain to provide a write window.")
+		fmt.Println("  Without it, there is a small risk of file corruption during concurrent writes.")
+	} else {
+		fmt.Printf("Watching active sessions (read-only, %s, interval: %ds, Ctrl+C to quit)\n", tierLabel, cleanWatchInterval)
+	}
 	fmt.Println("  Run 'contextspectre clean --active --all' to apply cleanup.")
 	printEscalationHint()
 
@@ -570,7 +577,14 @@ func runSmartWatch(sinceDuration time.Duration) error {
 
 	acc := &watchAccumulator{start: time.Now()}
 	tierLabel := watchTierLabel()
-	fmt.Printf("Watching active sessions (read-only, %s, smart mode, Ctrl+C to quit)\n", tierLabel)
+	if cleanAutoRepair {
+		fmt.Printf("Watching active sessions (auto-repair EXPERIMENTAL, %s, smart mode, Ctrl+C to quit)\n", tierLabel)
+		fmt.Println("WARNING: auto-repair writes are not coordinated with Claude Code.")
+		fmt.Println("  Safe operation requires neurorouter-pro in the chain to provide a write window.")
+		fmt.Println("  Without it, there is a small risk of file corruption during concurrent writes.")
+	} else {
+		fmt.Printf("Watching active sessions (read-only, %s, smart mode, Ctrl+C to quit)\n", tierLabel)
+	}
 	fmt.Println("  Run 'contextspectre clean --active --all' to apply cleanup.")
 	printEscalationHint()
 
@@ -1491,6 +1505,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", true, "Extract decisions and findings before cleaning (use --no-preserve to skip)")
 	cleanCmd.Flags().BoolVar(&cleanNoEscalate, "no-escalate", false, "Disable auto-escalation in watch mode")
-	cleanCmd.Flags().BoolVar(&cleanAutoRepair, "auto-repair", false, "Enable auto-repair in watch mode (rewire, coalesce, chain repair)")
+	cleanCmd.Flags().BoolVar(&cleanAutoRepair, "auto-repair", false, "[EXPERIMENTAL] Enable auto-repair in watch mode — safest with neurorouter-pro")
 	rootCmd.AddCommand(cleanCmd)
 }
