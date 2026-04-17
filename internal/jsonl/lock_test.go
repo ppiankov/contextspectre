@@ -151,3 +151,57 @@ func TestLockDifferentPaths(t *testing.T) {
 		t.Errorf("expected 2 locks acquired, got %d", acquired)
 	}
 }
+
+func TestTryLockFile_NonBlocking(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.jsonl")
+	if err := os.WriteFile(path, []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Acquire blocking lock in another goroutine
+	unlock, err := LockFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+
+	// TryLockFile from the same process should succeed (re-entrant)
+	unlock2, ok, err := TryLockFile(path)
+	if err != nil {
+		t.Fatalf("TryLockFile error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected TryLockFile to succeed (re-entrant within same process)")
+	}
+	unlock2()
+}
+
+func TestTryLockFile_ReEntrant(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.jsonl")
+	if err := os.WriteFile(path, []byte("x\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	// TryLock, then TryLock again (re-entrant), then unlock both
+	unlock1, ok1, err := TryLockFile(path)
+	if err != nil || !ok1 {
+		t.Fatalf("first TryLockFile: ok=%v err=%v", ok1, err)
+	}
+
+	unlock2, ok2, err := TryLockFile(path)
+	if err != nil || !ok2 {
+		t.Fatalf("second TryLockFile (re-entrant): ok=%v err=%v", ok2, err)
+	}
+
+	unlock2()
+	unlock1()
+
+	// Should be fully released — lock again to verify
+	unlock3, ok3, err := TryLockFile(path)
+	if err != nil || !ok3 {
+		t.Fatalf("third TryLockFile after release: ok=%v err=%v", ok3, err)
+	}
+	unlock3()
+}
