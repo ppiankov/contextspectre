@@ -14,6 +14,64 @@ var (
 	heldFd = map[string]*os.File{}
 )
 
+// TryLockFile attempts a non-blocking exclusive advisory lock on <path>.lock.
+// Returns (unlock, true, nil) on success, (nil, false, nil) if already locked
+// by another process, or (nil, false, err) on system error.
+// Re-entrant within the same process (same semantics as LockFile).
+func TryLockFile(path string) (unlock func(), ok bool, err error) {
+	lockPath := path + ".lock"
+	absPath, err := filepath.Abs(lockPath)
+	if err != nil {
+		return nil, false, fmt.Errorf("abs lock path: %w", err)
+	}
+
+	heldMu.Lock()
+	if held[absPath] > 0 {
+		held[absPath]++
+		heldMu.Unlock()
+		return func() {
+			heldMu.Lock()
+			held[absPath]--
+			heldMu.Unlock()
+		}, true, nil
+	}
+	heldMu.Unlock()
+
+	f, err := os.OpenFile(absPath, os.O_CREATE|os.O_RDWR, 0600)
+	if err != nil {
+		return nil, false, fmt.Errorf("open lock file: %w", err)
+	}
+
+	got, err := tryLockFile(f)
+	if err != nil {
+		_ = f.Close()
+		return nil, false, fmt.Errorf("try flock: %w", err)
+	}
+	if !got {
+		_ = f.Close()
+		return nil, false, nil
+	}
+
+	heldMu.Lock()
+	held[absPath] = 1
+	heldFd[absPath] = f
+	heldMu.Unlock()
+
+	return func() {
+		heldMu.Lock()
+		held[absPath]--
+		if held[absPath] == 0 {
+			delete(held, absPath)
+			delete(heldFd, absPath)
+			heldMu.Unlock()
+			_ = unlockFile(f)
+			_ = f.Close()
+		} else {
+			heldMu.Unlock()
+		}
+	}, true, nil
+}
+
 // LockFile acquires an exclusive advisory lock on <path>.lock.
 // Returns an unlock function that must be called (typically via defer).
 //

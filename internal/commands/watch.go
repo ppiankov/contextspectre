@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -134,6 +135,9 @@ func displayWatchLine(path string, prevTokens int, alerted *bool) int {
 	// Pad to overwrite previous line
 	fmt.Fprintf(os.Stdout, "%-120s", line)
 
+	// Update status line cache so the status-line hook picks up fresh data.
+	writeWatchStatusLineCache(path, stats)
+
 	// Alert
 	if watchAlert > 0 && pct >= watchAlert && !*alerted {
 		fmt.Print("\a") // terminal bell
@@ -159,6 +163,28 @@ func colorForPct(pct float64) string {
 
 func colorReset() string {
 	return "\033[0m"
+}
+
+// writeWatchStatusLineCache populates the status-line cache from a ScanLight result.
+// If stats is nil, a fresh ScanLight is performed.
+// This allows the status-line hook to read fresh data without re-scanning.
+func writeWatchStatusLineCache(path string, stats *jsonl.LightStats) {
+	fi, err := os.Stat(path)
+	if err != nil {
+		return
+	}
+	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	if stats == nil {
+		stats, err = jsonl.ScanLight(path)
+		if err != nil {
+			return
+		}
+	}
+	data, err := computeStatusLineFromStats(path, sessionID, stats)
+	if err != nil {
+		return
+	}
+	writeStatusLineCache(sessionID, fi.ModTime().UnixNano(), data)
 }
 
 func init() {

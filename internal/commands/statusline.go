@@ -57,6 +57,7 @@ type statusLineData struct {
 	VectorState     string  `json:"vector_state,omitempty"`
 	VectorAction    string  `json:"vector_action,omitempty"`
 	ChainHealthy    bool    `json:"chain_healthy"`
+	RepairCount     int     `json:"repair_count,omitempty"`
 }
 
 // statusLineCache is the on-disk cache structure.
@@ -133,7 +134,16 @@ func computeStatusLine(path, sessionID string) (*statusLineData, *jsonl.LightSta
 	if err != nil {
 		return nil, nil, fmt.Errorf("scan: %w", err)
 	}
+	data, err := computeStatusLineFromStats(path, sessionID, stats)
+	if err != nil {
+		return nil, nil, err
+	}
+	return data, stats, nil
+}
 
+// computeStatusLineFromStats builds status line data from pre-computed LightStats.
+// Use this when a ScanLight has already been performed to avoid a second scan.
+func computeStatusLineFromStats(path, sessionID string, stats *jsonl.LightStats) (*statusLineData, error) {
 	currentTokens := 0
 	if stats.LastUsage != nil {
 		currentTokens = stats.LastUsage.TotalContextTokens()
@@ -231,7 +241,7 @@ func computeStatusLine(path, sessionID string) (*statusLineData, *jsonl.LightSta
 		VectorState:     vectorState,
 		VectorAction:    vectorAction,
 		ChainHealthy:    stats.ChainHealthy,
-	}, stats, nil
+	}, nil
 }
 
 // extractProjectFromPath gets the project directory name from a session path.
@@ -284,11 +294,15 @@ func formatStatusLine(d *statusLineData) error {
 		if !d.ChainHealthy {
 			chainVal = "broken"
 		}
-		fmt.Printf("grade=%s\tctx=%.1f\tin=%d\tout=%d\tcost=%.2f\tmodel=%s\tproject=%s\tsid=%s\tturns=%d\tnoise=%d\tnm=%.2f\tsaved=%.2f\tvector=%s\tvaction=%s\tchain=%s\n",
+		repairStr := ""
+		if d.RepairCount > 0 {
+			repairStr = fmt.Sprintf("\trepairs=%d", d.RepairCount)
+		}
+		fmt.Printf("grade=%s\tctx=%.1f\tin=%d\tout=%d\tcost=%.2f\tmodel=%s\tproject=%s\tsid=%s\tturns=%d\tnoise=%d\tnm=%.2f\tsaved=%.2f\tvector=%s\tvaction=%s\tchain=%s%s\n",
 			d.Grade, d.ContextPercent, d.InputTokens, d.OutputTokens,
 			d.Cost, d.Model, d.Project, d.SessionID,
 			d.TurnsRemaining, d.NoiseTokens, d.NoiseMultiplier, d.SavedCost,
-			d.VectorState, d.VectorAction, chainVal)
+			d.VectorState, d.VectorAction, chainVal, repairStr)
 	}
 	return nil
 }

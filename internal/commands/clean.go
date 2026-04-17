@@ -41,6 +41,7 @@ var (
 	cleanTombstone     bool
 	cleanPreserve      bool
 	cleanNoEscalate    bool
+	cleanAutoRepair    bool
 )
 
 var cleanCmd = &cobra.Command{
@@ -940,6 +941,7 @@ type watchAccumulator struct {
 	trunc       int
 	tangents    int // tangent groups detected (advisory only, not removed)
 	escalations int // auto-escalation passes triggered
+	repairs     int // auto-repair actions applied
 	cost        float64
 	start       time.Time
 }
@@ -1013,6 +1015,9 @@ func (w *watchAccumulator) printSummary() {
 	if w.escalations > 0 {
 		fmt.Printf("  Auto-escalations:  %d\n", w.escalations)
 	}
+	if w.repairs > 0 {
+		fmt.Printf("  Auto-repairs:      %d\n", w.repairs)
+	}
 }
 
 // maxWatchWorkers is the maximum number of concurrent session cleaners in watch mode.
@@ -1032,8 +1037,10 @@ type watchCleanResult struct {
 // Sessions are analyzed in parallel (up to maxWatchWorkers).
 // Tangents are detected but NOT removed — advisory only.
 func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts editor.CleanLiveOpts) (int, int) {
-	// Force dry-run — watch mode is strictly read-only
-	opts.DryRun = true
+	// Force dry-run unless auto-repair is explicitly opted in.
+	if !cleanAutoRepair {
+		opts.DryRun = true
+	}
 
 	// Analyze sessions in parallel
 	ch := make(chan watchCleanResult, len(active))
@@ -1134,6 +1141,20 @@ func cleanActiveSessionsWatch(active []session.Info, acc *watchAccumulator, opts
 					formatTokens(tokensSaved), costStr)
 			}
 		}
+
+		// Auto-repair (opt-in): run tiered repairs on quiescent sessions.
+		if cleanAutoRepair {
+			repairs := runWatchAutoRepair(cr.info.FullPath, cr.info.SessionID)
+			if repairs > 0 {
+				acc.repairs += repairs
+				if !isJSON() {
+					fmt.Printf("    ↳ auto-repair: %d actions applied\n", repairs)
+				}
+			}
+		}
+
+		// Update status line cache for this session.
+		writeWatchStatusLineCache(cr.info.FullPath, nil)
 
 		// Tangent detection — advisory only, never auto-delete
 		detectTangentAdvisory(cr.info.FullPath, cr.proj, cr.shortID, acc)
@@ -1470,5 +1491,6 @@ func init() {
 	cleanCmd.Flags().BoolVar(&cleanTombstone, "tombstone", false, "Replace orphaned entries with placeholders instead of deleting (preserves Mac scroll-back)")
 	cleanCmd.Flags().BoolVar(&cleanPreserve, "preserve", true, "Extract decisions and findings before cleaning (use --no-preserve to skip)")
 	cleanCmd.Flags().BoolVar(&cleanNoEscalate, "no-escalate", false, "Disable auto-escalation in watch mode")
+	cleanCmd.Flags().BoolVar(&cleanAutoRepair, "auto-repair", false, "Enable auto-repair in watch mode (rewire, coalesce, chain repair)")
 	rootCmd.AddCommand(cleanCmd)
 }
