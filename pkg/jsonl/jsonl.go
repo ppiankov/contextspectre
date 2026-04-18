@@ -30,3 +30,8 @@ var Parse = jsonl.Parse
 // ParseRaw loads a session JSONL file and returns both parsed entries and raw
 // line bytes. Use when you need to write modified lines back to disk.
 var ParseRaw = jsonl.ParseRaw
+
+// ParseContentBlocks decodes the raw JSON content array of a message into
+// typed ContentBlock values. Used by semantic analysis to inspect tool_use
+// and tool_result blocks entry-by-entry.
+var ParseContentBlocks = jsonl.ParseContentBlocks
