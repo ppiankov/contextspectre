@@ -161,7 +161,7 @@ contextspectre sessions --format json
 
 See [CLI & TUI Reference](docs/commands.md) for the full command list, keybindings, and cleanup tiers.
 
-**Want this automated?** [NeuroRouter Pro](https://neurorouter.dev/#pricing) runs as a local proxy that applies these fixes in real time — before your requests hit the API. No manual cleanup needed.
+**Want this earlier in the pipeline?** [NeuroRouter Pro](https://neurorouter.dev/#pricing) runs as a local proxy that performs live context engineering before your requests hit the API. ContextSpectre still handles post-hoc analysis and repair.
 
 **Better together.** NeuroRouter Pro handles live context engineering and reports RCS so request shaping preserves decisions, constraints, and rejection reasons. ContextSpectre handles post-hoc analysis — cross-turn tangents, noise measurement, chain repair, and decision export. Maximum coverage requires both.
 

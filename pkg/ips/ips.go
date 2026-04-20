@@ -1,5 +1,5 @@
-// Package ips exposes the contextspectre IPS (Integrity/Performance Score)
-// metrics API for use by external consumers (e.g. contextspectre-pro). All
+// Package ips exposes ContextSpectre public metric aliases for external
+// consumers (e.g. contextspectre-pro). All
 // types are thin re-exports from the internal analyzer package — no logic
 // lives here.
 package ips
