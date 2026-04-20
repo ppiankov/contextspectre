@@ -163,7 +163,7 @@ See [CLI & TUI Reference](docs/commands.md) for the full command list, keybindin
 
 **Want this automated?** [NeuroRouter Pro](https://neurorouter.dev/#pricing) runs as a local proxy that applies these fixes in real time — before your requests hit the API. No manual cleanup needed.
 
-**Better together.** NeuroRouter Pro handles real-time filtering (42.9% payload reduction). ContextSpectre handles post-hoc analysis — cross-turn tangents, noise measurement, chain repair, and decision export. Maximum coverage requires both.
+**Better together.** NeuroRouter Pro handles live context engineering and reports RCS so request shaping preserves decisions, constraints, and rejection reasons. ContextSpectre handles post-hoc analysis — cross-turn tangents, noise measurement, chain repair, and decision export. Maximum coverage requires both.
 
 ## Key concepts
 
