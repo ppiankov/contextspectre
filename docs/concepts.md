@@ -15,6 +15,7 @@
 | **Agent friction** | Token waste from coordination failures, not reasoning: failed file reads retried against wrong paths, parallel operations that cancel each other, oversized reads that hit limits and force repeated attempts, stale binary paths after version updates ([anthropics/claude-code#32352](https://github.com/anthropics/claude-code/issues/32352)), and low-value narration between tool calls. These tokens buy no exploration or decisions but compound via the same re-read snowball as abandoned reasoning branches. A distinct cost category from decision cost (productive exploration) and snowball cost (dead exploration compounding). [NeuroRouter](https://neurorouter.dev) detects and counts friction patterns at the proxy layer. |
 | **Vector health score** | A-F grade measuring signal-to-noise ratio. A = >95% signal. F = <20% signal. |
 | **Input purity score (IPS)** | 0-100 metric measuring how much incoming tool output is already purified before entering context. 100 = all input pre-compressed, 0 = all input raw. Computed by classifying tool result entries against known compressible patterns (git status, ls, test/lint output) and estimating saveable tokens. The leading indicator - low IPS predicts future noise ratio increase. Shipped - visible in status line as `ips:N`. |
+| **Reasoning Continuity Score (RCS)** | [NeuroRouter Pro](https://neurorouter.dev) request-level metric for whether context shaping preserved the semantically correct vector to the result. RCS tracks decision, constraint, and rejection anchors before and after filtering, then applies risk penalties for lossy transformations that touch large or structurally sensitive request regions. It is not a cleanliness score and not a token-savings score: high RCS means the shaped request still carries the active reasoning vector. |
 | **Input purification** | Compressing or filtering command output before it enters the context window. Prevents dilution at the source - tokens that never enter context don't accumulate re-read tax. Tools like [RTK](https://github.com/rtk-ai/rtk) implement this as a transparent CLI proxy (e.g., `git status` output compressed from 10 lines to 1). Complementary to post-hoc cleanup: input purification reduces what goes in, vector sharpening cleans what's already there. Two stages of the same anti-dilution pipeline. [NeuroRouter](https://neurorouter.dev) is the inline implementation of input purification for API traffic. |
 | **Context dilution** | The reduction in effective reasoning signal caused by accumulation of tokens that are individually valid but collectively weaken the dominance of the session's operating vector. Unlike decay, dilution does not require incorrect or obsolete information - only an increasing ratio of secondary context relative to core decisions and constraints. The goal is still present; it's just no longer dominant in attention weighting. Explains the common experience: "the model still knows the goal but keeps wandering." That's not forgetting - that's dilution. |
 | **Reasoning contamination** | Old exploratory scaffolding persisting in context and biasing future responses off-vector. Not token waste - reasoning drift. [NeuroRouter](https://neurorouter.dev) prevents contamination sources from reaching the model. |
@@ -111,6 +112,8 @@ The transition from exploratory to decision is the key moment. ContextSpectre's 
 
 IPS measures how much incoming tool output is already purified before it enters the context window. Scale: 0-100, where 100 means all tool results are irreducible signal and 0 means everything could have been compressed.
 
+IPS is a ContextSpectre input-quality metric. It answers: "how much compressible tool output entered the session?" It does not answer whether a proxy transformation preserved the active reasoning vector. For that request-level question, use [NeuroRouter Pro](https://neurorouter.dev)'s RCS.
+
 ### What IPS measures
 
 Every tool result that enters context is classified against known compressible patterns:
@@ -173,6 +176,9 @@ IPS is a **leading indicator**. Low IPS predicts future noise ratio increase —
 | Metric | Layer | When it matters |
 |--------|-------|----------------|
 | **IPS** | Input | Before tokens enter context — prevention |
+| **RCS** | Proxy request | While shaping live requests — vector preservation |
 | **Noise multiplier** | Context | After tokens accumulate — diagnosis |
 | **Cadence score** | Action | When cleanup is overdue — urgency |
 | **CPD** | Economics | Per-decision cost — impact |
+
+IPS and RCS are complementary, not competing. IPS measures cleanliness of incoming context. RCS measures semantic safety of NeuroRouter's transformation. A session can have high IPS but low RCS if a filter removes a load-bearing rejection reason; it can also have modest IPS but high RCS if the remaining noise is ugly but not vector-bearing. The product boundary is: ContextSpectre observes session health over time, while NeuroRouter preserves the live request vector before the model sees it.
