@@ -74,8 +74,8 @@ The hook reads ContextSpectre data from a background cache that refreshes every 
 - 🟡 Yellow (100K-500K) - consider running `clean --all` manually
 - 🔴 Red (> 500K) - manual intervention needed, tangents accumulating
 
-`ips:` - input purity score (how much tool output is pre-compressed):
-- 🟢 Green (≥ 80) - well-purified, input compression working
+`ips:` - input purity score (how much tool output is purified before it enters context):
+- 🟢 Green (≥ 80) - well-purified, input hygiene working
 - 🟡 Yellow (50-79) - room to improve, some raw output entering context
 - 🔴 Red (< 50) - mostly raw input, consider adding input purification (e.g., [RTK](https://github.com/rtk-ai/rtk))
 
