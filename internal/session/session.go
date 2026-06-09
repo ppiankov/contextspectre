@@ -63,12 +63,15 @@ type QuickStats struct {
 	LastCompactionAfter  int
 	EstimatedCost        float64
 	Model                string
-	SignalPercent        int     // 0-100, estimated signal/noise ratio
-	ClientType           string  // "cli", "desktop", or "unknown"
-	EntropyScore         float64 // 0-100
-	EntropyLevel         string  // LOW/MEDIUM/HIGH/CRITICAL
-	CleanupStatus        string  // clean/due/overdue
-	CleanupCadenceScore  float64 // 0-100
+	LastModel            string         // last non-synthetic model seen
+	ModelsSeen           map[string]int // turn count per non-synthetic model
+	ModelMixed           bool           // true if more than one distinct non-synthetic model was used
+	SignalPercent        int            // 0-100, estimated signal/noise ratio
+	ClientType           string         // "cli", "desktop", or "unknown"
+	EntropyScore         float64        // 0-100
+	EntropyLevel         string         // LOW/MEDIUM/HIGH/CRITICAL
+	CleanupStatus        string         // clean/due/overdue
+	CleanupCadenceScore  float64        // 0-100
 }
 
 func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
@@ -87,6 +90,9 @@ func quickStatsFromLight(stats *jsonl.LightStats) *QuickStats {
 		LastCompactionBefore: stats.LastCompactionBefore,
 		LastCompactionAfter:  stats.LastCompactionAfter,
 		Model:                stats.Model,
+		LastModel:            stats.LastModel,
+		ModelsSeen:           stats.ModelsSeen,
+		ModelMixed:           len(stats.ModelsSeen) > 1,
 		SignalPercent:        stats.SignalPercent,
 		ClientType:           clientType,
 	}
@@ -124,6 +130,8 @@ type indexEntry struct {
 	CachedImageCount    int     `json:"cachedImageCount,omitempty"`
 	CachedCompactions   int     `json:"cachedCompactions,omitempty"`
 	CachedModel         string  `json:"cachedModel,omitempty"`
+	CachedLastModel     string  `json:"cachedLastModel,omitempty"`
+	CachedModelMixed    bool    `json:"cachedModelMixed,omitempty"`
 	CachedSignalPct     int     `json:"cachedSignalPct,omitempty"`
 	CachedClientType    string  `json:"cachedClientType,omitempty"`
 	CachedCost          float64 `json:"cachedCost,omitempty"`
@@ -303,6 +311,8 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 				ImageCount:      e.CachedImageCount,
 				CompactionCount: e.CachedCompactions,
 				Model:           e.CachedModel,
+				LastModel:       e.CachedLastModel,
+				ModelMixed:      e.CachedModelMixed,
 				SignalPercent:   e.CachedSignalPct,
 				ClientType:      e.CachedClientType,
 				EstimatedCost:   e.CachedCost,
@@ -341,6 +351,8 @@ func (d *Discoverer) fromIndex(indexPath, projectDir string) ([]Info, error) {
 			idx.Entries[i].CachedImageCount = info.ContextStats.ImageCount
 			idx.Entries[i].CachedCompactions = info.ContextStats.CompactionCount
 			idx.Entries[i].CachedModel = info.ContextStats.Model
+			idx.Entries[i].CachedLastModel = info.ContextStats.LastModel
+			idx.Entries[i].CachedModelMixed = info.ContextStats.ModelMixed
 			idx.Entries[i].CachedSignalPct = info.ContextStats.SignalPercent
 			idx.Entries[i].CachedClientType = info.ContextStats.ClientType
 			idx.Entries[i].CachedCost = info.ContextStats.EstimatedCost

@@ -488,6 +488,7 @@ func (m sessionsModel) View() string {
 		fmt.Fprintf(&hdr, "%-*s ", cols.branchW, "Branch")
 	}
 	fmt.Fprintf(&hdr, "%*s ", cols.msgsW, "Msgs")
+	fmt.Fprintf(&hdr, "%-*s ", cols.modelW, "Model")
 	if cols.showSize {
 		sizeLabel := "Size"
 		if m.sortBy == sortSize {
@@ -623,6 +624,21 @@ func (m sessionsModel) View() string {
 			fmt.Fprintf(&line, "%-*s ", cols.branchW, branch)
 		}
 		fmt.Fprintf(&line, "%*d ", cols.msgsW, s.MessageCount)
+		modelAbbr := "?    "
+		if s.ContextStats != nil {
+			m := s.ContextStats.LastModel
+			if m == "" {
+				m = s.ContextStats.Model
+			}
+			modelAbbr = analyzer.AbbreviateModel(m)
+			if s.ContextStats.ModelMixed {
+				modelAbbr = strings.TrimRight(modelAbbr, " ") + "*"
+				for len(modelAbbr) < cols.modelW {
+					modelAbbr += " "
+				}
+			}
+		}
+		fmt.Fprintf(&line, "%-*s ", cols.modelW, modelAbbr)
 		if cols.showSize {
 			size := fmt.Sprintf("%.1f MB", s.FileSizeMB)
 			fmt.Fprintf(&line, "%*s ", cols.sizeW, size)
@@ -712,6 +728,7 @@ type columnLayout struct {
 	branchW     int
 	showBranch  bool
 	msgsW       int
+	modelW      int
 	sizeW       int
 	showSize    bool
 	barW        int
@@ -725,12 +742,13 @@ type columnLayout struct {
 // computeColumns calculates responsive column widths based on terminal width.
 func computeColumns(width int, hasBranch bool) columnLayout {
 	c := columnLayout{
-		idW:   8,
-		msgsW: 6,
-		barW:  10,
-		pctW:  6,
-		sigW:  7,
-		costW: 8,
+		idW:    8,
+		msgsW:  6,
+		modelW: 5,
+		barW:   10,
+		pctW:   6,
+		sigW:   7,
+		costW:  8,
 	}
 
 	// Fixed overhead: prefix (5) + spaces between columns
@@ -749,7 +767,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 			c.branchW = 12
 		}
 		// Distribute remaining to project + slug
-		fixed := prefixW + c.idW + c.msgsW + c.sizeW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 10 // spaces
+		fixed := prefixW + c.idW + c.msgsW + c.modelW + c.sizeW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 11 // spaces
 		if c.showBranch {
 			fixed += c.branchW + 1
 		}
@@ -765,7 +783,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		c.showSize = false
 		c.mergeSignal = false
 		c.modW = 6
-		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 8
+		fixed := prefixW + c.idW + c.msgsW + c.modelW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 9
 		remaining := width - fixed
 		if remaining < 20 {
 			remaining = 20
@@ -780,7 +798,7 @@ func computeColumns(width int, hasBranch bool) columnLayout {
 		c.modW = 5
 		c.costW = 7
 		c.pctW = 5
-		fixed := prefixW + c.idW + c.msgsW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 8
+		fixed := prefixW + c.idW + c.msgsW + c.modelW + c.barW + c.pctW + compactW + c.sigW + c.costW + c.modW + 9
 		remaining := width - fixed
 		if remaining < 16 {
 			remaining = 16

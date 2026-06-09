@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 )
@@ -124,13 +125,15 @@ type LightStats struct {
 	TotalCacheWriteTokens int
 	TotalCacheReadTokens  int
 	Model                 string
-	SignalPercent         int       // 0-100, estimated signal/noise ratio
-	EpochAssistantCount   int       // assistant turns since last compaction
-	ChainHealthy          bool      // false if active parent chain has missing links
-	StartsWithQueueOp     bool      // true if first entry is queue-operation (Mac/desktop indicator)
-	FirstTimestamp        time.Time // timestamp of first entry
-	LastTimestamp         time.Time // timestamp of last entry
-	CWD                   string    // first non-empty CWD from entries
+	LastModel             string         // last non-synthetic model seen (for resume decisions)
+	ModelsSeen            map[string]int // turn count per model (non-synthetic only)
+	SignalPercent         int            // 0-100, estimated signal/noise ratio
+	EpochAssistantCount   int            // assistant turns since last compaction
+	ChainHealthy          bool           // false if active parent chain has missing links
+	StartsWithQueueOp     bool           // true if first entry is queue-operation (Mac/desktop indicator)
+	FirstTimestamp        time.Time      // timestamp of first entry
+	LastTimestamp         time.Time      // timestamp of last entry
+	CWD                   string         // first non-empty CWD from entries
 }
 
 // ScanLight reads a JSONL file extracting only stats-level data.
@@ -150,6 +153,7 @@ func ScanLight(path string) (*LightStats, error) {
 	stats := &LightStats{
 		FileSizeBytes: info.Size(),
 		TypeCounts:    make(map[MessageType]int),
+		ModelsSeen:    make(map[string]int),
 	}
 
 	scanner := bufio.NewScanner(f)
@@ -237,6 +241,10 @@ func ScanLight(path string) (*LightStats, error) {
 			if stats.Model == "" && e.Message.Model != "" {
 				stats.Model = e.Message.Model
 			}
+			if m := e.Message.Model; m != "" && !isModelSynthetic(m) {
+				stats.LastModel = m
+				stats.ModelsSeen[m]++
+			}
 
 			// Detect compaction: large drop in context tokens
 			if prevContextTokens > 0 && prevContextTokens-ctx > 50000 {
@@ -282,6 +290,12 @@ func ScanLight(path string) (*LightStats, error) {
 	}
 
 	return stats, scanner.Err()
+}
+
+// isModelSynthetic returns true for empty or clearly non-LLM model strings
+// (e.g. tool-injected entries that carry "<synthetic>" or similar markers).
+func isModelSynthetic(model string) bool {
+	return model == "" || strings.HasPrefix(model, "<") || strings.HasPrefix(model, "synthetic")
 }
 
 // containsImage is a fast heuristic check for base64 image content.
