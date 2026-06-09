@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.49.3] - 2026-06-09
+
+### Added
+
+- `sessions` table and TUI list gain a `MODEL` column showing a 5-char abbreviation of the session's last model (`O4.8`, `S4.6`, `H4.5`, `?`). Sessions that used more than one model carry a `*` suffix (`O4.8*`)
+- `sessions --model <substring>` filter — matches `sonnet`, `opus`, `haiku`, or any version fragment like `4-8`; composes with `--cwd`, `--project`, `--active`
+- JSON output of `sessions` gains `last_model` and `models_seen[{model, turns}]` alongside the existing `model` field
+
 ## [0.49.2] - 2026-04-13
 
 ### Fixed
