@@ -96,6 +96,7 @@ Running `contextspectre` without arguments opens the interactive TUI.
 | `contextspectre sessions --active` | Show sessions modified in last 5 minutes |
 | `contextspectre sessions --project <name>` | Filter by project name or alias |
 | `contextspectre sessions --cwd` | Show sessions for current directory (suggests relocation if none found) |
+| `contextspectre sessions --model <name>` | Filter by model (substring match: `sonnet`, `opus`, `haiku`, `4-8`) |
 | `contextspectre active` | Show currently active sessions with signal grades |
 | `contextspectre active --since 30m` | Custom activity window |
 | `contextspectre active --quiet` | One-line summary output |
