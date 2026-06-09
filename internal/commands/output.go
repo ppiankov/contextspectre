@@ -15,35 +15,43 @@ var outputFormat string
 
 // SessionJSON is the JSON output for a single session.
 type SessionJSON struct {
-	ID             string    `json:"id"`
-	Slug           string    `json:"slug,omitempty"`
-	CustomTitle    string    `json:"custom_title,omitempty"`
-	Project        string    `json:"project"`
-	Branch         string    `json:"branch,omitempty"`
-	Messages       int       `json:"messages"`
-	Tokens         int       `json:"tokens"`
-	ContextPercent float64   `json:"context_percent"`
-	Compactions    int       `json:"compactions"`
-	FileSizeBytes  int64     `json:"file_size_bytes"`
-	LastModified   time.Time `json:"last_modified"`
-	Active         bool      `json:"active"`
-	Images         int       `json:"images"`
-	EstimatedCost  float64   `json:"estimated_cost,omitempty"`
-	Model          string    `json:"model,omitempty"`
-	SignalPercent  *int      `json:"signal_percent,omitempty"`
-	EntropyScore   *float64  `json:"entropy_score,omitempty"`
-	EntropyLevel   string    `json:"entropy_level,omitempty"`
-	CleanupStatus  string    `json:"cleanup_status,omitempty"`
-	CadenceScore   *float64  `json:"cadence_score,omitempty"`
-	ClientType     string    `json:"client_type,omitempty"`
-	Zombie         bool      `json:"zombie,omitempty"`
-	ZombieReason   string    `json:"zombie_reason,omitempty"`
+	ID             string          `json:"id"`
+	Slug           string          `json:"slug,omitempty"`
+	CustomTitle    string          `json:"custom_title,omitempty"`
+	Project        string          `json:"project"`
+	Branch         string          `json:"branch,omitempty"`
+	Messages       int             `json:"messages"`
+	Tokens         int             `json:"tokens"`
+	ContextPercent float64         `json:"context_percent"`
+	Compactions    int             `json:"compactions"`
+	FileSizeBytes  int64           `json:"file_size_bytes"`
+	LastModified   time.Time       `json:"last_modified"`
+	Active         bool            `json:"active"`
+	Images         int             `json:"images"`
+	EstimatedCost  float64         `json:"estimated_cost,omitempty"`
+	Model          string          `json:"model,omitempty"`
+	LastModel      string          `json:"last_model,omitempty"`
+	ModelsSeen     []ModelSeenJSON `json:"models_seen,omitempty"`
+	SignalPercent  *int            `json:"signal_percent,omitempty"`
+	EntropyScore   *float64        `json:"entropy_score,omitempty"`
+	EntropyLevel   string          `json:"entropy_level,omitempty"`
+	CleanupStatus  string          `json:"cleanup_status,omitempty"`
+	CadenceScore   *float64        `json:"cadence_score,omitempty"`
+	ClientType     string          `json:"client_type,omitempty"`
+	Zombie         bool            `json:"zombie,omitempty"`
+	ZombieReason   string          `json:"zombie_reason,omitempty"`
 }
 
 // SessionsOutput is the JSON output for the sessions command.
 type SessionsOutput struct {
 	Sessions []SessionJSON `json:"sessions"`
 	Total    int           `json:"total"`
+}
+
+// ModelSeenJSON holds a model and its turn count for mixed-model sessions.
+type ModelSeenJSON struct {
+	Model string `json:"model"`
+	Turns int    `json:"turns"`
 }
 
 // StatsOutput is the JSON output for the stats command.

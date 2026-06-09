@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/ppiankov/contextspectre/internal/analyzer"
 	"github.com/ppiankov/contextspectre/internal/project"
 	"github.com/ppiankov/contextspectre/internal/session"
 	"github.com/spf13/cobra"
@@ -18,6 +19,7 @@ var (
 	sessionsCWD     bool
 	sessionsAll     bool
 	sessionsLimit   int
+	sessionsModel   string
 )
 
 var sessionsCmd = &cobra.Command{
@@ -80,6 +82,12 @@ func runSessions(cmd *cobra.Command, args []string) error {
 				sj.Images = s.ContextStats.ImageCount
 				sj.EstimatedCost = s.ContextStats.EstimatedCost
 				sj.Model = s.ContextStats.Model
+				sj.LastModel = s.ContextStats.LastModel
+				if len(s.ContextStats.ModelsSeen) > 0 {
+					for m, turns := range s.ContextStats.ModelsSeen {
+						sj.ModelsSeen = append(sj.ModelsSeen, ModelSeenJSON{Model: m, Turns: turns})
+					}
+				}
 				sj.ClientType = s.ContextStats.ClientType
 				if s.ContextStats.ContextTokens > 0 {
 					sp := s.ContextStats.SignalPercent
@@ -101,8 +109,8 @@ func runSessions(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "PROJECT\tSLUG\tID\tBRANCH\tMSGS\tSIZE\tCONTEXT\tMODIFIED")
-	fmt.Fprintln(w, "───────\t────\t──\t──────\t────\t────\t───────\t────────")
+	fmt.Fprintln(w, "PROJECT\tSLUG\tID\tBRANCH\tMSGS\tMODEL\tSIZE\tCONTEXT\tMODIFIED")
+	fmt.Fprintln(w, "───────\t────\t──\t──────\t────\t─────\t────\t───────\t────────")
 
 	for _, s := range sessions {
 		prefix := ""
@@ -128,13 +136,29 @@ func runSessions(cmd *cobra.Command, args []string) error {
 			slug = "—"
 		}
 
-		fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%d\t%.1f MB\t%s\t%s\n",
+		modelStr := "?    "
+		if s.ContextStats != nil {
+			m := s.ContextStats.LastModel
+			if m == "" {
+				m = s.ContextStats.Model
+			}
+			modelStr = analyzer.AbbreviateModel(m)
+			if s.ContextStats.ModelMixed {
+				modelStr = strings.TrimRight(modelStr, " ") + "*"
+				for len(modelStr) < 5 {
+					modelStr += " "
+				}
+			}
+		}
+
+		fmt.Fprintf(w, "%s%s\t%s\t%s\t%s\t%d\t%s\t%.1f MB\t%s\t%s\n",
 			prefix,
 			s.ProjectName,
 			slug,
 			s.ShortID(),
 			branch,
 			s.MessageCount,
+			modelStr,
 			s.FileSizeMB,
 			contextStr,
 			timeAgo(s.Modified),
@@ -150,9 +174,9 @@ func runSessions(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// filterSessions applies --active, --project, and --cwd flags.
+// filterSessions applies --active, --project, --cwd, and --model flags.
 func filterSessions(sessions []session.Info) []session.Info {
-	if !sessionsActive && sessionsProject == "" && !sessionsCWD {
+	if !sessionsActive && sessionsProject == "" && !sessionsCWD && sessionsModel == "" {
 		return sessions
 	}
 
@@ -174,6 +198,25 @@ func filterSessions(sessions []session.Info) []session.Info {
 	// Apply project filter (alias-aware)
 	if sessionsProject != "" {
 		sessions = resolveProjectSessions(sessions, sessionsProject, resolveClaudeDir())
+	}
+
+	// Apply --model filter: substring match against canonical model string
+	if sessionsModel != "" {
+		modelLow := strings.ToLower(sessionsModel)
+		var filtered []session.Info
+		for _, s := range sessions {
+			m := ""
+			if s.ContextStats != nil {
+				m = s.ContextStats.LastModel
+				if m == "" {
+					m = s.ContextStats.Model
+				}
+			}
+			if strings.Contains(strings.ToLower(m), modelLow) {
+				filtered = append(filtered, s)
+			}
+		}
+		sessions = filtered
 	}
 
 	// Apply active filter
@@ -288,5 +331,6 @@ func init() {
 	sessionsCmd.Flags().BoolVar(&sessionsCWD, "cwd", false, "Show only sessions for the current working directory")
 	sessionsCmd.Flags().BoolVar(&sessionsAll, "all", false, "Show all sessions (no limit)")
 	sessionsCmd.Flags().IntVar(&sessionsLimit, "limit", 20, "Maximum sessions to display")
+	sessionsCmd.Flags().StringVar(&sessionsModel, "model", "", "Filter by model (substring match, e.g. sonnet, opus, 4-6)")
 	rootCmd.AddCommand(sessionsCmd)
 }
