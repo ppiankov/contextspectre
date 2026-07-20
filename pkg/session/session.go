@@ -1,6 +1,6 @@
 // Package session exposes contextspectre's session discovery types for use by
-// external consumers (e.g. contextspectre-pro). All types are thin re-exports
-// from the internal session package — no logic lives here.
+// external consumers. All types are thin re-exports from the internal session
+// package — no logic lives here.
 package session
 
 import "github.com/ppiankov/contextspectre/internal/session"
