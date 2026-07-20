@@ -1,6 +1,6 @@
 // Package jsonl exposes the contextspectre JSONL parser types and functions for
-// use by external consumers (e.g. contextspectre-pro). All types are thin
-// re-exports from the internal jsonl package — no logic lives here.
+// use by external consumers. All types are thin re-exports from the internal
+// jsonl package — no logic lives here.
 package jsonl
 
 import "github.com/ppiankov/contextspectre/internal/jsonl"

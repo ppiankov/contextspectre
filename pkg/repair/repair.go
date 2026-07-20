@@ -1,6 +1,6 @@
 // Package repair exposes the contextspectre repair and cleanup API for use by
-// external consumers (e.g. contextspectre-pro). All types and functions are
-// thin re-exports from internal packages — no logic lives here.
+// external consumers. All types and functions are thin re-exports from internal
+// packages — no logic lives here.
 package repair
 
 import "github.com/ppiankov/contextspectre/internal/editor"

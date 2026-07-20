@@ -1,6 +1,6 @@
 // Package scan exposes the contextspectre diagnostic API for use by
-// external consumers (e.g. contextspectre-pro). All types and functions are
-// thin re-exports from internal packages — no logic lives here.
+// external consumers. All types and functions are thin re-exports from internal
+// packages — no logic lives here.
 package scan
 
 import (

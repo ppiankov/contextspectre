@@ -313,7 +313,7 @@ func runDoctor(cmd *cobra.Command, args []string) error {
 	}
 
 	// Check companion tools
-	companions := []string{"ancc", "chainwatch"}
+	companions := []string{"ancc"}
 	for _, name := range companions {
 		cc := CompanionCheck{Name: name}
 		if path, err := exec.LookPath(name); err == nil {
