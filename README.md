@@ -6,7 +6,7 @@
 [![ANCC](https://img.shields.io/badge/ANCC-agent--native-blue)](https://ancc.dev)
 [![Status: Stable](https://img.shields.io/badge/Status-Stable-green)](CHANGELOG.md)
 
-> **Project status:** ContextSpectre is stable and feature-complete. It receives bug fixes and compatibility updates only.
+> **Project status:** ContextSpectre is stable and feature-complete. It receives bug fixes and compatibility updates only. Re-assessed 2026-07-20: still useful as-is, no changes needed.
 
 Reasoning hygiene layer for Claude Code. Open it at any decision boundary to see what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
