@@ -8,7 +8,7 @@
 
 > **Project status:** ContextSpectre is stable and feature-complete. It receives bug fixes and compatibility updates only.
 
-Reasoning hygiene layer for Claude Code. Not a cleanup utility - a tool you open at every decision boundary, not just when context is full. See what fills your context, what it costs, cut what no longer matters, and carry forward what does.
+Reasoning hygiene layer for Claude Code. Open it at any decision boundary to see what fills your context, what it costs, cut what no longer matters, and carry forward what does.
 
 ## Before and after
 

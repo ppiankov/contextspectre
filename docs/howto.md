@@ -168,6 +168,8 @@ The checkpoint extracts from the active epoch: decisions made, findings discover
 
 `launch` runs the full pre-flight pipeline — checkpoint, fix, clean — then exec-s into `claude --resume`. The session must be idle (not actively used) for fix to converge.
 
+The checkpoint runs first as your restore point. Note that each individual `clean` writes its own `.bak`, but running `clean`, `fix`, and `rewire` in sequence (or the same session more than once) overwrites and clears those per-operation backups — so the checkpoint, not the `.bak`, is what recovers a full pipeline run. Checkpoint before chaining these commands manually, and avoid re-running the chain on an already-processed session.
+
 ```bash
 # Most recent session in current directory
 contextspectre launch --cwd
